@@ -34,7 +34,7 @@ export async function GET() {
     return NextResponse.json({ brands: mockBrands });
   }
 
-  const brands = (data || []).map((u) => {
+  const brands = (data || []).map((u: Record<string, unknown>) => {
     const profile = Array.isArray(u.brand_profiles) ? u.brand_profiles[0] : u.brand_profiles;
     return {
       id: u.id,
