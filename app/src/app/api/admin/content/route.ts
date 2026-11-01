@@ -1,0 +1,118 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { verifyAdmin, isSupabaseConfigured } from "@/lib/admin-auth";
+import { createClient } from "@/lib/supabase/server";
+
+const defaultContent: Record<string, Record<string, string>> = {
+  hero: {
+    badge: "הפלטפורמה ליוצרי תוכן ומותגים בישראל",
+    title_line1: "יוצרים תוכן.",
+    title_line2: "מחברים מותגים.",
+    subtitle: "קבלו מוצרים חינם, צלמו סרטונים אותנטיים, וצמחו כיוצרי תוכן. עסקים — קבלו תוכן UGC איכותי במחיר שפוי.",
+    cta_creator: "אני יוצר/ת תוכן",
+    cta_brand: "אני בעל/ת עסק",
+  },
+  how_it_works: {
+    section_title: "שלושה צעדים פשוטים",
+    step1_title: "בחרו מוצר",
+    step1_desc: "גלו מוצרים מעניינים מעסקים מובילים ושלחו בקשת חיבור",
+    step2_title: "צלמו סרטון",
+    step2_desc: "קבלו את המוצר חינם וצלמו סרטון UGC אותנטי תוך 10 ימים",
+    step3_title: "צמחו",
+    step3_desc: "צברו ניסיון, עלו ברמות, והפכו ליוצרי תוכן מבוקשים",
+  },
+  stats: {
+    stat1_value: "500+",
+    stat1_label: "יוצרי תוכן פעילים",
+    stat2_value: "200+",
+    stat2_label: "מותגים ועסקים",
+    stat3_value: "2,000+",
+    stat3_label: "סרטונים שנוצרו",
+  },
+  creators: {
+    title_line1: "הפכו את",
+    title_line2: "התשוקה למקצוע",
+    benefit1: "קבלו מוצרים חינם מהמותגים המובילים",
+    benefit2: "צלמו תוכן בסגנון שלכם, בקצב שלכם",
+    benefit3: "צמחו עם מערכת דירוגים ייחודית",
+    benefit4: "בנו פורטפוליו מקצועי מרשים",
+    cta: "הצטרפו כיוצרי תוכן",
+  },
+  brands: {
+    title_line1: "תוכן שעובד",
+    title_line2: "בלי הפקות יקרות",
+    benefit1: "תוכן UGC אותנטי שמביא תוצאות",
+    benefit2: "מחירים שפויים — קרדיט אחד = סרטון אחד",
+    benefit3: "יוצרים מאומתים ומדורגים",
+    benefit4: "ניהול קל דרך לוח בקרה חכם",
+    cta: "הצטרפו כמפרסמים",
+  },
+  cta_final: {
+    title_line1: "מוכנים",
+    title_line2: "להתחיל?",
+    subtitle: "הצטרפו לקהילת היוצרים והמותגים הגדלה. חינם לגמרי ליוצרי תוכן.",
+    cta_primary: "הרשמה חינם",
+    cta_secondary: "אני מפרסם",
+  },
+  footer: {
+    tagline: "הפלטפורמה ליוצרי תוכן ומותגים",
+    copyright: "Mashpianim. כל הזכויות שמורות.",
+  },
+};
+
+export async function GET() {
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json({ content: defaultContent });
+  }
+
+  const { isAdmin, supabase } = await verifyAdmin();
+  if (!isAdmin || !supabase) {
+    return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
+  }
+
+  const { data, error } = await supabase
+    .from("site_content")
+    .select("section, data");
+
+  if (error) {
+    return NextResponse.json({ content: defaultContent });
+  }
+
+  const content = { ...defaultContent };
+  for (const row of data || []) {
+    content[row.section] = row.data as Record<string, string>;
+  }
+
+  return NextResponse.json({ content });
+}
+
+export async function PUT(request: NextRequest) {
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json({ success: true });
+  }
+
+  const { isAdmin, supabase } = await verifyAdmin();
+  if (!isAdmin || !supabase) {
+    return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
+  }
+
+  const body = await request.json();
+  const { section, data } = body;
+
+  if (!section || !data) {
+    return NextResponse.json({ error: "פרטים חסרים" }, { status: 400 });
+  }
+
+  const { error } = await supabase
+    .from("site_content")
+    .upsert(
+      { section, data, updated_at: new Date().toISOString() },
+      { onConflict: "section" }
+    );
+
+  if (error) {
+    console.error("[admin/content] upsert error:", error);
+    return NextResponse.json({ error: "שגיאה בשמירה" }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
+}
