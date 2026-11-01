@@ -446,91 +446,81 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* For Brands */}
-      <section className="px-4 sm:px-6 py-24 sm:py-28 relative bg-gradient-to-b from-neutral-50/50 to-white">
-        <FloatingOrb className="top-1/2 right-0 w-[300px] h-[300px] bg-ig-orange/10 blur-[100px] -translate-y-1/2" delay={2} />
-        <div className="max-w-5xl mx-auto grid md:grid-cols-2 gap-12 md:gap-20 items-center relative">
-          <FadeIn delay={0.15} className="order-2 md:order-1">
-            <div className="relative rounded-3xl p-[1.5px] bg-gradient-to-br from-ig-orange/40 via-ig-yellow/40 to-ig-purple/30">
-              <div className="bg-white rounded-[22px] p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-ig-orange" />
-                    <p className="text-xs font-semibold text-neutral-600">לוח בקרה</p>
-                  </div>
-                  <span className="text-[10px] font-medium text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded-full">עדכון אחרון: היום</span>
-                </div>
-                <div className="space-y-2.5">
-                  {[
-                    { label: "סרטונים שהתקבלו", val: "24", icon: "M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h1.5C5.496 19.5 6 18.996 6 18.375m-2.625 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-1.5A1.125 1.125 0 0118 18.375M20.625 4.5H3.375m17.25 0c.621 0 1.125.504 1.125 1.125M20.625 4.5h-1.5C18.504 4.5 18 5.004 18 5.625m3.75 0v1.5c0 .621-.504 1.125-1.125 1.125M3.375 4.5c-.621 0-1.125.504-1.125 1.125M3.375 4.5h1.5C5.496 4.5 6 5.004 6 5.625m-3.75 0v1.5c0 .621.504 1.125 1.125 1.125m0 0h1.5m-1.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m1.5-3.75C5.496 8.25 6 7.746 6 7.125v-1.5M4.875 8.25C5.496 8.25 6 8.754 6 9.375v1.5m0-5.25v5.25m0-5.25C6 5.004 6.504 4.5 7.125 4.5h9.75c.621 0 1.125.504 1.125 1.125m1.125 2.625h1.5m-1.5 0A1.125 1.125 0 0118 7.125v-1.5m1.125 2.625c-.621 0-1.125.504-1.125 1.125v1.5m2.625-2.625c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125M18 5.625v5.25M7.125 12h9.75m-9.75 0A1.125 1.125 0 016 10.875M7.125 12C6.504 12 6 12.504 6 13.125m0-2.25C6 11.496 5.496 12 4.875 12M18 10.875c0 .621-.504 1.125-1.125 1.125M18 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m-12 5.25v-5.25m0 5.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125m-12 0v-1.5c0-.621-.504-1.125-1.125-1.125M18 18.375v-5.25m0 5.25v-1.5c0-.621.504-1.125 1.125-1.125M18 13.125v1.5c0 .621.504 1.125 1.125 1.125M18 13.125c0-.621.504-1.125 1.125-1.125M6 13.125v1.5c0 .621-.504 1.125-1.125 1.125M6 13.125C6 12.504 5.496 12 4.875 12m-1.5 0h1.5m-1.5 0c-.621 0-1.125-.504-1.125-1.125v-1.5c0-.621.504-1.125 1.125-1.125m1.5 3.75c-.621 0-1.125-.504-1.125-1.125M19.125 12h1.5m0 0c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75c-.621 0-1.125-.504-1.125-1.125", color: "ig-purple" },
-                    { label: "צפיות כוללות", val: "12.4K", icon: "M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z M15 12a3 3 0 11-6 0 3 3 0 016 0z", color: "ig-pink" },
-                    { label: "עלות לסרטון", val: "₪89", icon: "M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z", color: "ig-orange" },
-                    { label: "ROI", val: "340%", icon: "M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.281m5.94 2.28l-2.28 5.941", color: "emerald" },
-                  ].map((row, i) => (
-                    <motion.div
-                      key={row.label}
-                      className="flex items-center justify-between bg-neutral-50/80 rounded-xl px-4 py-3.5 border border-neutral-100 hover:border-ig-orange/20 hover:bg-white transition-all"
-                      initial={{ opacity: 0, y: 12 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ delay: 0.2 + i * 0.08, duration: 0.4 }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                          row.color === "ig-purple" ? "bg-ig-purple/10" :
-                          row.color === "ig-pink" ? "bg-ig-pink/10" :
-                          row.color === "ig-orange" ? "bg-ig-orange/10" :
-                          "bg-emerald-50"
-                        }`}>
-                          <Icon d={row.icon} className={`w-4 h-4 ${
-                            row.color === "ig-purple" ? "text-ig-purple" :
-                            row.color === "ig-pink" ? "text-ig-pink" :
-                            row.color === "ig-orange" ? "text-ig-orange" :
-                            "text-emerald-500"
-                          }`} />
-                        </div>
-                        <span className="text-sm text-neutral-600">{row.label}</span>
-                      </div>
-                      <span className="text-sm font-bold text-neutral-900">{row.val}</span>
-                    </motion.div>
-                  ))}
-                </div>
+      {/* How the platform works — for brands */}
+      <section className="px-4 sm:px-6 py-24 sm:py-28 relative bg-neutral-900 overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(225,48,108,0.08),transparent_50%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(131,58,180,0.06),transparent_50%)]" />
+        <div className="max-w-3xl mx-auto relative">
+          <FadeIn>
+            <div className="text-center mb-16">
+              <div className="flex items-center justify-center gap-2 mb-3">
+                <div className="h-px w-8 bg-gradient-to-l from-ig-orange to-ig-pink" />
+                <p className="text-sm font-semibold text-ig-pink tracking-wide">למותגים ועסקים</p>
+                <div className="h-px w-8 bg-gradient-to-l from-ig-pink to-ig-purple" />
               </div>
+              <h2 className="text-3xl md:text-5xl font-extrabold text-white">ככה הפלטפורמה עובדת</h2>
             </div>
           </FadeIn>
 
-          <FadeIn className="order-1 md:order-2">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="h-px w-8 bg-gradient-to-l from-ig-orange to-ig-yellow" />
-              <p className="text-sm font-semibold text-ig-orange tracking-wide">למותגים ועסקים</p>
-            </div>
-            <h2 className="text-3xl md:text-5xl font-bold leading-tight text-neutral-900">
-              {c.brands.title_line1} <span className="ig-gradient-text">{c.brands.title_line2}</span>
-            </h2>
-            <div className="mt-8 space-y-4">
-              {[c.brands.benefit1, c.brands.benefit2, c.brands.benefit3, c.brands.benefit4].map((text, i) => (
-                <motion.div
-                  key={text}
-                  className="flex items-start gap-3"
-                  initial={{ opacity: 0, x: 20 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.08, duration: 0.4 }}
-                >
-                  <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-ig-orange to-ig-yellow flex items-center justify-center mt-0.5 shrink-0 shadow-sm shadow-ig-orange/20">
-                    <Icon d={checkIcon} className="w-3.5 h-3.5 text-white" />
+          <div className="relative">
+            {/* Vertical timeline line */}
+            <div className="absolute top-0 bottom-0 right-[23px] sm:right-auto sm:left-1/2 sm:-translate-x-1/2 w-[2px] bg-gradient-to-b from-ig-purple via-ig-pink to-ig-orange" />
+
+            {[
+              {
+                step: "1",
+                title: "העלו מוצר",
+                desc: "הוסיפו את המוצר שלכם לפלטפורמה בקליק. תיאור, תמונות, ופרטי משלוח — ויוצרי התוכן כבר רואים אותו.",
+                gradient: "from-ig-purple to-ig-magenta",
+              },
+              {
+                step: "2",
+                title: "התחברו ליוצרים",
+                desc: "יוצרי תוכן מאומתים שולחים בקשות חיבור. בחרו את המתאימים לפי סגנון, קטגוריה ודירוג.",
+                gradient: "from-ig-pink to-ig-orange",
+              },
+              {
+                step: "3",
+                title: "שלחו את המוצר",
+                desc: "אשרו את החיבור ושלחו את המוצר ישירות ליוצר — הפלטפורמה מנהלת את כל התהליך.",
+                gradient: "from-ig-orange to-ig-yellow",
+              },
+              {
+                step: "4",
+                title: "קבלו תוכן UGC",
+                desc: "תוך 10 ימים תקבלו סרטון UGC אותנטי מוכן לפרסום ברשתות החברתיות שלכם.",
+                gradient: "from-ig-yellow to-emerald-400",
+              },
+            ].map((item, i) => (
+              <FadeIn key={item.step} delay={i * 0.12}>
+                <div className={`relative flex items-start gap-5 sm:gap-8 mb-12 last:mb-0 ${i % 2 === 0 ? "sm:flex-row" : "sm:flex-row-reverse"}`}>
+                  {/* Step number circle */}
+                  <div className="relative z-10 shrink-0">
+                    <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-lg shadow-ig-pink/30`}>
+                      <span className="text-white text-lg font-bold">{item.step}</span>
+                    </div>
                   </div>
-                  <p className="text-neutral-600 leading-relaxed">{text}</p>
-                </motion.div>
-              ))}
+
+                  {/* Content card */}
+                  <div className={`flex-1 bg-white/[0.06] backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-ig-pink/30 transition-all ${i % 2 === 0 ? "sm:mr-auto" : "sm:ml-auto"}`}>
+                    <h3 className="text-xl font-bold text-white mb-2">{item.title}</h3>
+                    <p className="text-neutral-400 text-sm leading-relaxed">{item.desc}</p>
+                  </div>
+                </div>
+              </FadeIn>
+            ))}
+          </div>
+
+          <FadeIn delay={0.5}>
+            <div className="text-center mt-14">
+              <Link
+                href="/register?type=brand"
+                className="group inline-flex items-center gap-2 px-8 py-4 rounded-full ig-gradient-bg-animated text-white font-semibold transition-all shadow-lg shadow-ig-pink/30 hover:shadow-xl hover:shadow-ig-pink/40 hover:scale-[1.02]"
+              >
+                {c.brands.cta}
+                <Icon d={arrowIcon} className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+              </Link>
             </div>
-            <Link
-              href="/register?type=brand"
-              className="group inline-flex items-center gap-2 mt-8 px-7 py-3.5 rounded-full bg-neutral-900 text-white font-semibold hover:bg-neutral-800 transition-all shadow-lg shadow-neutral-900/20 hover:shadow-xl hover:scale-[1.02]"
-            >
-              {c.brands.cta}
-              <Icon d={arrowIcon} className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            </Link>
           </FadeIn>
         </div>
       </section>
