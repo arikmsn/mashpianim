@@ -32,7 +32,7 @@ function RegisterContent() {
         <div className="text-center mb-8">
           <Image src="/logo.png" alt="משפיען אונליין" width={72} height={72} className="mx-auto rounded-2xl shadow-lg shadow-ig-pink/20 mb-4" />
           <h1 className="text-3xl font-bold mb-2">הצטרפו אלינו</h1>
-          <p className="text-neutral-500">בואו נתחיל — מי אתם?</p>
+          {!userType && <p className="text-neutral-500">בואו נתחיל — מי אתם?</p>}
         </div>
 
         <AnimatePresence mode="wait">
@@ -480,11 +480,8 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
       const verifyData = await verifyRes.json();
       if (!verifyRes.ok) throw new Error(verifyData.error);
 
-      if (verifyData.tokenHash) {
-        await supabase.auth.verifyOtp({
-          token_hash: verifyData.tokenHash,
-          type: "magiclink",
-        });
+      if (verifyData.email && verifyData.tempPassword) {
+        await supabase.auth.signInWithPassword({ email: verifyData.email, password: verifyData.tempPassword });
       }
 
       await registerProfile(verifyData.userId);
