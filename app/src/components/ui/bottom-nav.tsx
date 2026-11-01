@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -69,24 +69,20 @@ function BottomNav() {
   const pathname = usePathname();
   const { user } = useAuth();
   const [userType, setUserType] = useState<"creator" | "brand" | null>(null);
+  const fetchedRef = useRef(false);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || fetchedRef.current) return;
+    fetchedRef.current = true;
 
-    async function fetchUserType() {
-      try {
-        const res = await fetch("/api/profile");
-        if (res.ok) {
-          const data = await res.json();
-          if (data.user?.type) {
-            setUserType(data.user.type as "creator" | "brand");
-          }
+    fetch("/api/profile")
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data?.user?.type) {
+          setUserType(data.user.type as "creator" | "brand");
         }
-      } catch {
-        // Default to creator nav
-      }
-    }
-    fetchUserType();
+      })
+      .catch(() => {});
   }, [user]);
 
   const navItems = userType === "brand" ? brandNavItems : creatorNavItems;
