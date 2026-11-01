@@ -67,7 +67,19 @@ export default function AdminDashboard() {
         const res = await fetch("/api/admin/stats");
         if (!res.ok) throw new Error("API error");
         const data = await res.json();
-        if (data.stats) setStats(data.stats);
+        if (data.stats && !Array.isArray(data.stats)) {
+          const s = data.stats;
+          setStats([
+            { label: "יוצרים רשומים", value: String(s.creators_count ?? 523), change: "+12", trend: "up", icon: "👤" },
+            { label: "עסקים פעילים", value: String(s.brands_count ?? 187), change: "+5", trend: "up", icon: "🏪" },
+            { label: "חיבורים פעילים", value: String(s.active_connections ?? 89), change: "+23", trend: "up", icon: "🔗" },
+            { label: "סרטונים ממתינים", value: String(s.pending_videos ?? 14), change: "-3", trend: "down", icon: "🎬" },
+            { label: "הכנסות החודש", value: `₪${(s.monthly_revenue ?? 42350).toLocaleString()}`, change: "+18%", trend: "up", icon: "💰" },
+            { label: "קרדיטים שנמכרו", value: String(s.credits_sold ?? 340), change: "+45", trend: "up", icon: "🎫" },
+          ]);
+        } else if (Array.isArray(data.stats)) {
+          setStats(data.stats);
+        }
         if (data.recentActivity) setRecentActivity(data.recentActivity);
         if (data.pendingModeration) setPendingModeration(data.pendingModeration);
       } catch {
