@@ -41,3 +41,5 @@ workbox-*.js
 
 # Supabase
 supabase/.temp/
+app/supabase/.temp/
+.temp/
