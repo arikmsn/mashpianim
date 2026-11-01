@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -15,9 +16,39 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "connectionId required" }, { status: 400 });
   }
 
+  const userClient = await createServerClient();
+  const { data: { user } } = await userClient.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "לא מחובר" }, { status: 401 });
+  }
+
   const supabase = getSupabaseAdmin();
   if (!supabase) {
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
+  }
+
+  const { data: dbUser } = await supabase
+    .from("users")
+    .select("id, type")
+    .eq("auth_user_id", user.id)
+    .single();
+
+  if (!dbUser) {
+    return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 403 });
+  }
+
+  if ((dbUser as any).type !== "admin") {
+    const { data: connection } = await supabase
+      .from("connections")
+      .select("creator_id, brand_id")
+      .eq("id", connectionId)
+      .single();
+
+    if (!connection ||
+        ((dbUser as any).id !== (connection as any).creator_id &&
+         (dbUser as any).id !== (connection as any).brand_id)) {
+      return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
+    }
   }
 
   const { data, error } = await supabase
@@ -46,9 +77,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const userClient = await createServerClient();
+    const { data: { user } } = await userClient.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "לא מחובר" }, { status: 401 });
+    }
+
     const supabase = getSupabaseAdmin();
     if (!supabase) {
       return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
+    }
+
+    const { data: dbUser } = await supabase
+      .from("users")
+      .select("id")
+      .eq("auth_user_id", user.id)
+      .single();
+
+    if (!dbUser) {
+      return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 403 });
+    }
+
+    const { data: connection } = await supabase
+      .from("connections")
+      .select("creator_id")
+      .eq("id", connectionId)
+      .single();
+
+    if (!connection || (dbUser as any).id !== (connection as any).creator_id) {
+      return NextResponse.json({ error: "אין הרשאה להעלות סרטון לחיבור זה" }, { status: 403 });
     }
 
     const ext = file.name.split(".").pop() || "mp4";
