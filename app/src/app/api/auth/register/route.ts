@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getGreenAPI } from "@/lib/adapters/greenapi";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -96,6 +97,21 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           { error: "שגיאה ביצירת פרופיל עסקי" },
           { status: 500 }
+        );
+      }
+    }
+
+    // Send welcome message via WhatsApp (non-blocking)
+    const greenAPI = getGreenAPI();
+    if (greenAPI && phone) {
+      const name = profile.fullName || "";
+      if (userType === "creator") {
+        greenAPI.sendWelcomeCreator(phone, name).catch((err) =>
+          console.error("[register] welcome message error:", err)
+        );
+      } else if (userType === "brand") {
+        greenAPI.sendWelcomeBrand(phone, name, profile.shopName || "").catch((err) =>
+          console.error("[register] welcome message error:", err)
         );
       }
     }

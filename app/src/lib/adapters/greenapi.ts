@@ -68,6 +68,57 @@ export class GreenAPIProvider implements MessagingProvider {
     });
   }
 
+  async sendWelcomeCreator(
+    phone: string,
+    name: string
+  ): Promise<{ success: boolean; messageId?: string }> {
+    return this.sendWhatsApp({
+      to: phone,
+      body: [
+        `🎉 ברוכים הבאים למשפיען אונליין, ${name}!`,
+        ``,
+        `ההרשמה שלך הושלמה בהצלחה ואנחנו שמחים שהצטרפת לקהילת יוצרי התוכן שלנו.`,
+        ``,
+        `✅ מה עכשיו?`,
+        `• עדכנו את הפרופיל שלכם`,
+        `• גלשו בפיד וגלו מוצרים חדשים`,
+        `• הגישו בקשה למוצר שמעניין אתכם`,
+        `• צלמו סרטון UGC וקבלו את המוצר בחינם!`,
+        ``,
+        `🔗 כנסו לאפליקציה: https://www.mashpian.online/feed`,
+        ``,
+        `בהצלחה! 💪`,
+        `צוות משפיען אונליין`,
+      ].join("\n"),
+    });
+  }
+
+  async sendWelcomeBrand(
+    phone: string,
+    name: string,
+    shopName: string
+  ): Promise<{ success: boolean; messageId?: string }> {
+    return this.sendWhatsApp({
+      to: phone,
+      body: [
+        `🎉 ברוכים הבאים למשפיען אונליין, ${name}!`,
+        ``,
+        `העסק *${shopName}* נרשם בהצלחה לפלטפורמה.`,
+        ``,
+        `✅ מה עכשיו?`,
+        `• העלו מוצרים לפרופיל העסקי`,
+        `• יוצרי תוכן יגישו בקשות למוצרים שלכם`,
+        `• אשרו בקשות ושלחו מוצרים`,
+        `• קבלו סרטוני UGC אותנטיים לשיווק!`,
+        ``,
+        `🔗 כנסו לממשק הניהול: https://www.mashpian.online/brand`,
+        ``,
+        `בהצלחה! 🚀`,
+        `צוות משפיען אונליין`,
+      ].join("\n"),
+    });
+  }
+
   async sendConnectionNotification(
     phone: string,
     brandName: string,
