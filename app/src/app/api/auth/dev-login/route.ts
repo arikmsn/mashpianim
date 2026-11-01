@@ -38,7 +38,11 @@ export async function POST(request: NextRequest) {
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
     let user = existingUsers?.users?.find((u) => u.email === config.email);
 
-    if (!user) {
+    if (user) {
+      await supabaseAdmin.auth.admin.updateUserById(user.id, {
+        password: SHARED_AUTH_PASSWORD,
+      });
+    } else {
       const { data: newUser, error: createError } =
         await supabaseAdmin.auth.admin.createUser({
           email: config.email,
