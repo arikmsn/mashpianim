@@ -21,6 +21,7 @@ function LoginContent() {
   const [password, setPassword] = useState("");
   const [step, setStep] = useState<"phone" | "otp" | "email">("phone");
   const [loading, setLoading] = useState(false);
+  const [formattedPhone, setFormattedPhone] = useState("");
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/feed";
   const router = useRouter();
@@ -31,12 +32,16 @@ function LoginContent() {
     e.preventDefault();
     setLoading(true);
     try {
-      const formattedPhone = phone.startsWith("+") ? phone : `+972${phone.replace(/^0/, "")}`;
-      const { error } = await supabase.auth.signInWithOtp({ phone: formattedPhone });
-      if (error) throw error;
-      setPhone(formattedPhone);
+      const res = await fetch("/api/auth/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setFormattedPhone(data.phone);
       setStep("otp");
-      toast("קוד אימות נשלח!", "success");
+      toast("קוד אימות נשלח בוואטסאפ! 💬", "success");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "שגיאה בשליחת הקוד";
       toast(msg, "error");
@@ -49,14 +54,23 @@ function LoginContent() {
     e.preventDefault();
     setLoading(true);
     try {
-      const { error } = await supabase.auth.verifyOtp({
-        phone,
-        token: otp,
-        type: "sms",
+      const res = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: formattedPhone, code: otp }),
       });
-      if (error) throw error;
-      toast("התחברתם בהצלחה!", "success");
-      router.push(redirect);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      if (data.verificationUrl) {
+        router.push(data.verificationUrl);
+      } else if (data.needsOnboarding) {
+        router.push("/register");
+      } else {
+        // Sign in with email-password fallback for existing users
+        toast("התחברתם בהצלחה!", "success");
+        router.push(redirect);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "קוד שגוי";
       toast(msg, "error");
@@ -115,6 +129,9 @@ function LoginContent() {
                 className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none transition-all text-center text-lg"
                 required
               />
+              <p className="text-xs text-neutral-400 mt-2 text-center">
+                נשלח קוד אימות בוואטסאפ 💬
+              </p>
               <button
                 type="submit"
                 disabled={loading}
@@ -134,14 +151,18 @@ function LoginContent() {
 
           {step === "otp" && (
             <form onSubmit={handleVerifyOTP}>
-              <p className="text-sm text-neutral-500 mb-4 text-center">
-                שלחנו קוד ל-{phone}
-              </p>
+              <div className="text-center mb-4">
+                <span className="text-3xl">💬</span>
+                <p className="text-sm text-neutral-500 mt-2">
+                  שלחנו קוד בוואטסאפ ל-
+                </p>
+                <p className="font-mono text-sm font-medium" dir="ltr">{formattedPhone}</p>
+              </div>
               <input
                 type="text"
                 dir="ltr"
                 value={otp}
-                onChange={(e) => setOtp(e.target.value)}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
                 placeholder="000000"
                 maxLength={6}
                 className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none transition-all text-center text-2xl tracking-[0.5em]"
@@ -149,14 +170,14 @@ function LoginContent() {
               />
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || otp.length < 6}
                 className="w-full mt-4 px-6 py-3 rounded-xl bg-pink-500 text-white font-medium hover:bg-pink-600 transition-colors disabled:opacity-50"
               >
                 {loading ? "מאמת..." : "אישור"}
               </button>
               <button
                 type="button"
-                onClick={() => setStep("phone")}
+                onClick={() => { setStep("phone"); setOtp(""); }}
                 className="w-full mt-2 text-sm text-neutral-400 hover:text-neutral-600"
               >
                 שנו מספר טלפון
@@ -207,17 +228,12 @@ function LoginContent() {
             <p className="text-center text-sm text-neutral-400 mb-4">
               או התחברו עם
             </p>
-            <div className="flex gap-3">
-              <button
-                onClick={handleGoogleLogin}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-neutral-200 hover:bg-neutral-50 transition-colors text-sm"
-              >
-                <span>Google</span>
-              </button>
-              <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-neutral-200 hover:bg-neutral-50 transition-colors text-sm">
-                <span>Apple</span>
-              </button>
-            </div>
+            <button
+              onClick={handleGoogleLogin}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-neutral-200 hover:bg-neutral-50 transition-colors text-sm"
+            >
+              <span>Google</span>
+            </button>
           </div>
         </div>
 

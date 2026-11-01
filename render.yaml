@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: mashpianim
+    runtime: node
+    region: frankfurt
+    plan: starter
+    buildCommand: cd app && npm install && npm run build
+    startCommand: cd app && npm start
+    envVars:
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GREENAPI_INSTANCE_ID
+        sync: false
+      - key: GREENAPI_API_TOKEN
+        sync: false
+      - key: NODE_ENV
+        value: production
