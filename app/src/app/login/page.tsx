@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -19,9 +19,12 @@ function LoginContent() {
   const [otp, setOtp] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [step, setStep] = useState<"phone" | "otp" | "email">("phone");
+  const [adminPhone, setAdminPhone] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [step, setStep] = useState<"phone" | "otp" | "email" | "admin-login" | "admin-roles">("phone");
   const [loading, setLoading] = useState(false);
   const [formattedPhone, setFormattedPhone] = useState("");
+  const tapRef = useRef({ count: 0, timer: 0 });
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/feed";
   const router = useRouter();
@@ -87,7 +90,6 @@ function LoginContent() {
       if (error) throw error;
       toast("התחברתם בהצלחה!", "success");
 
-      // Determine redirect based on user type
       let targetRedirect = redirect;
       if (redirect === "/feed" && signInData?.user) {
         try {
@@ -112,6 +114,66 @@ function LoginContent() {
     }
   }
 
+  async function handleAdminVerify(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/dev-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: adminPhone, password: adminPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      if (data.step === "choose_role") {
+        setStep("admin-roles");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "שגיאה";
+      toast(msg, "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleAdminRoleLogin(role: string) {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/dev-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: adminPhone, password: adminPassword, role }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      const { error } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.authPassword,
+      });
+      if (error) throw error;
+
+      const roleLabel = role === "admin" ? "מנהל" : role === "creator" ? "יוצר תוכן" : "מפרסם";
+      toast(`נכנסתם כ${roleLabel}`, "success");
+      router.push(data.redirect);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "שגיאה";
+      toast(msg, "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const handleSecretTap = useCallback(() => {
+    tapRef.current.count += 1;
+    window.clearTimeout(tapRef.current.timer);
+    if (tapRef.current.count >= 5) {
+      tapRef.current.count = 0;
+      setStep("admin-login");
+    } else {
+      tapRef.current.timer = window.setTimeout(() => { tapRef.current.count = 0; }, 2000);
+    }
+  }, []);
 
   async function handleGoogleLogin() {
     const { error } = await supabase.auth.signInWithOAuth({
@@ -125,7 +187,12 @@ function LoginContent() {
     <main className="min-h-screen flex items-center justify-center px-6 bg-gradient-to-br from-pink-50 to-background">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">שלום!</h1>
+          <h1
+            className="text-3xl font-bold mb-2 cursor-default select-none"
+            onClick={handleSecretTap}
+          >
+            שלום!
+          </h1>
           <p className="text-neutral-500">התחברו לחשבון שלכם</p>
         </div>
 
@@ -203,7 +270,84 @@ function LoginContent() {
             </form>
           )}
 
-          {(
+          {step === "admin-login" && (
+            <form onSubmit={handleAdminVerify}>
+              <div className="text-center mb-4">
+                <p className="text-sm font-medium">כניסת מנהל</p>
+              </div>
+              <label className="block text-sm font-medium mb-2">מספר טלפון</label>
+              <input
+                type="tel"
+                dir="ltr"
+                value={adminPhone}
+                onChange={(e) => setAdminPhone(e.target.value)}
+                placeholder="05X-XXX-XXXX"
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none transition-all text-center mb-3"
+              />
+              <label className="block text-sm font-medium mb-2">סיסמה</label>
+              <input
+                type="password"
+                dir="ltr"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="••••••"
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none transition-all text-center"
+              />
+              <button
+                type="submit"
+                disabled={loading || !adminPhone || !adminPassword}
+                className="w-full mt-4 px-6 py-3 rounded-xl bg-pink-500 text-white font-medium hover:bg-pink-600 transition-colors disabled:opacity-50"
+              >
+                {loading ? "מאמת..." : "המשך"}
+              </button>
+              <button type="button" onClick={() => setStep("phone")} className="w-full mt-3 text-sm text-neutral-400 hover:text-neutral-600">
+                חזרה להתחברות רגילה
+              </button>
+            </form>
+          )}
+
+          {step === "admin-roles" && (
+            <div>
+              <div className="text-center mb-5">
+                <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-6 h-6 text-emerald-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <p className="font-semibold text-neutral-900">אומתת בהצלחה</p>
+                <p className="text-sm text-neutral-400 mt-1">בחרו ממשק כניסה</p>
+              </div>
+              <div className="flex flex-col gap-2">
+                {[
+                  { role: "admin", label: "ממשק מנהל", desc: "דשבורד, מודרציה, הגדרות", color: "pink" },
+                  { role: "creator", label: "ממשק יוצר תוכן", desc: "פיד, פרופיל, חיבורים", color: "purple" },
+                  { role: "brand", label: "ממשק מפרסם", desc: "קמפיינים, יוצרים, קרדיטים", color: "blue" },
+                ].map((item) => (
+                  <button
+                    key={item.role}
+                    type="button"
+                    disabled={loading}
+                    onClick={() => handleAdminRoleLogin(item.role)}
+                    className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-neutral-200 hover:bg-pink-50 hover:border-pink-200 transition-colors text-right disabled:opacity-50"
+                  >
+                    <div className={`w-10 h-10 rounded-xl bg-${item.color}-50 flex items-center justify-center shrink-0`}>
+                      <div className={`w-5 h-5 rounded-full bg-${item.color}-200`} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-neutral-900">{item.label}</p>
+                      <p className="text-xs text-neutral-400">{item.desc}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <button type="button" onClick={() => { setStep("phone"); setAdminPhone(""); setAdminPassword(""); }}
+                className="w-full mt-4 text-sm text-neutral-400 hover:text-neutral-600">
+                חזרה להתחברות רגילה
+              </button>
+            </div>
+          )}
+
+          {step !== "admin-login" && step !== "admin-roles" && (
             <div className="mt-6 pt-6 border-t border-neutral-100">
               <p className="text-center text-sm text-neutral-400 mb-4">או התחברו עם</p>
               <button
