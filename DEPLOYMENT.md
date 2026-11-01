@@ -9,9 +9,9 @@
 
 ### Step 2: Get Supabase Keys
 From your Supabase project **Settings > API**:
-- `NEXT_PUBLIC_SUPABASE_URL` — Project URL
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — anon/public key
-- `SUPABASE_SERVICE_ROLE_KEY` — service_role key (secret!)
+- `NEXT_SUPABASE_URL` — Project URL
+- `NEXT_SUPABASE_ANON_KEY` — anon/public key
+- `SUPABASE_SEC_KEY` — service_role key (secret!)
 
 ### Step 3: Deploy to Vercel
 1. Go to [vercel.com/new](https://vercel.com/new)
@@ -21,9 +21,9 @@ From your Supabase project **Settings > API**:
 
 | Variable | Value |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Your Supabase anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Your Supabase service role key |
+| `NEXT_SUPABASE_URL` | Your Supabase URL |
+| `NEXT_SUPABASE_ANON_KEY` | Your Supabase anon key |
+| `SUPABASE_SEC_KEY` | Your Supabase service role key |
 
 5. Click **Deploy**
 
