@@ -2,7 +2,88 @@
 
 import Link from "next/link";
 import { motion, useScroll, useTransform } from "framer-motion";
-import { useRef } from "react";
+import { useRef, useEffect, useState } from "react";
+
+type SiteContent = Record<string, Record<string, string>>;
+
+const defaults: SiteContent = {
+  hero: {
+    badge: "הפלטפורמה ליוצרי תוכן ומותגים בישראל",
+    title_line1: "יוצרים תוכן.",
+    title_line2: "מחברים מותגים.",
+    subtitle: "קבלו מוצרים חינם, צלמו סרטונים אותנטיים, וצמחו כיוצרי תוכן. עסקים — קבלו תוכן UGC איכותי במחיר שפוי.",
+    cta_creator: "אני יוצר/ת תוכן",
+    cta_brand: "אני בעל/ת עסק",
+  },
+  how_it_works: {
+    section_title: "שלושה צעדים פשוטים",
+    step1_title: "בחרו מוצר",
+    step1_desc: "גלו מוצרים מעניינים מעסקים מובילים ושלחו בקשת חיבור",
+    step2_title: "צלמו סרטון",
+    step2_desc: "קבלו את המוצר חינם וצלמו סרטון UGC אותנטי תוך 10 ימים",
+    step3_title: "צמחו",
+    step3_desc: "צברו ניסיון, עלו ברמות, והפכו ליוצרי תוכן מבוקשים",
+  },
+  creators: {
+    title_line1: "הפכו את",
+    title_line2: "התשוקה למקצוע",
+    benefit1: "קבלו מוצרים חינם מהמותגים המובילים",
+    benefit2: "צלמו תוכן בסגנון שלכם, בקצב שלכם",
+    benefit3: "צמחו עם מערכת דירוגים ייחודית",
+    benefit4: "בנו פורטפוליו מקצועי מרשים",
+    cta: "הצטרפו כיוצרי תוכן",
+  },
+  stats: {
+    stat1_value: "500+",
+    stat1_label: "יוצרי תוכן פעילים",
+    stat2_value: "200+",
+    stat2_label: "מותגים ועסקים",
+    stat3_value: "2,000+",
+    stat3_label: "סרטונים שנוצרו",
+  },
+  brands: {
+    title_line1: "תוכן שעובד",
+    title_line2: "בלי הפקות יקרות",
+    benefit1: "תוכן UGC אותנטי שמביא תוצאות",
+    benefit2: "מחירים שפויים — קרדיט אחד = סרטון אחד",
+    benefit3: "יוצרים מאומתים ומדורגים",
+    benefit4: "ניהול קל דרך לוח בקרה חכם",
+    cta: "הצטרפו כמפרסמים",
+  },
+  cta_final: {
+    title_line1: "מוכנים",
+    title_line2: "להתחיל?",
+    subtitle: "הצטרפו לקהילת היוצרים והמותגים הגדלה. חינם לגמרי ליוצרי תוכן.",
+    cta_primary: "הרשמה חינם",
+    cta_secondary: "אני מפרסם",
+  },
+  footer: {
+    tagline: "הפלטפורמה ליוצרי תוכן ומותגים",
+    copyright: "Mashpianim. כל הזכויות שמורות.",
+  },
+};
+
+function useSiteContent(): SiteContent {
+  const [content, setContent] = useState<SiteContent>(defaults);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("mashpianim_site_content");
+      if (stored) {
+        const parsed = JSON.parse(stored) as SiteContent;
+        const merged: SiteContent = {};
+        for (const section of Object.keys(defaults)) {
+          merged[section] = { ...defaults[section], ...parsed[section] };
+        }
+        setContent(merged);
+      }
+    } catch {
+      // ignore parse errors, use defaults
+    }
+  }, []);
+
+  return content;
+}
 
 function FadeIn({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
   return (
@@ -32,6 +113,13 @@ const stepIcon3 = "M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74
 
 const checkIcon = "M4.5 12.75l6 6 9-13.5";
 const arrowIcon = "M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18";
+const playIcon = "M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z";
+
+const heroVideos = [
+  { label: "סרום ויטמין C", gradient: "from-pink-300 to-rose-400" },
+  { label: "שעון ספורט", gradient: "from-purple-300 to-indigo-400" },
+  { label: "תיק גב עור", gradient: "from-amber-300 to-orange-400" },
+];
 
 export default function HomePage() {
   const heroRef = useRef<HTMLDivElement>(null);
@@ -40,6 +128,7 @@ export default function HomePage() {
     offset: ["start start", "end start"],
   });
   const heroOpacity = useTransform(scrollYProgress, [0, 0.7], [1, 0]);
+  const c = useSiteContent();
 
   return (
     <main className="min-h-screen bg-white overflow-x-hidden">
@@ -79,7 +168,7 @@ export default function HomePage() {
           >
             <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-pink-50 text-pink-600 text-xs font-semibold tracking-wide border border-pink-100">
               <span className="w-1.5 h-1.5 rounded-full bg-pink-500" />
-              הפלטפורמה ליוצרי תוכן ומותגים בישראל
+              {c.hero.badge}
             </span>
           </motion.div>
 
@@ -89,9 +178,9 @@ export default function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
           >
-            יוצרים תוכן.
+            {c.hero.title_line1}
             <br />
-            <span className="text-pink-500">מחברים מותגים.</span>
+            <span className="text-pink-500">{c.hero.title_line2}</span>
           </motion.h1>
 
           <motion.p
@@ -100,8 +189,7 @@ export default function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.45 }}
           >
-            קבלו מוצרים חינם, צלמו סרטונים אותנטיים, וצמחו כיוצרי תוכן.
-            עסקים — קבלו תוכן UGC איכותי במחיר שפוי.
+            {c.hero.subtitle}
           </motion.p>
 
           <motion.div
@@ -114,14 +202,14 @@ export default function HomePage() {
               href="/register?type=creator"
               className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full bg-pink-500 text-white font-semibold hover:bg-pink-600 transition-all shadow-lg shadow-pink-500/20"
             >
-              אני יוצר/ת תוכן
+              {c.hero.cta_creator}
               <Icon d={arrowIcon} className="w-4 h-4" />
             </Link>
             <Link
               href="/register?type=brand"
               className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full border border-neutral-200 text-neutral-700 font-semibold hover:bg-neutral-50 transition-all"
             >
-              אני בעל/ת עסק
+              {c.hero.cta_brand}
             </Link>
           </motion.div>
 
@@ -142,11 +230,18 @@ export default function HomePage() {
                 <span className="text-xs font-medium bg-emerald-50 text-emerald-600 px-2.5 py-1 rounded-full border border-emerald-100">פעילה</span>
               </div>
               <div className="grid grid-cols-3 gap-2">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="aspect-[9/16] rounded-xl bg-gradient-to-b from-neutral-100 to-neutral-50 flex items-center justify-center">
-                    <svg className="w-8 h-8 text-neutral-300" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
-                    </svg>
+                {heroVideos.map((video) => (
+                  <div key={video.label} className={`relative aspect-[9/16] rounded-xl bg-gradient-to-b ${video.gradient} overflow-hidden group cursor-pointer`}>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center group-hover:bg-white/50 transition-colors">
+                        <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                          <path d={playIcon} />
+                        </svg>
+                      </div>
+                    </div>
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6">
+                      <p className="text-white text-[10px] font-medium text-center leading-tight">{video.label}</p>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -160,14 +255,14 @@ export default function HomePage() {
         <div className="max-w-5xl mx-auto">
           <FadeIn>
             <p className="text-sm font-semibold text-pink-500 text-center tracking-wide">איך זה עובד</p>
-            <h2 className="text-3xl md:text-4xl font-bold text-center mt-3 text-neutral-900">שלושה צעדים פשוטים</h2>
+            <h2 className="text-3xl md:text-4xl font-bold text-center mt-3 text-neutral-900">{c.how_it_works.section_title}</h2>
           </FadeIn>
 
           <div className="mt-16 grid md:grid-cols-3 gap-8">
             {[
-              { step: "01", title: "בחרו מוצר", desc: "גלו מוצרים מעניינים מעסקים מובילים ושלחו בקשת חיבור", icon: stepIcon1 },
-              { step: "02", title: "צלמו סרטון", desc: "קבלו את המוצר חינם וצלמו סרטון UGC אותנטי תוך 10 ימים", icon: stepIcon2 },
-              { step: "03", title: "צמחו", desc: "צברו ניסיון, עלו ברמות, והפכו ליוצרי תוכן מבוקשים", icon: stepIcon3 },
+              { step: "01", title: c.how_it_works.step1_title, desc: c.how_it_works.step1_desc, icon: stepIcon1 },
+              { step: "02", title: c.how_it_works.step2_title, desc: c.how_it_works.step2_desc, icon: stepIcon2 },
+              { step: "03", title: c.how_it_works.step3_title, desc: c.how_it_works.step3_desc, icon: stepIcon3 },
             ].map((item, i) => (
               <FadeIn key={item.step} delay={i * 0.12}>
                 <div className="relative bg-white rounded-2xl p-8 border border-neutral-100 hover:border-pink-100 hover:shadow-lg hover:shadow-pink-500/5 transition-all duration-300">
@@ -190,15 +285,10 @@ export default function HomePage() {
           <FadeIn>
             <p className="text-sm font-semibold text-pink-500 tracking-wide">ליוצרי תוכן</p>
             <h2 className="text-3xl md:text-4xl font-bold mt-3 leading-tight text-neutral-900">
-              הפכו את <span className="text-pink-500">התשוקה למקצוע</span>
+              {c.creators.title_line1} <span className="text-pink-500">{c.creators.title_line2}</span>
             </h2>
             <div className="mt-8 space-y-4">
-              {[
-                "קבלו מוצרים חינם מהמותגים המובילים",
-                "צלמו תוכן בסגנון שלכם, בקצב שלכם",
-                "צמחו עם מערכת דירוגים ייחודית",
-                "בנו פורטפוליו מקצועי מרשים",
-              ].map((text) => (
+              {[c.creators.benefit1, c.creators.benefit2, c.creators.benefit3, c.creators.benefit4].map((text) => (
                 <div key={text} className="flex items-start gap-3">
                   <div className="w-5 h-5 rounded-full bg-pink-50 flex items-center justify-center mt-0.5 shrink-0">
                     <Icon d={checkIcon} className="w-3 h-3 text-pink-500" />
@@ -211,7 +301,7 @@ export default function HomePage() {
               href="/register?type=creator"
               className="inline-flex items-center gap-2 mt-8 px-7 py-3 rounded-full bg-pink-500 text-white font-semibold hover:bg-pink-600 transition-all shadow-lg shadow-pink-500/15"
             >
-              הצטרפו כיוצרי תוכן
+              {c.creators.cta}
               <Icon d={arrowIcon} className="w-4 h-4" />
             </Link>
           </FadeIn>
@@ -248,11 +338,11 @@ export default function HomePage() {
       <section className="px-6 py-20 bg-neutral-900 text-white">
         <div className="max-w-5xl mx-auto grid grid-cols-3 gap-8 text-center">
           {[
-            { value: "500+", label: "יוצרי תוכן פעילים" },
-            { value: "200+", label: "מותגים ועסקים" },
-            { value: "2,000+", label: "סרטונים שנוצרו" },
+            { value: c.stats.stat1_value, label: c.stats.stat1_label },
+            { value: c.stats.stat2_value, label: c.stats.stat2_label },
+            { value: c.stats.stat3_value, label: c.stats.stat3_label },
           ].map((stat, i) => (
-            <FadeIn key={stat.label} delay={i * 0.1}>
+            <FadeIn key={i} delay={i * 0.1}>
               <div className="text-4xl md:text-5xl font-extrabold tracking-tight">{stat.value}</div>
               <div className="text-neutral-400 text-sm mt-2 font-medium">{stat.label}</div>
             </FadeIn>
@@ -288,15 +378,10 @@ export default function HomePage() {
           <FadeIn className="order-1 md:order-2">
             <p className="text-sm font-semibold text-pink-500 tracking-wide">למותגים ועסקים</p>
             <h2 className="text-3xl md:text-4xl font-bold mt-3 leading-tight text-neutral-900">
-              תוכן שעובד <span className="text-pink-500">בלי הפקות יקרות</span>
+              {c.brands.title_line1} <span className="text-pink-500">{c.brands.title_line2}</span>
             </h2>
             <div className="mt-8 space-y-4">
-              {[
-                "תוכן UGC אותנטי שמביא תוצאות",
-                "מחירים שפויים — קרדיט אחד = סרטון אחד",
-                "יוצרים מאומתים ומדורגים",
-                "ניהול קל דרך לוח בקרה חכם",
-              ].map((text) => (
+              {[c.brands.benefit1, c.brands.benefit2, c.brands.benefit3, c.brands.benefit4].map((text) => (
                 <div key={text} className="flex items-start gap-3">
                   <div className="w-5 h-5 rounded-full bg-pink-50 flex items-center justify-center mt-0.5 shrink-0">
                     <Icon d={checkIcon} className="w-3 h-3 text-pink-500" />
@@ -309,7 +394,7 @@ export default function HomePage() {
               href="/register?type=brand"
               className="inline-flex items-center gap-2 mt-8 px-7 py-3 rounded-full bg-neutral-900 text-white font-semibold hover:bg-neutral-800 transition-all"
             >
-              הצטרפו כמפרסמים
+              {c.brands.cta}
               <Icon d={arrowIcon} className="w-4 h-4" />
             </Link>
           </FadeIn>
@@ -321,23 +406,23 @@ export default function HomePage() {
         <FadeIn>
           <div className="max-w-2xl mx-auto text-center">
             <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight text-neutral-900">
-              מוכנים <span className="text-pink-500">להתחיל?</span>
+              {c.cta_final.title_line1} <span className="text-pink-500">{c.cta_final.title_line2}</span>
             </h2>
             <p className="mt-4 text-neutral-500 max-w-sm mx-auto">
-              הצטרפו לקהילת היוצרים והמותגים הגדלה. חינם לגמרי ליוצרי תוכן.
+              {c.cta_final.subtitle}
             </p>
             <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
               <Link
                 href="/register?type=creator"
                 className="inline-flex items-center justify-center px-8 py-3.5 rounded-full bg-pink-500 text-white font-semibold hover:bg-pink-600 transition-all shadow-lg shadow-pink-500/20"
               >
-                הרשמה חינם
+                {c.cta_final.cta_primary}
               </Link>
               <Link
                 href="/register?type=brand"
                 className="inline-flex items-center justify-center px-8 py-3.5 rounded-full border border-neutral-200 text-neutral-700 font-semibold hover:bg-white transition-all"
               >
-                אני מפרסם
+                {c.cta_final.cta_secondary}
               </Link>
             </div>
           </div>
@@ -352,7 +437,7 @@ export default function HomePage() {
               <p className="text-lg font-bold">
                 <span className="text-pink-400">M</span>ashpianim
               </p>
-              <p className="text-neutral-500 text-sm mt-1">הפלטפורמה ליוצרי תוכן ומותגים</p>
+              <p className="text-neutral-500 text-sm mt-1">{c.footer.tagline}</p>
             </div>
             <div className="flex gap-6 text-sm text-neutral-500">
               <Link href="/terms" className="hover:text-white transition-colors">תנאי שימוש</Link>
@@ -361,7 +446,7 @@ export default function HomePage() {
             </div>
           </div>
           <div className="mt-8 pt-8 border-t border-neutral-800 text-center text-neutral-600 text-xs">
-            &copy; {new Date().getFullYear()} Mashpianim. כל הזכויות שמורות.
+            &copy; {new Date().getFullYear()} {c.footer.copyright}
           </div>
         </div>
       </footer>

@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Badge, Button, Card } from "@/components/ui";
+import { Badge, Button, Card, useToast } from "@/components/ui";
+import { useAuth } from "@/hooks/use-auth";
 
 const categories = [
   "הכל",
@@ -15,10 +17,25 @@ const categories = [
   "ילדים",
 ];
 
-const mockProducts = [
+interface Product {
+  id: string;
+  name: string;
+  brand: string;
+  brandAvatar: string | null;
+  image: string | null;
+  category: string;
+  value: number;
+  description: string;
+  requirements: string;
+  deadline: number;
+  applicants: number;
+  maxCreators: number;
+}
+
+const mockProducts: Product[] = [
   {
     id: "1",
-    name: 'סרום ויטמין C לעור הפנים',
+    name: "סרום ויטמין C לעור הפנים",
     brand: "GlowUp Skincare",
     brandAvatar: null,
     image: null,
@@ -102,7 +119,38 @@ const mockProducts = [
   },
 ];
 
-function ProductCard({ product }: { product: (typeof mockProducts)[0] }) {
+function ProductSkeleton() {
+  return (
+    <div className="bg-white rounded-2xl border border-neutral-100 overflow-hidden">
+      <div className="h-48 bg-gradient-to-br from-pink-100 to-pink-50 animate-pulse" />
+      <div className="p-4 space-y-3">
+        <div className="flex justify-between">
+          <div className="space-y-2 flex-1">
+            <div className="h-4 bg-pink-100 rounded-lg w-3/4 animate-pulse" />
+            <div className="h-3 bg-neutral-100 rounded-lg w-1/2 animate-pulse" />
+          </div>
+          <div className="h-6 w-12 bg-pink-100 rounded-full animate-pulse" />
+        </div>
+        <div className="h-3 bg-neutral-100 rounded-lg w-full animate-pulse" />
+        <div className="h-3 bg-neutral-100 rounded-lg w-2/3 animate-pulse" />
+        <div className="flex justify-between items-center pt-1">
+          <div className="h-3 bg-neutral-100 rounded-lg w-1/3 animate-pulse" />
+          <div className="h-8 w-20 bg-pink-100 rounded-full animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProductCard({
+  product,
+  onApply,
+  applying,
+}: {
+  product: Product;
+  onApply: (id: string) => void;
+  applying: string | null;
+}) {
   const placeholderColors = [
     "from-pink-200 to-pink-300",
     "from-purple-200 to-purple-300",
@@ -112,15 +160,25 @@ function ProductCard({ product }: { product: (typeof mockProducts)[0] }) {
     "from-rose-200 to-rose-300",
   ];
   const colorIndex =
-    parseInt(product.id) % placeholderColors.length;
+    parseInt(product.id.replace(/\D/g, "") || "0") % placeholderColors.length;
 
   return (
     <Card hover padding="none" className="overflow-hidden">
-      <div
-        className={`h-48 bg-gradient-to-br ${placeholderColors[colorIndex]} flex items-center justify-center`}
-      >
-        <span className="text-5xl opacity-50">📦</span>
-      </div>
+      {product.image ? (
+        <div className="h-48 overflow-hidden">
+          <img
+            src={product.image}
+            alt={product.name}
+            className="w-full h-full object-cover"
+          />
+        </div>
+      ) : (
+        <div
+          className={`h-48 bg-gradient-to-br ${placeholderColors[colorIndex]} flex items-center justify-center`}
+        >
+          <span className="text-5xl opacity-50">📦</span>
+        </div>
+      )}
       <div className="p-4">
         <div className="flex items-start justify-between mb-2">
           <div>
@@ -142,7 +200,12 @@ function ProductCard({ product }: { product: (typeof mockProducts)[0] }) {
             <span>👥 {product.applicants}/{product.maxCreators}</span>
             <span>⏱ {product.deadline} ימים</span>
           </div>
-          <Button size="sm" rounded>
+          <Button
+            size="sm"
+            rounded
+            loading={applying === product.id}
+            onClick={() => onApply(product.id)}
+          >
             שלחו בקשה
           </Button>
         </div>
@@ -154,10 +217,91 @@ function ProductCard({ product }: { product: (typeof mockProducts)[0] }) {
 export default function FeedPage() {
   const [activeCategory, setActiveCategory] = useState("הכל");
   const [searchQuery, setSearchQuery] = useState("");
+  const [products, setProducts] = useState<Product[]>(mockProducts);
+  const [loading, setLoading] = useState(true);
+  const [applying, setApplying] = useState<string | null>(null);
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const router = useRouter();
 
-  const filtered = mockProducts.filter((p) => {
+  useEffect(() => {
+    async function fetchProducts() {
+      try {
+        const res = await fetch("/api/products?status=active");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.products && data.products.length > 0) {
+            setProducts(
+              data.products.map((p: Record<string, unknown>) => ({
+                id: p.id as string,
+                name: p.name as string,
+                brand: (p.brand_name as string) || (p.shop_name as string) || "",
+                brandAvatar: (p.logo_url as string) || null,
+                image: (p.image_url as string) || null,
+                category: (p.category as string) || "",
+                value: Number(p.price) || 0,
+                description: (p.description as string) || "",
+                requirements: (p.requirements as string) || "סרטון UGC",
+                deadline: (p.film_deadline_days as number) || 10,
+                applicants: (p.applicants_count as number) || 0,
+                maxCreators: (p.max_creators as number) || 3,
+              }))
+            );
+          }
+        }
+      } catch {
+        // Keep mock data on failure
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchProducts();
+  }, []);
+
+  const handleApply = useCallback(
+    async (productId: string) => {
+      if (!user) {
+        router.push("/login?redirect=/feed");
+        return;
+      }
+
+      setApplying(productId);
+      try {
+        const res = await fetch("/api/connections", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId }),
+        });
+
+        if (res.ok) {
+          toast("בקשת החיבור נשלחה בהצלחה!", "success");
+          setProducts((prev) =>
+            prev.map((p) =>
+              p.id === productId
+                ? { ...p, applicants: p.applicants + 1 }
+                : p
+            )
+          );
+        } else {
+          const data = await res.json();
+          toast(data.error || "שגיאה בשליחת הבקשה", "error");
+        }
+      } catch {
+        toast("שגיאה בשליחת הבקשה", "error");
+      } finally {
+        setApplying(null);
+      }
+    },
+    [user, router, toast]
+  );
+
+  const filtered = products.filter((p) => {
     if (activeCategory !== "הכל" && p.category !== activeCategory) return false;
-    if (searchQuery && !p.name.includes(searchQuery) && !p.brand.includes(searchQuery))
+    if (
+      searchQuery &&
+      !p.name.includes(searchQuery) &&
+      !p.brand.includes(searchQuery)
+    )
       return false;
     return true;
   });
@@ -190,7 +334,14 @@ export default function FeedPage() {
               </svg>
             </div>
             <button className="p-2.5 rounded-xl bg-neutral-50 border border-neutral-100 text-neutral-500 hover:bg-neutral-100 transition-colors">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                 <path d="M13.73 21a2 2 0 0 1-3.46 0" />
               </svg>
@@ -218,23 +369,35 @@ export default function FeedPage() {
 
       {/* Product grid */}
       <div className="max-w-2xl mx-auto px-4 py-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <AnimatePresence mode="popLayout">
-            {filtered.map((product) => (
-              <motion.div
-                key={product.id}
-                layout
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.2 }}
-              >
-                <ProductCard product={product} />
-              </motion.div>
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <ProductSkeleton key={i} />
             ))}
-          </AnimatePresence>
-        </div>
-        {filtered.length === 0 && (
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <AnimatePresence mode="popLayout">
+              {filtered.map((product) => (
+                <motion.div
+                  key={product.id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <ProductCard
+                    product={product}
+                    onApply={handleApply}
+                    applying={applying}
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
+        {!loading && filtered.length === 0 && (
           <div className="text-center py-20 text-neutral-400">
             <span className="text-4xl block mb-4">🔍</span>
             <p>לא נמצאו מוצרים בקטגוריה זו</p>
