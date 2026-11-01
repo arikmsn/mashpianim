@@ -184,7 +184,7 @@ function LoginContent() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-6 bg-gradient-to-br from-pink-50 to-background">
+    <main className="min-h-screen flex items-center justify-center px-6" style={{ background: "linear-gradient(135deg, rgba(131,58,180,0.05), rgba(225,48,108,0.05), rgba(247,119,55,0.03))" }}>
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <h1
@@ -206,14 +206,14 @@ function LoginContent() {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="05X-XXX-XXXX"
-                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none transition-all text-center text-lg"
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-ig-pink focus:ring-2 focus:ring-ig-pink/20 outline-none transition-all text-center text-lg"
                 required
               />
               <p className="text-xs text-neutral-400 mt-2 text-center">נשלח קוד אימות בוואטסאפ</p>
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full mt-4 px-6 py-3 rounded-xl bg-pink-500 text-white font-medium hover:bg-pink-600 transition-colors disabled:opacity-50"
+                className="w-full mt-4 px-6 py-3 rounded-xl ig-gradient-bg text-white font-medium hover:opacity-90 transition-colors disabled:opacity-50"
               >
                 {loading ? "שולח..." : "שלחו לי קוד"}
               </button>
@@ -236,13 +236,13 @@ function LoginContent() {
                 onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
                 placeholder="000000"
                 maxLength={6}
-                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none transition-all text-center text-2xl tracking-[0.5em]"
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-ig-pink focus:ring-2 focus:ring-ig-pink/20 outline-none transition-all text-center text-2xl tracking-[0.5em]"
                 required
               />
               <button
                 type="submit"
                 disabled={loading || otp.length < 6}
-                className="w-full mt-4 px-6 py-3 rounded-xl bg-pink-500 text-white font-medium hover:bg-pink-600 transition-colors disabled:opacity-50"
+                className="w-full mt-4 px-6 py-3 rounded-xl ig-gradient-bg text-white font-medium hover:opacity-90 transition-colors disabled:opacity-50"
               >
                 {loading ? "מאמת..." : "אישור"}
               </button>
@@ -256,12 +256,12 @@ function LoginContent() {
             <form onSubmit={handleEmailLogin}>
               <label className="block text-sm font-medium mb-2">אימייל</label>
               <input type="email" dir="ltr" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@example.com"
-                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none transition-all text-center" required />
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-ig-pink focus:ring-2 focus:ring-ig-pink/20 outline-none transition-all text-center" required />
               <label className="block text-sm font-medium mb-2 mt-3">סיסמה</label>
               <input type="password" dir="ltr" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••"
-                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none transition-all text-center" required />
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-ig-pink focus:ring-2 focus:ring-ig-pink/20 outline-none transition-all text-center" required />
               <button type="submit" disabled={loading}
-                className="w-full mt-4 px-6 py-3 rounded-xl bg-pink-500 text-white font-medium hover:bg-pink-600 transition-colors disabled:opacity-50">
+                className="w-full mt-4 px-6 py-3 rounded-xl ig-gradient-bg text-white font-medium hover:opacity-90 transition-colors disabled:opacity-50">
                 {loading ? "מתחבר..." : "התחברות"}
               </button>
               <button type="button" onClick={() => setStep("phone")} className="w-full mt-2 text-sm text-neutral-400 hover:text-neutral-600">
@@ -282,7 +282,7 @@ function LoginContent() {
                 value={adminPhone}
                 onChange={(e) => setAdminPhone(e.target.value)}
                 placeholder="05X-XXX-XXXX"
-                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none transition-all text-center mb-3"
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-ig-pink focus:ring-2 focus:ring-ig-pink/20 outline-none transition-all text-center mb-3"
               />
               <label className="block text-sm font-medium mb-2">סיסמה</label>
               <input
@@ -291,12 +291,12 @@ function LoginContent() {
                 value={adminPassword}
                 onChange={(e) => setAdminPassword(e.target.value)}
                 placeholder="••••••"
-                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none transition-all text-center"
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-ig-pink focus:ring-2 focus:ring-ig-pink/20 outline-none transition-all text-center"
               />
               <button
                 type="submit"
                 disabled={loading || !adminPhone || !adminPassword}
-                className="w-full mt-4 px-6 py-3 rounded-xl bg-pink-500 text-white font-medium hover:bg-pink-600 transition-colors disabled:opacity-50"
+                className="w-full mt-4 px-6 py-3 rounded-xl ig-gradient-bg text-white font-medium hover:opacity-90 transition-colors disabled:opacity-50"
               >
                 {loading ? "מאמת..." : "המשך"}
               </button>

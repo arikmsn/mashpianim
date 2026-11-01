@@ -94,8 +94,8 @@ let greenAPIInstance: GreenAPIProvider | null = null;
 export function getGreenAPI(): GreenAPIProvider | null {
   if (greenAPIInstance) return greenAPIInstance;
 
-  const instanceId = process.env.GREENAPI_INSTANCE_ID;
-  const apiToken = process.env.GREENAPI_API_TOKEN;
+  const instanceId = process.env.GREEN_API_INSTANCE_ID || process.env.GREENAPI_INSTANCE_ID;
+  const apiToken = process.env.GREEN_API_TOKEN || process.env.GREENAPI_API_TOKEN;
 
   if (!instanceId || !apiToken) return null;
 
