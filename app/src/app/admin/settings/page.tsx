@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Card, CardTitle, Button, Input, useToast } from "@/components/ui";
 
 const defaultSettings = {
-  general: { platformName: "Mashpianim", supportEmail: "support@mashpianim.co.il", supportPhone: "" },
+  general: { platformName: "Mashpian", supportEmail: "support@mashpian.online", supportPhone: "" },
   credits: { single: "100", pack5: "450", pack10: "800", pack20: "1400" },
   moderation: { ocrCheck: true, chatFilter: true, speechDetection: true, contentFilter: true },
   timelines: { shipDays: "7", filmDays: "10", reviewDays: "7", maxRevisions: "1" },
@@ -12,7 +12,7 @@ const defaultSettings = {
 
 type Settings = typeof defaultSettings;
 
-const STORAGE_KEY = "mashpianim_settings";
+const STORAGE_KEY = "mashpian_settings";
 
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<Settings>(defaultSettings);

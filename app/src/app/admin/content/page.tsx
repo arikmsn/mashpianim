@@ -89,7 +89,7 @@ const defaultContent: ContentSection[] = [
     label: "פוטר",
     fields: [
       { key: "tagline", label: "תיאור קצר", type: "text", value: "הפלטפורמה ליוצרי תוכן ומותגים" },
-      { key: "copyright", label: "זכויות יוצרים", type: "text", value: "Mashpianim. כל הזכויות שמורות." },
+      { key: "copyright", label: "זכויות יוצרים", type: "text", value: "Mashpian. כל הזכויות שמורות." },
     ],
   },
 ];
@@ -138,7 +138,7 @@ export default function AdminContentPage() {
 
       // Fallback to localStorage
       try {
-        const stored = localStorage.getItem("mashpianim_site_content");
+        const stored = localStorage.getItem("mashpian_site_content");
         if (stored) {
           const parsed = JSON.parse(stored);
           setSections(mergeSavedContent(defaultContent, parsed));
@@ -178,7 +178,7 @@ export default function AdminContentPage() {
       }
 
       // Save to localStorage
-      localStorage.setItem("mashpianim_site_content", JSON.stringify(payload));
+      localStorage.setItem("mashpian_site_content", JSON.stringify(payload));
 
       // Persist to Supabase via API
       let apiError = "";

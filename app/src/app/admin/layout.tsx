@@ -24,7 +24,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <aside className="hidden md:flex w-64 bg-[#0B051D] text-white flex-col fixed right-0 top-0 h-screen z-40">
         <div className="p-6 border-b border-white/10">
           <h1 className="text-lg font-bold">
-            <span className="text-pink-400">Mashpianim</span> Admin
+            <span className="text-ig-pink">Mashpian</span> Admin
           </h1>
         </div>
         <nav className="flex-1 p-4 space-y-1">
@@ -60,7 +60,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Mobile header */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-[#0B051D] text-white px-4 py-3 flex items-center justify-between">
         <h1 className="text-sm font-bold">
-          <span className="text-pink-400">Mashpianim</span> Admin
+          <span className="text-ig-pink">Mashpian</span> Admin
         </h1>
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
@@ -88,7 +88,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <aside className="absolute right-0 top-0 h-full w-64 bg-[#0B051D] text-white flex flex-col animate-in slide-in-from-right">
             <div className="p-6 border-b border-white/10 flex items-center justify-between">
               <h1 className="text-lg font-bold">
-                <span className="text-pink-400">Mashpianim</span> Admin
+                <span className="text-ig-pink">Mashpian</span> Admin
               </h1>
               <button
                 onClick={() => setMobileOpen(false)}

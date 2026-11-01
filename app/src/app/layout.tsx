@@ -9,14 +9,14 @@ const heebo = Heebo({
 });
 
 export const metadata: Metadata = {
-  title: "Mashpianim — יוצרים תוכן, מחברים מותגים",
+  title: "Mashpian — יוצרים תוכן, מחברים מותגים",
   description:
     "הפלטפורמה הישראלית לחיבור יוצרי תוכן UGC עם מותגים ועסקים. מוצרים חינם בתמורה לסרטונים אותנטיים.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Mashpianim",
+    title: "Mashpian",
   },
 };
 
@@ -24,7 +24,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#FF1493",
+  themeColor: "#E1306C",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

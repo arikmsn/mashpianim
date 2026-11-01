@@ -4,9 +4,9 @@ import { createClient } from "@supabase/supabase-js";
 const SHARED_AUTH_PASSWORD = process.env.ADMIN_AUTH_SECRET || "change-me-in-env";
 
 const ROLE_CONFIG: Record<string, { email: string; phone: string; fullName: string; type: string }> = {
-  admin: { email: "admin@mashpianim.co.il", phone: "+972502463555", fullName: "מנהל מערכת", type: "admin" },
-  creator: { email: "creator@mashpianim.co.il", phone: "+972500000001", fullName: "יוצר תוכן (בדיקה)", type: "creator" },
-  brand: { email: "brand@mashpianim.co.il", phone: "+972500000002", fullName: "מפרסם (בדיקה)", type: "brand" },
+  admin: { email: "admin@mashpian.online", phone: "+972502463555", fullName: "מנהל מערכת", type: "admin" },
+  creator: { email: "creator@mashpian.online", phone: "+972500000001", fullName: "יוצר תוכן (בדיקה)", type: "creator" },
+  brand: { email: "brand@mashpian.online", phone: "+972500000002", fullName: "מפרסם (בדיקה)", type: "brand" },
 };
 
 export async function POST(request: NextRequest) {

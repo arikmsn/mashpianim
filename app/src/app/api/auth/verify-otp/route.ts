@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
     const { data: session, error: sessionError } =
       await supabaseAdmin.auth.admin.generateLink({
         type: "magiclink",
-        email: `${phone.replace("+", "")}@phone.mashpianim.co.il`,
+        email: `${phone.replace("+", "")}@phone.mashpian.online`,
       });
 
     if (sessionError) {

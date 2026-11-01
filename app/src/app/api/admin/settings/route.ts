@@ -4,8 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 
 const defaultSettings: Record<string, Record<string, string>> = {
   general: {
-    platform_name: "Mashpianim",
-    support_email: "support@mashpianim.co.il",
+    platform_name: "Mashpian",
+    support_email: "support@mashpian.online",
     support_phone: "",
   },
   credits: {

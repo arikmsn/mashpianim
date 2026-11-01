@@ -5,11 +5,11 @@ import { cn } from "@/lib/utils";
 
 const variants = {
   primary:
-    "bg-pink-500 text-white hover:bg-pink-600 shadow-lg shadow-pink-500/25",
+    "ig-gradient-bg text-white hover:opacity-90 shadow-lg shadow-ig-pink/25",
   secondary:
-    "bg-pink-50 text-pink-600 hover:bg-pink-100",
+    "bg-ig-pink/10 text-ig-pink hover:bg-ig-pink/15",
   outline:
-    "border-2 border-pink-500 text-pink-500 hover:bg-pink-50",
+    "border-2 border-ig-pink text-ig-pink hover:bg-ig-pink/5",
   ghost:
     "text-neutral-600 hover:bg-neutral-100",
   dark:

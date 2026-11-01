@@ -55,7 +55,7 @@ const defaultContent: Record<string, Record<string, string>> = {
   },
   footer: {
     tagline: "הפלטפורמה ליוצרי תוכן ומותגים",
-    copyright: "Mashpianim. כל הזכויות שמורות.",
+    copyright: "Mashpian. כל הזכויות שמורות.",
   },
 };
 

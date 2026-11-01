@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --background: #F9F8F5;
+  --background: #FAFAFA;
   --foreground: #0B051D;
   --pink-50: #FFF0F6;
   --pink-100: #FFD6E8;
   --pink-200: #FFA8CD;
   --pink-300: #FF7EB3;
   --pink-400: #FF4D94;
-  --pink-500: #FF1493;
-  --pink-600: #E0007B;
-  --pink-700: #B80064;
-  --pink-800: #8F004D;
-  --pink-900: #660037;
+  --pink-500: #E1306C;
+  --pink-600: #C13584;
+  --pink-700: #833AB4;
+  --pink-800: #6C2D9E;
+  --pink-900: #4A1D6B;
   --neutral-50: #FAFAFA;
   --neutral-100: #F5F5F5;
   --neutral-200: #E5E5E5;
@@ -22,7 +22,13 @@
   --neutral-600: #525252;
   --neutral-700: #404040;
   --neutral-800: #262626;
-  --neutral-900: #0B051D;
+  --neutral-900: #171717;
+  --ig-purple: #833AB4;
+  --ig-pink: #E1306C;
+  --ig-magenta: #C13584;
+  --ig-orange: #F77737;
+  --ig-yellow: #FCAF45;
+  --ig-light-yellow: #FFDC80;
   --radius: 0.75rem;
 }
 
@@ -49,6 +55,12 @@
   --color-neutral-700: var(--neutral-700);
   --color-neutral-800: var(--neutral-800);
   --color-neutral-900: var(--neutral-900);
+  --color-ig-purple: var(--ig-purple);
+  --color-ig-pink: var(--ig-pink);
+  --color-ig-magenta: var(--ig-magenta);
+  --color-ig-orange: var(--ig-orange);
+  --color-ig-yellow: var(--ig-yellow);
+  --color-ig-light-yellow: var(--ig-light-yellow);
   --font-sans: var(--font-heebo), system-ui, sans-serif;
   --radius-sm: calc(var(--radius) - 0.25rem);
   --radius-md: var(--radius);
@@ -60,11 +72,70 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0B051D;
-    --foreground: #F9F8F5;
+    --foreground: #FAFAFA;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-20px); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+.ig-gradient-text {
+  background: linear-gradient(135deg, var(--ig-purple), var(--ig-pink), var(--ig-orange), var(--ig-yellow));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.ig-gradient-bg {
+  background: linear-gradient(135deg, var(--ig-purple), var(--ig-pink), var(--ig-orange), var(--ig-yellow));
+}
+
+.ig-gradient-bg-animated {
+  background: linear-gradient(135deg, var(--ig-purple), var(--ig-pink), var(--ig-orange), var(--ig-yellow));
+  background-size: 200% 200%;
+  animation: gradient-shift 6s ease infinite;
+}
+
+.ig-gradient-border {
+  position: relative;
+  background: white;
+  z-index: 0;
+}
+
+.ig-gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, var(--ig-purple), var(--ig-pink), var(--ig-orange), var(--ig-yellow));
+  z-index: -1;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.glass-dark {
+  background: rgba(23, 23, 23, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
