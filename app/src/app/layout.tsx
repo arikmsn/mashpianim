@@ -11,7 +11,7 @@ const heebo = Heebo({
 export const metadata: Metadata = {
   title: "Mashpianim — יוצרים תוכן, מחברים מותגים",
   description:
-    "פלטפורמה לחיבור יוצרי תוכן UGC עם מותגים ועסקי e-commerce. מוצרים חינם בתמורה לסרטונים אותנטיים.",
+    "הפלטפורמה הישראלית לחיבור יוצרי תוכן UGC עם מותגים ועסקים. מוצרים חינם בתמורה לסרטונים אותנטיים.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
