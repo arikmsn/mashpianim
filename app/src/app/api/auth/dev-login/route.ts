@@ -6,52 +6,46 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const DEV_ADMIN_PASSWORD = "Mashpianim2026!";
+const ADMIN_PHONE = "+972502463555";
+const ADMIN_PASSWORD = "612861";
 
-const DEV_ACCOUNTS: Record<string, { phone: string; email: string; role: string }> = {
-  admin: {
-    phone: "+972500000000",
-    email: "admin@mashpianim.co.il",
-    role: "admin",
-  },
-  creator: {
-    phone: "+972500000001",
-    email: "creator@mashpianim.co.il",
-    role: "creator",
-  },
-  brand: {
-    phone: "+972500000002",
-    email: "brand@mashpianim.co.il",
-    role: "brand",
-  },
+const ROLE_CONFIG: Record<string, { email: string; fullName: string }> = {
+  admin: { email: "admin@mashpianim.co.il", fullName: "מנהל מערכת" },
+  creator: { email: "creator@mashpianim.co.il", fullName: "יוצר תוכן (בדיקה)" },
+  brand: { email: "brand@mashpianim.co.il", fullName: "מפרסם (בדיקה)" },
 };
 
 export async function POST(request: NextRequest) {
   try {
-    const { role, password } = await request.json();
+    const { phone, password, role } = await request.json();
 
-    if (password !== DEV_ADMIN_PASSWORD) {
-      return NextResponse.json({ error: "סיסמה שגויה" }, { status: 401 });
+    const normalizedPhone = phone?.replace(/[-\s]/g, "").replace(/^0/, "+972");
+
+    if (normalizedPhone !== ADMIN_PHONE || password !== ADMIN_PASSWORD) {
+      return NextResponse.json({ error: "מספר טלפון או סיסמה שגויים" }, { status: 401 });
     }
 
-    const account = DEV_ACCOUNTS[role];
-    if (!account) {
+    if (!role) {
+      return NextResponse.json({ success: true, step: "choose_role" });
+    }
+
+    const config = ROLE_CONFIG[role];
+    if (!config) {
       return NextResponse.json({ error: "תפקיד לא תקין" }, { status: 400 });
     }
 
-    // Check if dev user exists
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-    let user = existingUsers?.users?.find((u) => u.email === account.email);
+    let user = existingUsers?.users?.find((u) => u.email === config.email);
 
     if (!user) {
       const { data: newUser, error: createError } =
         await supabaseAdmin.auth.admin.createUser({
-          email: account.email,
-          password: DEV_ADMIN_PASSWORD,
-          phone: account.phone,
+          email: config.email,
+          password: ADMIN_PASSWORD,
+          phone: ADMIN_PHONE,
           phone_confirm: true,
           email_confirm: true,
-          user_metadata: { role: account.role, dev_account: true },
+          user_metadata: { role, dev_account: true },
         });
       if (createError) {
         return NextResponse.json(
@@ -61,28 +55,26 @@ export async function POST(request: NextRequest) {
       }
       user = newUser.user;
 
-      // Create user record in users table
       await supabaseAdmin.from("users").upsert({
         id: user.id,
-        phone: account.phone,
-        email: account.email,
-        full_name: account.role === "admin" ? "מנהל מערכת" : account.role === "creator" ? "יוצר תוכן (בדיקה)" : "מפרסם (בדיקה)",
-        role: account.role,
+        phone: ADMIN_PHONE,
+        email: config.email,
+        full_name: config.fullName,
+        role,
         status: "active",
       });
 
-      // Create profile based on role
-      if (account.role === "creator") {
+      if (role === "creator") {
         await supabaseAdmin.from("creator_profiles").upsert({
           user_id: user.id,
-          display_name: "יוצר תוכן (בדיקה)",
+          display_name: config.fullName,
           bio: "חשבון בדיקה ליוצר תוכן",
           categories: ["אופנה", "לייף סטייל"],
           level: "starter",
           instagram_url: "https://instagram.com/test_creator",
           tiktok_url: "https://tiktok.com/@test_creator",
         });
-      } else if (account.role === "brand") {
+      } else if (role === "brand") {
         await supabaseAdmin.from("brand_profiles").upsert({
           user_id: user.id,
           business_name: "מותג בדיקה בע\"מ",
@@ -94,20 +86,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate a magic link for this user
     const { data: linkData, error: linkError } =
       await supabaseAdmin.auth.admin.generateLink({
         type: "magiclink",
-        email: account.email,
+        email: config.email,
       });
 
     if (linkError || !linkData) {
       return NextResponse.json({
         success: true,
         userId: user.id,
-        role: account.role,
-        email: account.email,
-        message: "משתמש נוצר, התחברו עם אימייל וסיסמה",
+        role,
+        email: config.email,
         loginMethod: "email",
       });
     }
@@ -115,8 +105,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       userId: user.id,
-      role: account.role,
-      email: account.email,
+      role,
+      email: config.email,
       verificationUrl: linkData?.properties?.hashed_token
         ? `/auth/callback?token_hash=${linkData.properties.hashed_token}&type=magiclink`
         : undefined,

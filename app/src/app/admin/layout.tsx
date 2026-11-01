@@ -9,6 +9,7 @@ const navItems = [
   { href: "/admin/creators", label: "יוצרים", icon: "🎬" },
   { href: "/admin/brands", label: "עסקים", icon: "🏪" },
   { href: "/admin/moderation", label: "מודרציה", icon: "🛡️" },
+  { href: "/admin/content", label: "תוכן האתר", icon: "✏️" },
   { href: "/admin/settings", label: "הגדרות", icon: "⚙️" },
 ];
 
