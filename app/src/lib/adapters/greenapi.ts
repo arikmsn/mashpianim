@@ -64,7 +64,7 @@ export class GreenAPIProvider implements MessagingProvider {
   ): Promise<{ success: boolean; messageId?: string }> {
     return this.sendWhatsApp({
       to: phone,
-      body: `🔐 קוד האימות שלך ב-Mashpian: *${code}*\n\nהקוד תקף ל-5 דקות. אל תשתפו אותו עם אף אחד.`,
+      body: `קוד האימות שלך למערכת משפיען אונליין הינו:\n${code}\n🔐 הקוד תקף ל-5 דקות. אין לשתף אותו עם אף אחד.`,
     });
   }
 
