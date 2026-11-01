@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -24,7 +24,7 @@ function LoginContent() {
   const [step, setStep] = useState<"phone" | "otp" | "email" | "admin-login" | "admin-roles">("phone");
   const [loading, setLoading] = useState(false);
   const [formattedPhone, setFormattedPhone] = useState("");
-  const [tapCount, setTapCount] = useState(0);
+  const tapRef = useRef({ count: 0, timer: 0 });
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/feed";
   const router = useRouter();
@@ -150,6 +150,17 @@ function LoginContent() {
     }
   }
 
+  const handleSecretTap = useCallback(() => {
+    tapRef.current.count += 1;
+    window.clearTimeout(tapRef.current.timer);
+    if (tapRef.current.count >= 5) {
+      tapRef.current.count = 0;
+      setStep("admin-login");
+    } else {
+      tapRef.current.timer = window.setTimeout(() => { tapRef.current.count = 0; }, 2000);
+    }
+  }, []);
+
   async function handleGoogleLogin() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -162,7 +173,12 @@ function LoginContent() {
     <main className="min-h-screen flex items-center justify-center px-6 bg-gradient-to-br from-pink-50 to-background">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">שלום!</h1>
+          <h1
+            className="text-3xl font-bold mb-2 cursor-default select-none"
+            onClick={handleSecretTap}
+          >
+            שלום!
+          </h1>
           <p className="text-neutral-500">התחברו לחשבון שלכם</p>
         </div>
 
@@ -361,21 +377,9 @@ function LoginContent() {
           )}
         </div>
 
-        <p
-          className="text-center mt-6 text-sm text-neutral-400 select-none"
-          onClick={() => {
-            const next = tapCount + 1;
-            if (next >= 5) {
-              setStep("admin-login");
-              setTapCount(0);
-            } else {
-              setTapCount(next);
-              setTimeout(() => setTapCount(0), 2000);
-            }
-          }}
-        >
+        <p className="text-center mt-6 text-sm text-neutral-400">
           אין לכם חשבון?{" "}
-          <Link href="/register" className="text-pink-500 font-medium hover:underline" onClick={(e) => e.stopPropagation()}>
+          <Link href="/register" className="text-pink-500 font-medium hover:underline">
             הירשמו עכשיו
           </Link>
         </p>
