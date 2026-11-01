@@ -1,11 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 export async function verifyAdmin() {
-  const supabaseConfigured =
-    process.env.NEXT_SUPABASE_URL &&
-    process.env.NEXT_SUPABASE_ANON_KEY;
+  const supabaseUrl = process.env.NEXT_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_SUPABASE_ANON_KEY;
+  const supabaseServiceKey = process.env.SUPABASE_SEC_KEY;
 
-  if (!supabaseConfigured) {
+  if (!supabaseUrl || !supabaseAnonKey) {
     return { isAdmin: false, userId: null, supabase: null };
   }
 
@@ -18,6 +19,23 @@ export async function verifyAdmin() {
     return { isAdmin: false, userId: null, supabase };
   }
 
+  // Use service role client to bypass RLS when checking admin status
+  if (supabaseServiceKey) {
+    const adminClient = createSupabaseClient(supabaseUrl, supabaseServiceKey);
+    const { data: dbUser } = await adminClient
+      .from("users")
+      .select("type")
+      .eq("auth_user_id", user.id)
+      .single();
+
+    if ((dbUser as any)?.type === "admin") {
+      // Return service role client so admin operations bypass RLS too
+      return { isAdmin: true, userId: user.id, supabase: adminClient };
+    }
+    return { isAdmin: false, userId: user.id, supabase };
+  }
+
+  // Fallback: try with anon client (may fail if RLS blocks)
   const { data: dbUser } = await supabase
     .from("users")
     .select("type")
