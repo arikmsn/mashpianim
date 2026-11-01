@@ -45,6 +45,9 @@ self.addEventListener('fetch', (event) => {
 
   if (request.method !== 'GET') return;
 
+  // Skip cross-origin requests (Supabase, analytics, etc.)
+  if (url.origin !== self.location.origin) return;
+
   // Static assets: cache-first
   if (
     url.pathname.startsWith('/_next/static/') ||

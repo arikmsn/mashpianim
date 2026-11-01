@@ -1,14 +1,18 @@
 {
+  "id": "/feed",
   "name": "משפיען אונליין — יוצרים תוכן, מחברים מותגים",
   "short_name": "משפיען אונליין",
   "description": "הפלטפורמה הישראלית לחיבור יוצרי תוכן UGC עם מותגים. מוצרים בחינם בתמורה לסרטונים אותנטיים.",
   "start_url": "/feed",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#E1306C",
   "orientation": "portrait",
   "dir": "rtl",
   "lang": "he",
+  "prefer_related_applications": false,
+  "categories": ["social", "shopping", "business"],
   "icons": [
     {
       "src": "/icon.svg",
@@ -30,6 +34,15 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "משפיען אונליין — גלו מוצרים מותגים"
     }
   ]
 }
