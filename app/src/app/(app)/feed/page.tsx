@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge, Button, Card, useToast } from "@/components/ui";
 import { useAuth } from "@/hooks/use-auth";
+import { useNotifications } from "@/hooks/use-notifications";
 
 const categories = [
   "הכל",
@@ -222,6 +224,7 @@ export default function FeedPage() {
   const [applying, setApplying] = useState<string | null>(null);
   const { user } = useAuth();
   const { toast } = useToast();
+  const { unreadCount } = useNotifications();
   const router = useRouter();
 
   useEffect(() => {
@@ -333,7 +336,10 @@ export default function FeedPage() {
                 <path d="M21 21l-4.35-4.35" />
               </svg>
             </div>
-            <button className="p-2.5 rounded-xl bg-neutral-50 border border-neutral-100 text-neutral-500 hover:bg-neutral-100 transition-colors">
+            <Link
+              href="/notifications"
+              className="relative p-2.5 rounded-xl bg-neutral-50 border border-neutral-100 text-neutral-500 hover:bg-neutral-100 transition-colors"
+            >
               <svg
                 width="18"
                 height="18"
@@ -345,7 +351,12 @@ export default function FeedPage() {
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                 <path d="M13.73 21a2 2 0 0 1-3.46 0" />
               </svg>
-            </button>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-pink-500 text-white text-[10px] flex items-center justify-center font-bold ring-2 ring-white">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </Link>
           </div>
 
           {/* Categories */}
