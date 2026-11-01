@@ -34,12 +34,12 @@ const defaults: SiteContent = {
     cta: "הצטרפו כיוצרי תוכן",
   },
   stats: {
-    stat1_value: "500+",
-    stat1_label: "יוצרי תוכן פעילים",
-    stat2_value: "200+",
-    stat2_label: "מותגים ועסקים",
-    stat3_value: "2,000+",
-    stat3_label: "סרטונים שנוצרו",
+    stat1_value: "100%",
+    stat1_label: "חינם ליוצרים",
+    stat2_value: "10",
+    stat2_label: "ימים ליצירת סרטון",
+    stat3_value: "3",
+    stat3_label: "צעדים פשוטים",
   },
   brands: {
     title_line1: "תוכן שעובד",
@@ -137,9 +137,9 @@ const arrowIcon = "M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18";
 const playIcon = "M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z";
 
 const heroVideos = [
-  { label: "סרום ויטמין C", gradient: "from-pink-300 to-rose-400" },
-  { label: "שעון ספורט", gradient: "from-purple-300 to-indigo-400" },
-  { label: "תיק גב עור", gradient: "from-amber-300 to-orange-400" },
+  { label: "ביוטי", gradient: "from-pink-300 to-rose-400" },
+  { label: "טכנולוגיה", gradient: "from-purple-300 to-indigo-400" },
+  { label: "אופנה", gradient: "from-amber-300 to-orange-400" },
 ];
 
 export default function HomePage() {
@@ -234,7 +234,7 @@ export default function HomePage() {
             </Link>
           </motion.div>
 
-          {/* Mock UI card */}
+          {/* Hero illustration card */}
           <motion.div
             className="mt-16 mx-auto max-w-lg"
             initial={{ opacity: 0, y: 40 }}
@@ -245,8 +245,8 @@ export default function HomePage() {
               <div className="flex items-center gap-3 mb-4 pb-4 border-b border-neutral-100">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-pink-600" />
                 <div className="flex-1">
-                  <div className="text-sm font-semibold text-neutral-900">שרה כ. — יוצרת תוכן</div>
-                  <div className="text-xs text-neutral-400">רמה 3 · 28 סרטונים · 4.9 דירוג</div>
+                  <div className="text-sm font-semibold text-neutral-900">הפרופיל שלך</div>
+                  <div className="text-xs text-neutral-400">רמה · סרטונים · דירוג</div>
                 </div>
                 <span className="text-xs font-medium bg-emerald-50 text-emerald-600 px-2.5 py-1 rounded-full border border-emerald-100">פעילה</span>
               </div>
@@ -331,9 +331,9 @@ export default function HomePage() {
             <div className="bg-neutral-50 rounded-2xl p-8 border border-neutral-100">
               <div className="space-y-3">
                 {[
-                  { name: "סרום ויטמין C", brand: "GlowUp Skincare", status: "ממתין לאישור" },
-                  { name: "אוזניות ספורט", brand: "TechFit", status: "אושר — צלמו" },
-                  { name: "סט יוגה", brand: "ZenLife", status: "סרטון הועלה" },
+                  { name: "מוצר לדוגמה", brand: "מותג א׳", status: "ממתין לאישור" },
+                  { name: "מוצר שני", brand: "מותג ב׳", status: "אושר — צלמו" },
+                  { name: "מוצר שלישי", brand: "מותג ג׳", status: "סרטון הועלה" },
                 ].map((item, i) => (
                   <div key={i} className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-neutral-100">
                     <div>

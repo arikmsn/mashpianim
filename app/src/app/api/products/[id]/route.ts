@@ -8,7 +8,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
 
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ product: { id, name: "מוצר לדוגמה", status: "active" } });
+    return NextResponse.json({ error: "המערכת לא מוגדרת" }, { status: 503 });
   }
 
   const supabase = await createClient();
@@ -35,7 +35,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
 
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ error: "המערכת לא מוגדרת" }, { status: 503 });
   }
 
   const supabase = await createClient();
@@ -61,7 +61,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   const { data: dbUser } = await supabase
     .from("users")
     .select("type")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
 
   if (brandUserId !== user.id && (dbUser as any)?.type !== "admin") {
@@ -98,7 +98,7 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
 
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ error: "המערכת לא מוגדרת" }, { status: 503 });
   }
 
   const supabase = await createClient();

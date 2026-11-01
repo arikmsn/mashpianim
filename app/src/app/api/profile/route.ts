@@ -8,136 +8,121 @@ function isSupabaseConfigured() {
   );
 }
 
-const mockCreatorProfile = {
-  user: {
-    id: "mock-1",
-    full_name: "נועה כהן",
-    phone: "050-1234567",
-    email: null,
-    type: "creator",
-    avatar_url: null,
-  },
-  profile: {
-    bio: "יוצרת תוכן עם אהבה למוצרי טיפוח ואופנה. תמיד מחפשת את המוצר הבא!",
-    categories: ["ביוטי", "אופנה", "לייפסטייל"],
-    city: "תל אביב",
-    tiktok_handle: "@noahcohen",
-    instagram_handle: "@noah.cohen",
-    date_of_birth: "1998-03-15",
-    level: "creator_plus",
-    hearts: 42,
-    completed_connections: 15,
-  },
-};
-
 export async function GET() {
   if (!isSupabaseConfigured()) {
-    return NextResponse.json(mockCreatorProfile);
+    return NextResponse.json({ error: "המערכת לא מוגדרת" }, { status: 503 });
   }
 
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
+  const supabase = await createClient();
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
 
-    if (!authUser) {
-      return NextResponse.json({ error: "לא מחובר" }, { status: 401 });
-    }
+  if (!authUser) {
+    return NextResponse.json({ error: "לא מחובר" }, { status: 401 });
+  }
 
-    const { data: rawUser } = await supabase
-      .from("users")
+  const { data: rawUser } = await supabase
+    .from("users")
+    .select("*")
+    .eq("auth_user_id", authUser.id)
+    .single();
+  const userData = rawUser as any;
+
+  if (!userData) {
+    return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 404 });
+  }
+
+  if (userData.type === "creator") {
+    const { data: rawProfile } = await supabase
+      .from("creator_profiles")
       .select("*")
-      .eq("auth_user_id", authUser.id)
+      .eq("user_id", userData.id)
       .single();
-    const userData = rawUser as any;
 
-    if (!userData) {
-      return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 404 });
-    }
+    return NextResponse.json({
+      user: userData,
+      profile: rawProfile || {},
+    });
+  } else if (userData.type === "brand") {
+    const { data: rawProfile } = await supabase
+      .from("brand_profiles")
+      .select("*")
+      .eq("user_id", userData.id)
+      .single();
 
-    if (userData.type === "creator") {
-      const { data: rawProfile } = await supabase
-        .from("creator_profiles")
-        .select("*")
-        .eq("user_id", userData.id)
-        .single();
-
-      return NextResponse.json({
-        user: userData,
-        profile: rawProfile || {},
-      });
-    } else if (userData.type === "brand") {
-      const { data: rawProfile } = await supabase
-        .from("brand_profiles")
-        .select("*")
-        .eq("user_id", userData.id)
-        .single();
-
-      return NextResponse.json({
-        user: userData,
-        profile: rawProfile || {},
-      });
-    }
-
-    return NextResponse.json({ user: userData, profile: {} });
-  } catch {
-    return NextResponse.json(mockCreatorProfile);
+    return NextResponse.json({
+      user: userData,
+      profile: rawProfile || {},
+    });
   }
+
+  return NextResponse.json({ user: userData, profile: {} });
 }
 
 export async function PUT(req: Request) {
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ error: "המערכת לא מוגדרת" }, { status: 503 });
   }
 
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
+  const supabase = await createClient();
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
 
-    if (!authUser) {
-      return NextResponse.json({ error: "לא מחובר" }, { status: 401 });
+  if (!authUser) {
+    return NextResponse.json({ error: "לא מחובר" }, { status: 401 });
+  }
+
+  const body = await req.json();
+  const { userFields, profileFields } = body;
+
+  const { data: rawUser } = await supabase
+    .from("users")
+    .select("*")
+    .eq("auth_user_id", authUser.id)
+    .single();
+  const userData = rawUser as any;
+
+  if (!userData) {
+    return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 404 });
+  }
+
+  if (userFields && Object.keys(userFields).length > 0) {
+    const { error } = await (supabase
+      .from("users") as any)
+      .update(userFields)
+      .eq("id", userData.id);
+
+    if (error) {
+      console.error("[profile] update user error:", error);
+      return NextResponse.json({ error: "שגיאה בעדכון פרטים" }, { status: 500 });
     }
+  }
 
-    const body = await req.json();
-    const { userFields, profileFields } = body;
+  if (profileFields && Object.keys(profileFields).length > 0) {
+    if (userData.type === "creator") {
+      const { error } = await (supabase
+        .from("creator_profiles") as any)
+        .update(profileFields)
+        .eq("user_id", userData.id);
 
-    const { data: rawUser } = await supabase
-      .from("users")
-      .select("*")
-      .eq("auth_user_id", authUser.id)
-      .single();
-    const userData = rawUser as any;
+      if (error) {
+        console.error("[profile] update creator error:", error);
+        return NextResponse.json({ error: "שגיאה בעדכון פרופיל" }, { status: 500 });
+      }
+    } else if (userData.type === "brand") {
+      const { error } = await (supabase
+        .from("brand_profiles") as any)
+        .update(profileFields)
+        .eq("user_id", userData.id);
 
-    if (!userData) {
-      return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 404 });
-    }
-
-    if (userFields && Object.keys(userFields).length > 0) {
-      await (supabase
-        .from("users") as any)
-        .update(userFields)
-        .eq("id", userData.id);
-    }
-
-    if (profileFields && Object.keys(profileFields).length > 0) {
-      if (userData.type === "creator") {
-        await (supabase
-          .from("creator_profiles") as any)
-          .update(profileFields)
-          .eq("user_id", userData.id);
-      } else if (userData.type === "brand") {
-        await (supabase
-          .from("brand_profiles") as any)
-          .update(profileFields)
-          .eq("user_id", userData.id);
+      if (error) {
+        console.error("[profile] update brand error:", error);
+        return NextResponse.json({ error: "שגיאה בעדכון פרופיל" }, { status: 500 });
       }
     }
-
-    return NextResponse.json({ success: true });
-  } catch {
-    return NextResponse.json({ success: true });
   }
+
+  return NextResponse.json({ success: true });
 }

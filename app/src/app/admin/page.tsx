@@ -9,24 +9,6 @@ type StatItem = { label: string; value: string; change: string; trend: string; i
 type ActivityItem = { type: string; text: string; time: string };
 type ModerationItem = { id: string; creator: string; product: string; brand: string; uploadedAgo: string };
 
-const defaultStats: StatItem[] = [
-  { label: "יוצרים רשומים", value: "523", change: "+12", trend: "up", icon: "👤" },
-  { label: "עסקים פעילים", value: "187", change: "+5", trend: "up", icon: "🏪" },
-  { label: "חיבורים פעילים", value: "89", change: "+23", trend: "up", icon: "🔗" },
-  { label: "סרטונים ממתינים", value: "14", change: "-3", trend: "down", icon: "🎬" },
-  { label: "הכנסות החודש", value: "₪42,350", change: "+18%", trend: "up", icon: "💰" },
-  { label: "קרדיטים שנמכרו", value: "340", change: "+45", trend: "up", icon: "🎫" },
-];
-
-const defaultActivity: ActivityItem[] = [
-  { type: "creator_join", text: "נועה כהן הצטרפה כיוצרת תוכן", time: "לפני 15 דקות" },
-  { type: "video_upload", text: "סרטון חדש הועלה לבדיקה — סרום ויטמין C", time: "לפני 32 דקות" },
-  { type: "brand_join", text: "ChefHome נרשם כעסק חדש", time: "לפני שעה" },
-  { type: "connection", text: "חיבור חדש נוצר: TechFit ↔ דנה לוי", time: "לפני 2 שעות" },
-  { type: "payment", text: "GlowUp Skincare רכש 20 קרדיטים (₪1,400)", time: "לפני 3 שעות" },
-  { type: "moderation", text: "סרטון נדחה — זוהתה הפנייה לאינסטגרם", time: "לפני 4 שעות" },
-  { type: "video_approved", text: "סרטון אושר — תיק גב UrbanStyle", time: "לפני 5 שעות" },
-];
 
 const activityIcons: Record<string, string> = {
   creator_join: "👤",
@@ -38,11 +20,6 @@ const activityIcons: Record<string, string> = {
   video_approved: "✅",
 };
 
-const defaultModeration: ModerationItem[] = [
-  { id: "1", creator: "נועה כהן", product: "סרום ויטמין C", brand: "GlowUp", uploadedAgo: "32 דקות" },
-  { id: "2", creator: "דנה לוי", product: "שעון ספורט", brand: "TechFit", uploadedAgo: "שעה" },
-  { id: "3", creator: "שרה אברהם", product: "סט יוגה", brand: "ZenLife", uploadedAgo: "2 שעות" },
-];
 
 function StatSkeleton() {
   return (
@@ -56,9 +33,9 @@ function StatSkeleton() {
 }
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState<StatItem[]>(defaultStats);
-  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>(defaultActivity);
-  const [pendingModeration, setPendingModeration] = useState<ModerationItem[]>(defaultModeration);
+  const [stats, setStats] = useState<StatItem[]>([]);
+  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
+  const [pendingModeration, setPendingModeration] = useState<ModerationItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -70,12 +47,12 @@ export default function AdminDashboard() {
         if (data.stats && !Array.isArray(data.stats)) {
           const s = data.stats;
           setStats([
-            { label: "יוצרים רשומים", value: String(s.creators_count ?? 523), change: "+12", trend: "up", icon: "👤" },
-            { label: "עסקים פעילים", value: String(s.brands_count ?? 187), change: "+5", trend: "up", icon: "🏪" },
-            { label: "חיבורים פעילים", value: String(s.active_connections ?? 89), change: "+23", trend: "up", icon: "🔗" },
-            { label: "סרטונים ממתינים", value: String(s.pending_videos ?? 14), change: "-3", trend: "down", icon: "🎬" },
-            { label: "הכנסות החודש", value: `₪${(s.monthly_revenue ?? 42350).toLocaleString()}`, change: "+18%", trend: "up", icon: "💰" },
-            { label: "קרדיטים שנמכרו", value: String(s.credits_sold ?? 340), change: "+45", trend: "up", icon: "🎫" },
+            { label: "יוצרים רשומים", value: String(s.creators_count ?? 0), change: "", trend: "up", icon: "👤" },
+            { label: "עסקים פעילים", value: String(s.brands_count ?? 0), change: "", trend: "up", icon: "🏪" },
+            { label: "חיבורים פעילים", value: String(s.active_connections ?? 0), change: "", trend: "up", icon: "🔗" },
+            { label: "סרטונים ממתינים", value: String(s.pending_videos ?? 0), change: "", trend: "down", icon: "🎬" },
+            { label: "הכנסות החודש", value: `₪${(s.monthly_revenue ?? 0).toLocaleString()}`, change: "", trend: "up", icon: "💰" },
+            { label: "קרדיטים שנמכרו", value: String(s.credits_sold ?? 0), change: "", trend: "up", icon: "🎫" },
           ]);
         } else if (Array.isArray(data.stats)) {
           setStats(data.stats);
@@ -83,7 +60,7 @@ export default function AdminDashboard() {
         if (data.recentActivity) setRecentActivity(data.recentActivity);
         if (data.pendingModeration) setPendingModeration(data.pendingModeration);
       } catch {
-        // fallback to mock data already set
+        // API unavailable
       } finally {
         setLoading(false);
       }
@@ -141,15 +118,19 @@ export default function AdminDashboard() {
         <Card padding="md">
           <CardTitle className="mb-4">פעילות אחרונה</CardTitle>
           <div className="space-y-3">
-            {recentActivity.map((item, i) => (
-              <div key={i} className="flex items-start gap-3 py-2 border-b border-neutral-50 last:border-0">
-                <span className="text-lg">{activityIcons[item.type] || "📋"}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-neutral-700">{item.text}</p>
-                  <p className="text-xs text-neutral-400 mt-0.5">{item.time}</p>
+            {recentActivity.length === 0 ? (
+              <p className="text-sm text-neutral-400 text-center py-8">אין פעילות אחרונה</p>
+            ) : (
+              recentActivity.map((item, i) => (
+                <div key={i} className="flex items-start gap-3 py-2 border-b border-neutral-50 last:border-0">
+                  <span className="text-lg">{activityIcons[item.type] || "📋"}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-neutral-700">{item.text}</p>
+                    <p className="text-xs text-neutral-400 mt-0.5">{item.time}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </Card>
 
@@ -160,20 +141,24 @@ export default function AdminDashboard() {
             <Badge variant="warning" size="sm">{pendingModeration.length} ממתינים</Badge>
           </div>
           <div className="space-y-3">
-            {pendingModeration.map((item) => (
-              <div key={item.id} className="flex items-center justify-between py-2 border-b border-neutral-50 last:border-0">
-                <div>
-                  <p className="text-sm font-medium">{item.product}</p>
-                  <p className="text-xs text-neutral-400">{item.creator} • {item.brand}</p>
+            {pendingModeration.length === 0 ? (
+              <p className="text-sm text-neutral-400 text-center py-8">אין סרטונים ממתינים</p>
+            ) : (
+              pendingModeration.map((item) => (
+                <div key={item.id} className="flex items-center justify-between py-2 border-b border-neutral-50 last:border-0">
+                  <div>
+                    <p className="text-sm font-medium">{item.product}</p>
+                    <p className="text-xs text-neutral-400">{item.creator} • {item.brand}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-neutral-400">לפני {item.uploadedAgo}</span>
+                    <button className="px-3 py-1.5 rounded-lg bg-pink-50 text-pink-500 text-xs font-medium hover:bg-pink-100 transition-colors">
+                      בדקו
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-neutral-400">לפני {item.uploadedAgo}</span>
-                  <button className="px-3 py-1.5 rounded-lg bg-pink-50 text-pink-500 text-xs font-medium hover:bg-pink-100 transition-colors">
-                    בדקו
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </Card>
       </div>

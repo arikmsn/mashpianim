@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { isSupabaseConfigured } from "@/lib/admin-auth";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -16,24 +15,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "connectionId required" }, { status: 400 });
   }
 
-  if (!isSupabaseConfigured()) {
-    return NextResponse.json({
-      videos: [
-        {
-          id: "mock-video-1",
-          connection_id: connectionId,
-          url: "/mock-video.mp4",
-          thumbnail_url: null,
-          status: "pending",
-          created_at: new Date().toISOString(),
-        },
-      ],
-    });
-  }
-
   const supabase = getSupabaseAdmin();
   if (!supabase) {
-    return NextResponse.json({ videos: [] });
+    return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 
   const { data, error } = await supabase
@@ -62,22 +46,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!isSupabaseConfigured()) {
-      return NextResponse.json({
-        success: true,
-        video: {
-          id: `mock-${Date.now()}`,
-          connection_id: connectionId,
-          url: `/uploads/mock-${Date.now()}.mp4`,
-          status: "pending",
-          created_at: new Date().toISOString(),
-        },
-      });
-    }
-
     const supabase = getSupabaseAdmin();
     if (!supabase) {
-      return NextResponse.json({ error: "Server error" }, { status: 500 });
+      return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
     }
 
     const ext = file.name.split(".").pop() || "mp4";

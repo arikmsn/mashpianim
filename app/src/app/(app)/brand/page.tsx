@@ -20,20 +20,6 @@ interface RecentConnection {
   createdAt: string;
 }
 
-const mockStats: BrandStats = {
-  activeProducts: 4,
-  pendingConnections: 7,
-  totalVideos: 12,
-  creditsRemaining: 18,
-};
-
-const mockRecentConnections: RecentConnection[] = [
-  { id: "1", creatorName: "נועה כהן", productName: "סרום ויטמין C", status: "pending", createdAt: "2024-01-15T10:00:00Z" },
-  { id: "2", creatorName: "דנה לוי", productName: "שעון ספורט חכם", status: "filming", createdAt: "2024-01-14T09:00:00Z" },
-  { id: "3", creatorName: "שרה אברהם", productName: "תיק גב עור טבעוני", status: "completed", createdAt: "2024-01-13T08:00:00Z" },
-  { id: "4", creatorName: "מיכל דוד", productName: "ערכת בישול שף", status: "shipped", createdAt: "2024-01-12T07:00:00Z" },
-];
-
 const statusLabels: Record<string, { label: string; variant: "pink" | "success" | "warning" | "default" }> = {
   pending: { label: "ממתין לאישור", variant: "warning" },
   approved: { label: "אושר", variant: "pink" },
@@ -70,8 +56,13 @@ function DashboardSkeleton() {
 }
 
 export default function BrandDashboard() {
-  const [stats, setStats] = useState<BrandStats>(mockStats);
-  const [connections, setConnections] = useState<RecentConnection[]>(mockRecentConnections);
+  const [stats, setStats] = useState<BrandStats>({
+    activeProducts: 0,
+    pendingConnections: 0,
+    totalVideos: 0,
+    creditsRemaining: 0,
+  });
+  const [connections, setConnections] = useState<RecentConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const { toast } = useToast();
@@ -110,7 +101,7 @@ export default function BrandDashboard() {
           }
         }
       } catch {
-        // Keep mock data
+        // API unavailable
       } finally {
         setLoading(false);
       }

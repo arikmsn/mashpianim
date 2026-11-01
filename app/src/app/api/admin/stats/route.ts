@@ -1,18 +1,11 @@
 import { NextResponse } from "next/server";
 import { verifyAdmin, isSupabaseConfigured } from "@/lib/admin-auth";
 
-const mockStats = {
-  creators_count: 523,
-  brands_count: 187,
-  active_connections: 89,
-  pending_videos: 14,
-  monthly_revenue: 42350,
-  credits_sold: 340,
-};
-
 export async function GET() {
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ stats: mockStats });
+    return NextResponse.json({
+      stats: { creators_count: 0, brands_count: 0, active_connections: 0, pending_videos: 0, monthly_revenue: 0, credits_sold: 0 },
+    });
   }
 
   const { isAdmin, supabase } = await verifyAdmin();

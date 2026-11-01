@@ -6,7 +6,7 @@ const defaultSettings: Record<string, Record<string, string>> = {
   general: {
     platform_name: "Mashpianim",
     support_email: "support@mashpianim.co.il",
-    support_phone: "03-1234567",
+    support_phone: "",
   },
   credits: {
     single_price: "100",
@@ -56,7 +56,7 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ error: "המערכת לא מוגדרת" }, { status: 503 });
   }
 
   const { isAdmin, supabase } = await verifyAdmin();

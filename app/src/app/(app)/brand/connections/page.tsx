@@ -17,14 +17,6 @@ interface Connection {
   completedAt: string | null;
 }
 
-const mockConnections: Connection[] = [
-  { id: "1", creatorName: "נועה כהן", creatorAvatar: null, productName: "סרום ויטמין C", productImage: null, status: "pending", createdAt: "2024-01-15T10:00:00Z", approvedAt: null, shippedAt: null, completedAt: null },
-  { id: "2", creatorName: "דנה לוי", creatorAvatar: null, productName: "שעון ספורט חכם", productImage: null, status: "approved", createdAt: "2024-01-14T09:00:00Z", approvedAt: "2024-01-14T12:00:00Z", shippedAt: null, completedAt: null },
-  { id: "3", creatorName: "שרה אברהם", creatorAvatar: null, productName: "תיק גב עור טבעוני", productImage: null, status: "filming", createdAt: "2024-01-13T08:00:00Z", approvedAt: "2024-01-13T10:00:00Z", shippedAt: "2024-01-13T15:00:00Z", completedAt: null },
-  { id: "4", creatorName: "מיכל דוד", creatorAvatar: null, productName: "ערכת בישול שף", productImage: null, status: "in_review", createdAt: "2024-01-12T07:00:00Z", approvedAt: "2024-01-12T09:00:00Z", shippedAt: "2024-01-12T14:00:00Z", completedAt: null },
-  { id: "5", creatorName: "יעל גרין", creatorAvatar: null, productName: "סט יוגה פרימיום", productImage: null, status: "completed", createdAt: "2024-01-11T06:00:00Z", approvedAt: "2024-01-11T08:00:00Z", shippedAt: "2024-01-11T12:00:00Z", completedAt: "2024-01-18T16:00:00Z" },
-];
-
 type TabId = "pending" | "active" | "completed";
 
 const tabs: { id: TabId; label: string }[] = [
@@ -106,9 +98,9 @@ export default function BrandConnectionsPage() {
         }
       }
     } catch {
-      // Fall through to mock
+      // API unavailable
     }
-    setConnections(mockConnections);
+    setConnections([]);
     setLoading(false);
   }
 

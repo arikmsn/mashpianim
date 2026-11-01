@@ -1,18 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyAdmin, isSupabaseConfigured } from "@/lib/admin-auth";
 
-const mockBrands = [
-  { id: "1", full_name: "אבי כהן", phone: "050-1111111", is_active: true, shop_name: "GlowUp Skincare", category: "ביוטי וטיפוח", website_url: "https://glowup.co.il", total_credits: 45, used_credits: 12, created_at: "2025-12-01" },
-  { id: "2", full_name: "דוד לוי", phone: "050-2222222", is_active: true, shop_name: "TechFit", category: "טכנולוגיה", website_url: "https://techfit.co.il", total_credits: 22, used_credits: 9, created_at: "2026-01-15" },
-  { id: "3", full_name: "רחל מזרחי", phone: "050-3333333", is_active: true, shop_name: "UrbanStyle", category: "אופנה", website_url: "https://urbanstyle.co.il", total_credits: 67, used_credits: 23, created_at: "2025-11-01" },
-  { id: "4", full_name: "משה פרידמן", phone: "050-4444444", is_active: true, shop_name: "ChefHome", category: "מזון ומשקאות", website_url: null, total_credits: 10, used_credits: 2, created_at: "2026-10-01" },
-  { id: "5", full_name: "יוסי חן", phone: "050-5555555", is_active: true, shop_name: "ZenLife", category: "ספורט ובריאות", website_url: "https://zenlife.co.il", total_credits: 30, used_credits: 11, created_at: "2026-03-20" },
-  { id: "6", full_name: "נורית שרון", phone: "050-6666666", is_active: true, shop_name: "LightHouse", category: "ניקיון ובית", website_url: null, total_credits: 15, used_credits: 7, created_at: "2026-05-10" },
-];
-
 export async function GET() {
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ brands: mockBrands });
+    return NextResponse.json({ brands: [] });
   }
 
   const { isAdmin, supabase } = await verifyAdmin();
@@ -31,7 +22,7 @@ export async function GET() {
 
   if (error) {
     console.error("[admin/brands] list error:", error);
-    return NextResponse.json({ brands: mockBrands });
+    return NextResponse.json({ error: "שגיאה בטעינת מותגים" }, { status: 500 });
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -59,7 +50,7 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ error: "המערכת לא מוגדרת" }, { status: 503 });
   }
 
   const { isAdmin, supabase } = await verifyAdmin();

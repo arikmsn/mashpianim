@@ -1,17 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyAdmin, isSupabaseConfigured } from "@/lib/admin-auth";
 
-const mockCreators = [
-  { id: "1", full_name: "נועה כהן", phone: "050-1234567", is_active: true, level: "creator_plus", categories: ["ביוטי", "אופנה"], hearts: 42, completed_connections: 15, tiktok_handle: "@noa_cohen", instagram_handle: "@noa.cohen", city: "תל אביב", created_at: "2026-01-15" },
-  { id: "2", full_name: "דנה לוי", phone: "050-2345678", is_active: true, level: "creator", categories: ["טכנולוגיה"], hearts: 18, completed_connections: 7, tiktok_handle: "@dana_levi", instagram_handle: null, city: "חיפה", created_at: "2026-03-10" },
-  { id: "3", full_name: "שרה אברהם", phone: "050-3456789", is_active: true, level: "on_the_radar", categories: ["ספורט", "לייפסטייל"], hearts: 85, completed_connections: 28, tiktok_handle: "@sara_a", instagram_handle: "@sara.avraham", city: "ירושלים", created_at: "2025-12-01" },
-  { id: "4", full_name: "מיכל דוד", phone: "050-4567890", is_active: false, level: "creator", categories: ["אוכל"], hearts: 5, completed_connections: 3, tiktok_handle: null, instagram_handle: "@michal.d", city: "באר שבע", created_at: "2026-06-20" },
-  { id: "5", full_name: "תמר רוזן", phone: "050-5678901", is_active: true, level: "creator_plus", categories: ["ביוטי", "בית וגינה"], hearts: 35, completed_connections: 12, tiktok_handle: "@tamar_r", instagram_handle: "@tamar.rozen", city: "רעננה", created_at: "2026-02-05" },
-];
-
 export async function GET() {
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ creators: mockCreators });
+    return NextResponse.json({ creators: [] });
   }
 
   const { isAdmin, supabase } = await verifyAdmin();
@@ -30,7 +22,7 @@ export async function GET() {
 
   if (error) {
     console.error("[admin/creators] list error:", error);
-    return NextResponse.json({ creators: mockCreators });
+    return NextResponse.json({ error: "שגיאה בטעינת יוצרים" }, { status: 500 });
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -59,7 +51,7 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ error: "המערכת לא מוגדרת" }, { status: 503 });
   }
 
   const { isAdmin, supabase } = await verifyAdmin();

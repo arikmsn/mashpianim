@@ -9,9 +9,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
 
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({
-      connection: { id, status: "pending", product_name: "מוצר לדוגמה" },
-    });
+    return NextResponse.json({ error: "המערכת לא מוגדרת" }, { status: 503 });
   }
 
   const supabase = await createClient();
@@ -55,7 +53,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
 
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ error: "המערכת לא מוגדרת" }, { status: 503 });
   }
 
   const supabase = await createClient();
@@ -145,10 +143,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({
-      success: true,
-      message: { id: `mock-${Date.now()}`, text: text.trim(), is_system: false },
-    });
+    return NextResponse.json({ error: "המערכת לא מוגדרת" }, { status: 503 });
   }
 
   const supabase = await createClient();

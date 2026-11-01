@@ -21,12 +21,12 @@ const defaultContent: Record<string, Record<string, string>> = {
     step3_desc: "צברו ניסיון, עלו ברמות, והפכו ליוצרי תוכן מבוקשים",
   },
   stats: {
-    stat1_value: "500+",
-    stat1_label: "יוצרי תוכן פעילים",
-    stat2_value: "200+",
-    stat2_label: "מותגים ועסקים",
-    stat3_value: "2,000+",
-    stat3_label: "סרטונים שנוצרו",
+    stat1_value: "100%",
+    stat1_label: "חינם ליוצרים",
+    stat2_value: "10",
+    stat2_label: "ימים ליצירת סרטון",
+    stat3_value: "3",
+    stat3_label: "צעדים פשוטים",
   },
   creators: {
     title_line1: "הפכו את",

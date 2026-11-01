@@ -2,15 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/admin-auth";
 
-const mockConnections = [
-  { id: "1", product_name: "סרום ויטמין C", brand_name: "GlowUp Skincare", creator_name: "נועה כהן", status: "filming", created_at: new Date().toISOString() },
-  { id: "2", product_name: "שעון ספורט חכם", brand_name: "TechFit", creator_name: "דנה לוי", status: "shipped", created_at: new Date().toISOString() },
-  { id: "3", product_name: "תיק גב עור טבעוני", brand_name: "UrbanStyle", creator_name: "שרה אברהם", status: "in_review", created_at: new Date().toISOString() },
-];
-
 export async function GET() {
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ connections: mockConnections });
+    return NextResponse.json({ connections: [] });
   }
 
   const supabase = await createClient();

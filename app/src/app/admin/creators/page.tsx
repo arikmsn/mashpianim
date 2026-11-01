@@ -20,14 +20,6 @@ type Creator = {
   phone?: string;
 };
 
-const mockCreators: Creator[] = [
-  { id: "1", name: "נועה כהן", level: "יוצרת+", status: "active", videos: 15, rating: 4.8, hearts: 42, joined: "ינואר 2026", categories: ["ביוטי", "אופנה"], bio: "יוצרת תוכן עם אהבה למוצרי טיפוח", tiktokHandle: "@noahc", city: "תל אביב" },
-  { id: "2", name: "דנה לוי", level: "יוצרת", status: "active", videos: 7, rating: 4.5, hearts: 18, joined: "מרץ 2026", categories: ["טכנולוגיה"], bio: "חובבת גאדג'טים וטכנולוגיה", instagramHandle: "@danalevi", city: "חיפה" },
-  { id: "3", name: "שרה אברהם", level: "על הרדאר", status: "active", videos: 28, rating: 4.9, hearts: 85, joined: "דצמבר 2025", categories: ["ספורט", "לייפסטייל"], bio: "ספורטאית ומאמנת כושר", tiktokHandle: "@sarahfit", city: "הרצליה" },
-  { id: "4", name: "מיכל דוד", level: "יוצרת", status: "suspended", videos: 3, rating: 3.2, hearts: 5, joined: "יוני 2026", categories: ["אוכל"], bio: "שפית ביתית", city: "ירושלים" },
-  { id: "5", name: "תמר רוזן", level: "יוצרת+", status: "active", videos: 12, rating: 4.6, hearts: 35, joined: "פברואר 2026", categories: ["ביוטי", "בית וגינה"], bio: "בלוגרית לייפסטייל", instagramHandle: "@tamarr", city: "רעננה" },
-];
-
 const levelColors: Record<string, "pink" | "purple" | "success"> = {
   "יוצרת": "pink",
   "יוצרת+": "purple",
@@ -35,7 +27,7 @@ const levelColors: Record<string, "pink" | "purple" | "success"> = {
 };
 
 export default function AdminCreatorsPage() {
-  const [creators, setCreators] = useState<Creator[]>(mockCreators);
+  const [creators, setCreators] = useState<Creator[]>([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "suspended">("all");
   const [loading, setLoading] = useState(true);
@@ -49,11 +41,9 @@ export default function AdminCreatorsPage() {
         const res = await fetch("/api/admin/creators");
         if (!res.ok) throw new Error("API error");
         const data = await res.json();
-        if (data.creators && data.creators.length > 0) {
-          setCreators(data.creators);
-        }
+        setCreators(data.creators || []);
       } catch {
-        // fallback to mock data
+        // API unavailable
       } finally {
         setLoading(false);
       }
@@ -83,17 +73,7 @@ export default function AdminCreatorsPage() {
         "success"
       );
     } catch {
-      setCreators((prev) =>
-        prev.map((c) =>
-          c.id === creator.id
-            ? { ...c, status: newAction === "suspend" ? "suspended" : "active" }
-            : c
-        )
-      );
-      toast(
-        newAction === "suspend" ? `${creator.name} הושעה` : `${creator.name} הופעל/ה מחדש`,
-        "success"
-      );
+      toast("שגיאה בעדכון הסטטוס", "error");
     } finally {
       setActionLoading(null);
     }

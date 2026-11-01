@@ -6,7 +6,7 @@ export async function verifyAdmin() {
     process.env.NEXT_SUPABASE_ANON_KEY;
 
   if (!supabaseConfigured) {
-    return { isAdmin: true, userId: "mock-admin", supabase: null };
+    return { isAdmin: false, userId: null, supabase: null };
   }
 
   const supabase = await createClient();

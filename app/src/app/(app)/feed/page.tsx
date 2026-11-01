@@ -34,92 +34,6 @@ interface Product {
   maxCreators: number;
 }
 
-const mockProducts: Product[] = [
-  {
-    id: "1",
-    name: "סרום ויטמין C לעור הפנים",
-    brand: "GlowUp Skincare",
-    brandAvatar: null,
-    image: null,
-    category: "ביוטי",
-    value: 189,
-    description: "סרום מרוכז עם ויטמין C טהור לעור זוהר ובריא",
-    requirements: "סרטון אנבוקסינג + שימוש",
-    deadline: 10,
-    applicants: 12,
-    maxCreators: 3,
-  },
-  {
-    id: "2",
-    name: "שעון ספורט חכם",
-    brand: "TechFit",
-    brandAvatar: null,
-    image: null,
-    category: "טכנולוגיה",
-    value: 350,
-    description: "שעון ספורט עם מעקב דופק, GPS ועמידות במים",
-    requirements: "סרטון סקירה + שימוש באימון",
-    deadline: 10,
-    applicants: 24,
-    maxCreators: 5,
-  },
-  {
-    id: "3",
-    name: "תיק גב עור טבעוני",
-    brand: "UrbanStyle",
-    brandAvatar: null,
-    image: null,
-    category: "אופנה",
-    value: 220,
-    description: "תיק גב אלגנטי מעור טבעוני, מושלם ליומיום",
-    requirements: "סטיילינג + סרטון OOTD",
-    deadline: 10,
-    applicants: 8,
-    maxCreators: 2,
-  },
-  {
-    id: "4",
-    name: "ערכת בישול שף",
-    brand: "ChefHome",
-    brandAvatar: null,
-    image: null,
-    category: "אוכל",
-    value: 280,
-    description: "ערכה מלאה עם סכינים, קרש חיתוך ומגבות מטבח",
-    requirements: "סרטון בישול עם הערכה",
-    deadline: 10,
-    applicants: 6,
-    maxCreators: 2,
-  },
-  {
-    id: "5",
-    name: "סט יוגה פרימיום",
-    brand: "ZenLife",
-    brandAvatar: null,
-    image: null,
-    category: "ספורט",
-    value: 199,
-    description: "מזרן יוגה, בלוקים ורצועה — כל מה שצריך לתרגול",
-    requirements: "סרטון תרגול יוגה",
-    deadline: 10,
-    applicants: 15,
-    maxCreators: 4,
-  },
-  {
-    id: "6",
-    name: "מנורת לד דקורטיבית",
-    brand: "LightHouse",
-    brandAvatar: null,
-    image: null,
-    category: "בית וגינה",
-    value: 145,
-    description: "מנורה עם 16 צבעים ושלט רחוק, מושלמת לחדר",
-    requirements: "סרטון עיצוב חדר / אווירה",
-    deadline: 10,
-    applicants: 18,
-    maxCreators: 5,
-  },
-];
 
 function ProductSkeleton() {
   return (
@@ -219,7 +133,7 @@ function ProductCard({
 export default function FeedPage() {
   const [activeCategory, setActiveCategory] = useState("הכל");
   const [searchQuery, setSearchQuery] = useState("");
-  const [products, setProducts] = useState<Product[]>(mockProducts);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState<string | null>(null);
   const { user } = useAuth();
@@ -253,7 +167,7 @@ export default function FeedPage() {
           }
         }
       } catch {
-        // Keep mock data on failure
+        // API unavailable
       } finally {
         setLoading(false);
       }

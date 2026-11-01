@@ -20,19 +20,6 @@ interface Product {
 
 const categories = ["ביוטי", "אופנה", "טכנולוגיה", "בית וגינה", "אוכל", "ספורט", "ילדים", "אחר"];
 
-const mockProducts: Product[] = [
-  {
-    id: "1", name: "סרום ויטמין C", description: "סרום מרוכז עם ויטמין C טהור",
-    price: 189, imageUrl: null, status: "active", category: "ביוטי",
-    shippingPolicy: "free", sourceUrl: null, applicantsCount: 12, createdAt: "2024-01-15T10:00:00Z",
-  },
-  {
-    id: "2", name: "שעון ספורט חכם", description: "שעון ספורט עם מעקב דופק",
-    price: 350, imageUrl: null, status: "active", category: "טכנולוגיה",
-    shippingPolicy: "free", sourceUrl: null, applicantsCount: 24, createdAt: "2024-01-14T09:00:00Z",
-  },
-];
-
 const shippingLabels: Record<string, string> = {
   free: "משלוח חינם",
   paid: "משלוח בתשלום",
@@ -106,9 +93,9 @@ export default function BrandProductsPage() {
         }
       }
     } catch {
-      // Fall through to mock
+      // API unavailable
     }
-    setProducts(mockProducts);
+    setProducts([]);
     setLoading(false);
   }
 

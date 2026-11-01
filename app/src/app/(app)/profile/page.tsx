@@ -51,22 +51,6 @@ const allCategories = [
   "ספורט", "ילדים", "לייפסטייל", "נסיעות", "בריאות",
 ];
 
-const mockCreatorProfile: CreatorProfile = {
-  name: "נועה כהן",
-  level: "יוצרת+",
-  hearts: 42,
-  completedConnections: 15,
-  categories: ["ביוטי", "אופנה", "לייפסטייל"],
-  bio: "יוצרת תוכן עם אהבה למוצרי טיפוח ואופנה. תמיד מחפשת את המוצר הבא!",
-  stats: { connections: 23, videos: 15, avgRating: 4.8 },
-};
-
-const mockVideos = [
-  { id: "1", product: "סרום ויטמין C", brand: "GlowUp", status: "approved", views: 1200 },
-  { id: "2", product: "שעון ספורט", brand: "TechFit", status: "approved", views: 890 },
-  { id: "3", product: "תיק גב", brand: "UrbanStyle", status: "in_review", views: 0 },
-];
-
 const levelLabels: Record<string, string> = {
   creator: "יוצרת",
   creator_plus: "יוצרת+",
@@ -296,7 +280,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<CreatorProfile | null>(null);
   const [brandProfile, setBrandProfile] = useState<BrandProfile | null>(null);
   const [userType, setUserType] = useState<"creator" | "brand" | null>(null);
-  const [videos, setVideos] = useState(mockVideos);
+  const [videos, setVideos] = useState<{id: string; product: string; brand: string; status: string; views: number}[]>([]);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -325,17 +309,6 @@ export default function ProfilePage() {
   useEffect(() => {
     async function fetchProfile() {
       if (!user) {
-        setProfile(mockCreatorProfile);
-        setUserType("creator");
-        setCreatorEditData({
-          full_name: mockCreatorProfile.name,
-          bio: mockCreatorProfile.bio,
-          categories: mockCreatorProfile.categories,
-          city: "תל אביב",
-          tiktok_handle: "",
-          instagram_handle: "",
-          date_of_birth: "",
-        });
         setLoading(false);
         return;
       }
@@ -351,8 +324,6 @@ export default function ProfilePage() {
         const userData = rawUser as any;
 
         if (!userData) {
-          setProfile(mockCreatorProfile);
-          setUserType("creator");
           setLoading(false);
           return;
         }
@@ -389,9 +360,6 @@ export default function ProfilePage() {
               date_of_birth: creatorData.date_of_birth || "",
             });
             setUserType("creator");
-          } else {
-            setProfile(mockCreatorProfile);
-            setUserType("creator");
           }
         } else if (userData.type === "brand") {
           const { data: rawBrand } = await supabase
@@ -424,14 +392,10 @@ export default function ProfilePage() {
               description: brandData.description || "",
             });
             setUserType("brand");
-          } else {
-            setProfile(mockCreatorProfile);
-            setUserType("creator");
           }
         }
       } catch {
-        setProfile(mockCreatorProfile);
-        setUserType("creator");
+        // API unavailable
       } finally {
         setLoading(false);
       }
@@ -600,7 +564,19 @@ export default function ProfilePage() {
     );
   }
 
-  const displayProfile = profile || mockCreatorProfile;
+  if (!profile && !brandProfile) {
+    return (
+      <main className="min-h-screen bg-background pb-24">
+        <div className="text-center py-20 text-neutral-400">
+          <span className="text-4xl block mb-3">👤</span>
+          <p>לא נמצא פרופיל</p>
+          <p className="text-xs mt-1">יש להתחבר כדי לצפות בפרופיל</p>
+        </div>
+      </main>
+    );
+  }
+
+  const displayProfile = profile!;
   const videoCount = displayProfile.stats.videos;
   const nextMilestone = getNextMilestone(videoCount);
   const milestones = getMilestones(videoCount);

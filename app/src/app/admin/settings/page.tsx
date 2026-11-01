@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Card, CardTitle, Button, Input, useToast } from "@/components/ui";
 
 const defaultSettings = {
-  general: { platformName: "Mashpianim", supportEmail: "support@mashpianim.co.il", supportPhone: "03-1234567" },
+  general: { platformName: "Mashpianim", supportEmail: "support@mashpianim.co.il", supportPhone: "" },
   credits: { single: "100", pack5: "450", pack10: "800", pack20: "1400" },
   moderation: { ocrCheck: true, chatFilter: true, speechDetection: true, contentFilter: true },
   timelines: { shipDays: "7", filmDays: "10", reviewDays: "7", maxRevisions: "1" },

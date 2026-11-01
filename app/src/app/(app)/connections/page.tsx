@@ -32,15 +32,6 @@ interface Connection {
   daysLeft: number | null;
 }
 
-const mockConnections: Connection[] = [
-  { id: "1", product: "סרום ויטמין C", brand: "GlowUp Skincare", status: "filming", daysLeft: 7 },
-  { id: "2", product: "שעון ספורט חכם", brand: "TechFit", status: "shipped", daysLeft: 5 },
-  { id: "3", product: "תיק גב עור טבעוני", brand: "UrbanStyle", status: "in_review", daysLeft: 3 },
-  { id: "4", product: "ערכת בישול שף", brand: "ChefHome", status: "pending", daysLeft: null },
-  { id: "5", product: "סט יוגה פרימיום", brand: "ZenLife", status: "pending", daysLeft: null },
-  { id: "6", product: "מנורת לד דקורטיבית", brand: "LightHouse", status: "completed", daysLeft: null },
-];
-
 function ConnectionSkeleton() {
   return (
     <div className="bg-white rounded-2xl border border-neutral-100 p-4">
@@ -62,7 +53,7 @@ function canUploadVideo(status: string) {
 
 export default function ConnectionsPage() {
   const [activeTab, setActiveTab] = useState<TabType>("active");
-  const [connections, setConnections] = useState<Connection[]>(mockConnections);
+  const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -98,7 +89,7 @@ export default function ConnectionsPage() {
           }
         }
       } catch {
-        // Keep mock data
+        // API unavailable
       } finally {
         setLoading(false);
       }

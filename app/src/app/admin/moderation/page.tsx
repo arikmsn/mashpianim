@@ -1,74 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge, Button, Card, Modal, useToast } from "@/components/ui";
 
 type ModerationStatus = "pending" | "approved" | "rejected";
-
-const mockQueue = [
-  {
-    id: "1",
-    creator: "נועה כהן",
-    product: "סרום ויטמין C",
-    brand: "GlowUp Skincare",
-    uploadedAgo: "32 דקות",
-    status: "pending" as ModerationStatus,
-    flags: [],
-    duration: "0:45",
-  },
-  {
-    id: "2",
-    creator: "דנה לוי",
-    product: "שעון ספורט חכם",
-    brand: "TechFit",
-    uploadedAgo: "שעה",
-    status: "pending" as ModerationStatus,
-    flags: ["זוהה טקסט חשוד"],
-    duration: "1:12",
-  },
-  {
-    id: "3",
-    creator: "שרה אברהם",
-    product: "סט יוגה פרימיום",
-    brand: "ZenLife",
-    uploadedAgo: "2 שעות",
-    status: "pending" as ModerationStatus,
-    flags: [],
-    duration: "0:58",
-  },
-  {
-    id: "4",
-    creator: "רותם בן דוד",
-    product: "מנורת לד",
-    brand: "LightHouse",
-    uploadedAgo: "3 שעות",
-    status: "rejected" as ModerationStatus,
-    flags: ["הפנייה לאינסטגרם", "מספר טלפון"],
-    duration: "1:30",
-  },
-  {
-    id: "5",
-    creator: "יעל שפירא",
-    product: "תיק גב עור",
-    brand: "UrbanStyle",
-    uploadedAgo: "4 שעות",
-    status: "approved" as ModerationStatus,
-    flags: [],
-    duration: "0:55",
-  },
-];
-
-const chatFlags = [
-  { id: "1", from: "דנה לוי", to: "TechFit", message: "אפשר לדבר ב...", flagType: "ניסיון שיתוף פרטי קשר", time: "לפני שעה", blocked: true },
-  { id: "2", from: "מיכל דוד", to: "ChefHome", message: "הנה המספר שלי 05...", flagType: "מספר טלפון", time: "לפני 3 שעות", blocked: true },
-];
+type ModerationItem = {
+  id: string;
+  creator: string;
+  product: string;
+  brand: string;
+  uploadedAgo: string;
+  status: ModerationStatus;
+  flags: string[];
+  duration: string;
+};
+type ChatFlag = {
+  id: string;
+  from: string;
+  to: string;
+  message: string;
+  flagType: string;
+  time: string;
+  blocked: boolean;
+};
 
 export default function AdminModerationPage() {
   const [tab, setTab] = useState<"videos" | "chat">("videos");
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
-  const [items, setItems] = useState(mockQueue);
+  const [items, setItems] = useState<ModerationItem[]>([]);
+  const [chatFlags, setChatFlags] = useState<ChatFlag[]>([]);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+
+  useEffect(() => {
+    setLoading(false);
+  }, []);
 
   const pendingCount = items.filter((i) => i.status === "pending").length;
 

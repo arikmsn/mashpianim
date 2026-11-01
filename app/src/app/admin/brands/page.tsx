@@ -19,17 +19,8 @@ type Brand = {
   description?: string;
 };
 
-const mockBrands: Brand[] = [
-  { id: "1", name: "GlowUp Skincare", status: "active", products: 8, credits: 45, spent: 12400, connections: 15, joined: "דצמבר 2025", category: "ביוטי וטיפוח", contactName: "רונית כהן", description: "מותג טיפוח ישראלי" },
-  { id: "2", name: "TechFit", status: "active", products: 5, credits: 22, spent: 8200, connections: 9, joined: "ינואר 2026", category: "טכנולוגיה", contactName: "יואב לוי" },
-  { id: "3", name: "UrbanStyle", status: "active", products: 12, credits: 67, spent: 18500, connections: 23, joined: "נובמבר 2025", category: "אופנה", contactName: "ליאור שמש" },
-  { id: "4", name: "ChefHome", status: "pending", products: 3, credits: 10, spent: 2000, connections: 2, joined: "אוקטובר 2026", category: "מזון ומשקאות", contactName: "אורי דגן" },
-  { id: "5", name: "ZenLife", status: "active", products: 6, credits: 30, spent: 9800, connections: 11, joined: "מרץ 2026", category: "ספורט ובריאות", contactName: "מאיה ברק" },
-  { id: "6", name: "LightHouse", status: "active", products: 4, credits: 15, spent: 5600, connections: 7, joined: "מאי 2026", category: "בית וגינה", contactName: "דן אורן" },
-];
-
 export default function AdminBrandsPage() {
-  const [brands, setBrands] = useState<Brand[]>(mockBrands);
+  const [brands, setBrands] = useState<Brand[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
@@ -41,11 +32,9 @@ export default function AdminBrandsPage() {
         const res = await fetch("/api/admin/brands");
         if (!res.ok) throw new Error("API error");
         const data = await res.json();
-        if (data.brands && data.brands.length > 0) {
-          setBrands(data.brands);
-        }
+        setBrands(data.brands || []);
       } catch {
-        // fallback to mock data
+        // API unavailable
       } finally {
         setLoading(false);
       }

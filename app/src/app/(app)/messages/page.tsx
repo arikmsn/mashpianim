@@ -24,41 +24,6 @@ interface Message {
   createdAt: string;
 }
 
-const mockConversations: Conversation[] = [
-  {
-    id: "1",
-    name: "GlowUp Skincare",
-    lastMessage: "שלחנו את המוצר, צפוי להגיע תוך 3 ימים 📦",
-    time: "לפני 2 שעות",
-    unread: 2,
-    product: "סרום ויטמין C",
-  },
-  {
-    id: "2",
-    name: "TechFit",
-    lastMessage: "הסרטון נראה מעולה! רק תיקון קטן בסוף...",
-    time: "לפני 5 שעות",
-    unread: 0,
-    product: "שעון ספורט חכם",
-  },
-  {
-    id: "3",
-    name: "UrbanStyle",
-    lastMessage: "מתי תוכלו לצלם את הסרטון?",
-    time: "אתמול",
-    unread: 1,
-    product: "תיק גב עור טבעוני",
-  },
-  {
-    id: "4",
-    name: "מערכת",
-    lastMessage: "ברוכים הבאים ל-Mashpianim! 🎉",
-    time: "לפני 3 ימים",
-    unread: 0,
-    product: null,
-  },
-];
-
 function formatTime(dateStr: string) {
   const date = new Date(dateStr);
   const now = new Date();
@@ -86,7 +51,7 @@ function MessagesContent() {
   const searchParams = useSearchParams();
   const initialConnection = searchParams.get("connection");
   const [selectedId, setSelectedId] = useState<string | null>(initialConnection);
-  const [conversations, setConversations] = useState<Conversation[]>(mockConversations);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
@@ -118,7 +83,7 @@ function MessagesContent() {
           }
         }
       } catch {
-        // Keep mock data
+        // API unavailable
       } finally {
         setLoading(false);
       }
