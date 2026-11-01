@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "שגיאה בטעינת מוצרים" }, { status: 500 });
   }
 
-  const products = (data || []).map((p) => ({
+  const products = (data || []).map((p: Record<string, unknown>) => ({
     ...p,
     brand_name: (p.brand_profiles as { shop_name: string })?.shop_name || "",
   }));

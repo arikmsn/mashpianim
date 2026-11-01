@@ -44,11 +44,11 @@ export async function GET() {
     ]);
 
   const monthlyRevenue = (transactionsRes.data || []).reduce(
-    (sum, t) => sum + (t.amount || 0),
+    (sum: number, t: { amount: number }) => sum + (t.amount || 0),
     0
   );
   const creditsSold = (creditsRes.data || []).reduce(
-    (sum, c) => sum + (c.total || 0),
+    (sum: number, c: { total: number }) => sum + (c.total || 0),
     0
   );
 
