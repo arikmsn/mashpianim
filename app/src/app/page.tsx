@@ -377,15 +377,14 @@ export default function HomePage() {
           <FadeIn delay={0.15} className="order-2 md:order-1">
             <div className="bg-neutral-50 rounded-2xl p-8 border border-neutral-100">
               <div className="flex items-center justify-between mb-4">
-                <p className="text-sm font-bold text-neutral-900">ביצועי קמפיין</p>
-                <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">+23% מהחודש שעבר</span>
+                <p className="text-sm font-bold text-neutral-900">לוח בקרה חכם</p>
               </div>
               <div className="space-y-3">
                 {[
-                  { label: "סרטונים שהתקבלו", val: "12" },
-                  { label: "צפיות כוללות", val: "48.2K" },
-                  { label: "עלות לסרטון", val: "₪70" },
-                  { label: "ROI", val: "340%" },
+                  { label: "סרטונים שהתקבלו", val: "—" },
+                  { label: "צפיות כוללות", val: "—" },
+                  { label: "עלות לסרטון", val: "—" },
+                  { label: "ROI", val: "—" },
                 ].map((row) => (
                   <div key={row.label} className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-neutral-100">
                     <span className="text-sm text-neutral-500">{row.label}</span>
