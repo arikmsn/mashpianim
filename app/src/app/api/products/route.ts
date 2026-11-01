@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
     .eq("id", user.id)
     .single();
 
-  if (dbUser?.type !== "brand") {
+  if ((dbUser as any)?.type !== "brand") {
     return NextResponse.json({ error: "רק עסקים יכולים להוסיף מוצרים" }, { status: 403 });
   }
 
@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
   const { data: product, error } = await supabase
     .from("products")
     .insert({
-      brand_id: brandProfile.id,
+      brand_id: (brandProfile as any).id,
       name,
       description: description || null,
       price,
@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
       shipping_address: shipping_address || null,
       source_url: source_url || null,
       status: "active",
-    })
+    } as any)
     .select()
     .single();
 

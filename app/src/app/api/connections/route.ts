@@ -42,16 +42,16 @@ export async function GET() {
     `)
     .order("created_at", { ascending: false });
 
-  if (dbUser.type === "creator") {
+  if ((dbUser as any).type === "creator") {
     query = query.eq("creator_id", user.id);
-  } else if (dbUser.type === "brand") {
+  } else if ((dbUser as any).type === "brand") {
     const { data: brandProfile } = await supabase
       .from("brand_profiles")
       .select("id")
       .eq("user_id", user.id)
       .single();
     if (brandProfile) {
-      query = query.eq("brand_id", brandProfile.id);
+      query = query.eq("brand_id", (brandProfile as any).id);
     }
   }
 
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     .eq("id", user.id)
     .single();
 
-  if (dbUser?.type !== "creator") {
+  if ((dbUser as any)?.type !== "creator") {
     return NextResponse.json({ error: "רק יוצרי תוכן יכולים לשלוח בקשות" }, { status: 403 });
   }
 
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
     .eq("id", product_id)
     .single();
 
-  if (!product || product.status !== "active") {
+  if (!product || (product as any).status !== "active") {
     return NextResponse.json({ error: "מוצר לא זמין" }, { status: 404 });
   }
 
@@ -122,10 +122,10 @@ export async function POST(request: NextRequest) {
     .from("connections")
     .insert({
       creator_id: user.id,
-      brand_id: product.brand_id,
+      brand_id: (product as any).brand_id,
       product_id,
       status: "pending",
-    })
+    } as any)
     .select()
     .single();
 

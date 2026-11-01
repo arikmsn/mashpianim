@@ -30,6 +30,7 @@ export interface Database {
           updated_at: string;
           is_active: boolean;
           onboarding_completed: boolean;
+          auth_user_id: string | null;
         };
         Insert: Omit<Database["public"]["Tables"]["users"]["Row"], "id" | "created_at" | "updated_at">;
         Update: Partial<Database["public"]["Tables"]["users"]["Insert"]>;
@@ -187,6 +188,26 @@ export interface Database {
         };
         Insert: Omit<Database["public"]["Tables"]["referrals"]["Row"], "id" | "created_at">;
         Update: Partial<Database["public"]["Tables"]["referrals"]["Insert"]>;
+      };
+      site_content: {
+        Row: {
+          id: string;
+          data: Record<string, string>;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: { id: string; data: Record<string, string>; updated_by?: string | null };
+        Update: Partial<{ data: Record<string, string>; updated_by: string | null }>;
+      };
+      site_settings: {
+        Row: {
+          id: string;
+          data: Record<string, unknown>;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: { id: string; data: Record<string, unknown>; updated_by?: string | null };
+        Update: Partial<{ data: Record<string, unknown>; updated_by: string | null }>;
       };
     };
     Views: Record<string, never>;

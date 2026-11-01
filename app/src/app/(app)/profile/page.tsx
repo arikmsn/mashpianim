@@ -111,11 +111,12 @@ export default function ProfilePage() {
       try {
         const supabase = createClient();
 
-        const { data: userData } = await supabase
+        const { data: rawUser } = await supabase
           .from("users")
           .select("*")
-          .eq("id", user.id)
+          .eq("auth_user_id", user.id)
           .single();
+        const userData = rawUser as any;
 
         if (!userData) {
           setProfile(mockCreatorProfile);
@@ -125,11 +126,12 @@ export default function ProfilePage() {
         }
 
         if (userData.type === "creator") {
-          const { data: creatorData } = await supabase
+          const { data: rawCreator } = await supabase
             .from("creator_profiles")
             .select("*")
-            .eq("user_id", user.id)
+            .eq("user_id", userData.id)
             .single();
+          const creatorData = rawCreator as any;
 
           if (creatorData) {
             setProfile({
@@ -151,11 +153,12 @@ export default function ProfilePage() {
             setUserType("creator");
           }
         } else if (userData.type === "brand") {
-          const { data: brandData } = await supabase
+          const { data: rawBrand } = await supabase
             .from("brand_profiles")
             .select("*")
-            .eq("user_id", user.id)
+            .eq("user_id", userData.id)
             .single();
+          const brandData = rawBrand as any;
 
           if (brandData) {
             setBrandProfile({

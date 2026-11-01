@@ -40,15 +40,15 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("site_settings")
-    .select("section, data");
+    .select("id, data");
 
   if (error) {
     return NextResponse.json({ settings: defaultSettings });
   }
 
   const settings = { ...defaultSettings };
-  for (const row of data || []) {
-    settings[row.section] = row.data as Record<string, string>;
+  for (const row of (data || []) as any[]) {
+    settings[row.id] = row.data as Record<string, string>;
   }
 
   return NextResponse.json({ settings });
@@ -65,7 +65,7 @@ export async function PUT(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { section, data } = body;
+  const { section, data } = body as { section: string; data: Record<string, string> };
 
   if (!section || !data) {
     return NextResponse.json({ error: "פרטים חסרים" }, { status: 400 });
@@ -74,8 +74,8 @@ export async function PUT(request: NextRequest) {
   const { error } = await supabase
     .from("site_settings")
     .upsert(
-      { section, data, updated_at: new Date().toISOString() },
-      { onConflict: "section" }
+      { id: section, data, updated_at: new Date().toISOString() } as any,
+      { onConflict: "id" }
     );
 
   if (error) {

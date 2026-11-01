@@ -83,10 +83,10 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "סטטוס חסר" }, { status: 400 });
   }
 
-  const allowed = validTransitions[connection.status];
+  const allowed = validTransitions[(connection as any).status];
   if (!allowed || !allowed.includes(newStatus)) {
     return NextResponse.json(
-      { error: `לא ניתן לעבור מ-${connection.status} ל-${newStatus}` },
+      { error: `לא ניתן לעבור מ-${(connection as any).status} ל-${newStatus}` },
       { status: 400 }
     );
   }
@@ -113,8 +113,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     updates.review_deadline = new Date(now.getTime() + 7 * 86400000).toISOString();
   }
 
-  const { error } = await supabase
-    .from("connections")
+  const { error } = await (supabase
+    .from("connections") as any)
     .update(updates)
     .eq("id", id);
 

@@ -25,8 +25,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
   return NextResponse.json({
     product: {
-      ...data,
-      brand_name: (data.brand_profiles as { shop_name: string })?.shop_name || "",
+      ...(data as any),
+      brand_name: ((data as any).brand_profiles as { shop_name: string })?.shop_name || "",
     },
   });
 }
@@ -57,14 +57,14 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "מוצר לא נמצא" }, { status: 404 });
   }
 
-  const brandUserId = (product.brand_profiles as { user_id: string })?.user_id;
+  const brandUserId = ((product as any).brand_profiles as { user_id: string })?.user_id;
   const { data: dbUser } = await supabase
     .from("users")
     .select("type")
     .eq("id", user.id)
     .single();
 
-  if (brandUserId !== user.id && dbUser?.type !== "admin") {
+  if (brandUserId !== user.id && (dbUser as any)?.type !== "admin") {
     return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
   }
 
@@ -81,8 +81,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   if (source_url !== undefined) updates.source_url = source_url;
   if (status !== undefined) updates.status = status;
 
-  const { error } = await supabase
-    .from("products")
+  const { error } = await (supabase
+    .from("products") as any)
     .update(updates)
     .eq("id", id);
 
@@ -120,13 +120,13 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "מוצר לא נמצא" }, { status: 404 });
   }
 
-  const brandUserId = (product.brand_profiles as { user_id: string })?.user_id;
+  const brandUserId = ((product as any).brand_profiles as { user_id: string })?.user_id;
   if (brandUserId !== user.id) {
     return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
   }
 
-  const { error } = await supabase
-    .from("products")
+  const { error } = await (supabase
+    .from("products") as any)
     .update({ status: "deleted" })
     .eq("id", id);
 

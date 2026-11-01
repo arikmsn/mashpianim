@@ -75,8 +75,8 @@ export async function PUT(request: NextRequest) {
   }
 
   if (is_active !== undefined) {
-    const { error } = await supabase
-      .from("users")
+    const { error } = await (supabase
+      .from("users") as any)
       .update({ is_active })
       .eq("id", userId);
 

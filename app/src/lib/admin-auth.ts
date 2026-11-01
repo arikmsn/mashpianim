@@ -21,11 +21,11 @@ export async function verifyAdmin() {
   const { data: dbUser } = await supabase
     .from("users")
     .select("type")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
 
   return {
-    isAdmin: dbUser?.type === "admin",
+    isAdmin: (dbUser as any)?.type === "admin",
     userId: user.id,
     supabase,
   };
