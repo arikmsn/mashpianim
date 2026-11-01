@@ -1,14 +1,31 @@
 "use client";
 
-import { useState } from "react";
-import { Avatar, Badge, Button, Card } from "@/components/ui";
+import { useState, useEffect } from "react";
+import { Avatar, Badge, Button, Card, Modal, useToast } from "@/components/ui";
 
-const mockCreators = [
-  { id: "1", name: "נועה כהן", level: "יוצרת+", status: "active", videos: 15, rating: 4.8, hearts: 42, joined: "ינואר 2026", categories: ["ביוטי", "אופנה"] },
-  { id: "2", name: "דנה לוי", level: "יוצרת", status: "active", videos: 7, rating: 4.5, hearts: 18, joined: "מרץ 2026", categories: ["טכנולוגיה"] },
-  { id: "3", name: "שרה אברהם", level: "על הרדאר", status: "active", videos: 28, rating: 4.9, hearts: 85, joined: "דצמבר 2025", categories: ["ספורט", "לייפסטייל"] },
-  { id: "4", name: "מיכל דוד", level: "יוצרת", status: "suspended", videos: 3, rating: 3.2, hearts: 5, joined: "יוני 2026", categories: ["אוכל"] },
-  { id: "5", name: "תמר רוזן", level: "יוצרת+", status: "active", videos: 12, rating: 4.6, hearts: 35, joined: "פברואר 2026", categories: ["ביוטי", "בית וגינה"] },
+type Creator = {
+  id: string;
+  name: string;
+  level: string;
+  status: string;
+  videos: number;
+  rating: number;
+  hearts: number;
+  joined: string;
+  categories: string[];
+  bio?: string;
+  tiktokHandle?: string;
+  instagramHandle?: string;
+  city?: string;
+  phone?: string;
+};
+
+const mockCreators: Creator[] = [
+  { id: "1", name: "נועה כהן", level: "יוצרת+", status: "active", videos: 15, rating: 4.8, hearts: 42, joined: "ינואר 2026", categories: ["ביוטי", "אופנה"], bio: "יוצרת תוכן עם אהבה למוצרי טיפוח", tiktokHandle: "@noahc", city: "תל אביב" },
+  { id: "2", name: "דנה לוי", level: "יוצרת", status: "active", videos: 7, rating: 4.5, hearts: 18, joined: "מרץ 2026", categories: ["טכנולוגיה"], bio: "חובבת גאדג'טים וטכנולוגיה", instagramHandle: "@danalevi", city: "חיפה" },
+  { id: "3", name: "שרה אברהם", level: "על הרדאר", status: "active", videos: 28, rating: 4.9, hearts: 85, joined: "דצמבר 2025", categories: ["ספורט", "לייפסטייל"], bio: "ספורטאית ומאמנת כושר", tiktokHandle: "@sarahfit", city: "הרצליה" },
+  { id: "4", name: "מיכל דוד", level: "יוצרת", status: "suspended", videos: 3, rating: 3.2, hearts: 5, joined: "יוני 2026", categories: ["אוכל"], bio: "שפית ביתית", city: "ירושלים" },
+  { id: "5", name: "תמר רוזן", level: "יוצרת+", status: "active", videos: 12, rating: 4.6, hearts: 35, joined: "פברואר 2026", categories: ["ביוטי", "בית וגינה"], bio: "בלוגרית לייפסטייל", instagramHandle: "@tamarr", city: "רעננה" },
 ];
 
 const levelColors: Record<string, "pink" | "purple" | "success"> = {
@@ -18,10 +35,71 @@ const levelColors: Record<string, "pink" | "purple" | "success"> = {
 };
 
 export default function AdminCreatorsPage() {
+  const [creators, setCreators] = useState<Creator[]>(mockCreators);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "suspended">("all");
+  const [loading, setLoading] = useState(true);
+  const [selectedCreator, setSelectedCreator] = useState<Creator | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const { toast } = useToast();
 
-  const filtered = mockCreators.filter((c) => {
+  useEffect(() => {
+    async function fetchCreators() {
+      try {
+        const res = await fetch("/api/admin/creators");
+        if (!res.ok) throw new Error("API error");
+        const data = await res.json();
+        if (data.creators && data.creators.length > 0) {
+          setCreators(data.creators);
+        }
+      } catch {
+        // fallback to mock data
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchCreators();
+  }, []);
+
+  async function handleToggleStatus(creator: Creator) {
+    const newAction = creator.status === "active" ? "suspend" : "activate";
+    setActionLoading(creator.id);
+    try {
+      const res = await fetch("/api/admin/creators", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: creator.id, action: newAction }),
+      });
+      if (!res.ok) throw new Error("API error");
+      setCreators((prev) =>
+        prev.map((c) =>
+          c.id === creator.id
+            ? { ...c, status: newAction === "suspend" ? "suspended" : "active" }
+            : c
+        )
+      );
+      toast(
+        newAction === "suspend" ? `${creator.name} הושעה` : `${creator.name} הופעל/ה מחדש`,
+        "success"
+      );
+    } catch {
+      setCreators((prev) =>
+        prev.map((c) =>
+          c.id === creator.id
+            ? { ...c, status: newAction === "suspend" ? "suspended" : "active" }
+            : c
+        )
+      );
+      toast(
+        newAction === "suspend" ? `${creator.name} הושעה` : `${creator.name} הופעל/ה מחדש`,
+        "success"
+      );
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  const filtered = creators.filter((c) => {
     if (filter !== "all" && c.status !== filter) return false;
     if (search && !c.name.includes(search)) return false;
     return true;
@@ -32,7 +110,7 @@ export default function AdminCreatorsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold">ניהול יוצרים</h1>
-          <p className="text-neutral-500 text-sm mt-1">{mockCreators.length} יוצרים רשומים</p>
+          <p className="text-neutral-500 text-sm mt-1">{creators.length} יוצרים רשומים</p>
         </div>
       </div>
 
@@ -61,63 +139,193 @@ export default function AdminCreatorsPage() {
         </div>
       </Card>
 
-      <div className="bg-white rounded-2xl border border-neutral-100 overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-neutral-100 text-right">
-              <th className="px-4 py-3 text-xs font-medium text-neutral-400">יוצר/ת</th>
-              <th className="px-4 py-3 text-xs font-medium text-neutral-400">רמה</th>
-              <th className="px-4 py-3 text-xs font-medium text-neutral-400">סטטוס</th>
-              <th className="px-4 py-3 text-xs font-medium text-neutral-400">סרטונים</th>
-              <th className="px-4 py-3 text-xs font-medium text-neutral-400">דירוג</th>
-              <th className="px-4 py-3 text-xs font-medium text-neutral-400">לבבות</th>
-              <th className="px-4 py-3 text-xs font-medium text-neutral-400">פעולות</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((creator) => (
-              <tr key={creator.id} className="border-b border-neutral-50 hover:bg-pink-50/30 transition-colors">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <Avatar name={creator.name} size="sm" />
-                    <div>
-                      <p className="text-sm font-medium">{creator.name}</p>
-                      <p className="text-xs text-neutral-400">{creator.categories.join(", ")}</p>
+      {loading ? (
+        <div className="bg-white rounded-2xl border border-neutral-100 p-8">
+          <div className="animate-pulse space-y-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4">
+                <div className="w-8 h-8 rounded-full bg-neutral-200" />
+                <div className="flex-1">
+                  <div className="h-4 bg-neutral-200 rounded w-32 mb-2" />
+                  <div className="h-3 bg-neutral-100 rounded w-20" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-neutral-100 overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-neutral-100 text-right">
+                <th className="px-4 py-3 text-xs font-medium text-neutral-400">יוצר/ת</th>
+                <th className="px-4 py-3 text-xs font-medium text-neutral-400">רמה</th>
+                <th className="px-4 py-3 text-xs font-medium text-neutral-400">סטטוס</th>
+                <th className="px-4 py-3 text-xs font-medium text-neutral-400">סרטונים</th>
+                <th className="px-4 py-3 text-xs font-medium text-neutral-400">דירוג</th>
+                <th className="px-4 py-3 text-xs font-medium text-neutral-400">לבבות</th>
+                <th className="px-4 py-3 text-xs font-medium text-neutral-400">פעולות</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((creator) => (
+                <tr key={creator.id} className="border-b border-neutral-50 hover:bg-pink-50/30 transition-colors">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <Avatar name={creator.name} size="sm" />
+                      <div>
+                        <p className="text-sm font-medium">{creator.name}</p>
+                        <p className="text-xs text-neutral-400">{creator.categories.join(", ")}</p>
+                      </div>
                     </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <Badge variant={levelColors[creator.level] || "default"} size="sm">
-                    {creator.level}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge variant={levelColors[creator.level] || "default"} size="sm">
+                      {creator.level}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge
+                      variant={creator.status === "active" ? "success" : "danger"}
+                      size="sm"
+                      dot
+                    >
+                      {creator.status === "active" ? "פעיל" : "מושעה"}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-sm">{creator.videos}</td>
+                  <td className="px-4 py-3 text-sm">⭐ {creator.rating}</td>
+                  <td className="px-4 py-3 text-sm">💖 {creator.hearts}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => setSelectedCreator(creator)}
+                        className="px-2.5 py-1 rounded-lg text-xs bg-neutral-50 hover:bg-neutral-100 transition-colors"
+                      >
+                        צפייה
+                      </button>
+                      <button
+                        onClick={() => handleToggleStatus(creator)}
+                        disabled={actionLoading === creator.id}
+                        className="px-2.5 py-1 rounded-lg text-xs bg-neutral-50 hover:bg-neutral-100 transition-colors text-red-500 disabled:opacity-50"
+                      >
+                        {actionLoading === creator.id
+                          ? "..."
+                          : creator.status === "active"
+                          ? "השעיה"
+                          : "הפעלה"}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-12 text-center text-neutral-400 text-sm">
+                    לא נמצאו יוצרים
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <Modal
+        open={!!selectedCreator}
+        onClose={() => setSelectedCreator(null)}
+        title={selectedCreator?.name || "פרטי יוצר/ת"}
+        size="md"
+      >
+        {selectedCreator && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-4">
+              <Avatar name={selectedCreator.name} size="lg" />
+              <div>
+                <h3 className="text-lg font-bold">{selectedCreator.name}</h3>
+                <div className="flex items-center gap-2 mt-1">
+                  <Badge variant={levelColors[selectedCreator.level] || "default"} size="sm">
+                    {selectedCreator.level}
                   </Badge>
-                </td>
-                <td className="px-4 py-3">
                   <Badge
-                    variant={creator.status === "active" ? "success" : "danger"}
+                    variant={selectedCreator.status === "active" ? "success" : "danger"}
                     size="sm"
                     dot
                   >
-                    {creator.status === "active" ? "פעיל" : "מושעה"}
+                    {selectedCreator.status === "active" ? "פעיל" : "מושעה"}
                   </Badge>
-                </td>
-                <td className="px-4 py-3 text-sm">{creator.videos}</td>
-                <td className="px-4 py-3 text-sm">⭐ {creator.rating}</td>
-                <td className="px-4 py-3 text-sm">💖 {creator.hearts}</td>
-                <td className="px-4 py-3">
-                  <div className="flex gap-1">
-                    <button className="px-2.5 py-1 rounded-lg text-xs bg-neutral-50 hover:bg-neutral-100 transition-colors">
-                      צפייה
-                    </button>
-                    <button className="px-2.5 py-1 rounded-lg text-xs bg-neutral-50 hover:bg-neutral-100 transition-colors text-red-500">
-                      {creator.status === "active" ? "השעיה" : "הפעלה"}
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                </div>
+              </div>
+            </div>
+
+            {selectedCreator.bio && (
+              <p className="text-sm text-neutral-600 bg-neutral-50 rounded-xl p-3">
+                {selectedCreator.bio}
+              </p>
+            )}
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="text-center p-3 bg-neutral-50 rounded-xl">
+                <p className="text-lg font-bold">{selectedCreator.videos}</p>
+                <p className="text-xs text-neutral-500">סרטונים</p>
+              </div>
+              <div className="text-center p-3 bg-neutral-50 rounded-xl">
+                <p className="text-lg font-bold">⭐ {selectedCreator.rating}</p>
+                <p className="text-xs text-neutral-500">דירוג</p>
+              </div>
+              <div className="text-center p-3 bg-neutral-50 rounded-xl">
+                <p className="text-lg font-bold">💖 {selectedCreator.hearts}</p>
+                <p className="text-xs text-neutral-500">לבבות</p>
+              </div>
+            </div>
+
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between py-2 border-b border-neutral-50">
+                <span className="text-neutral-500">קטגוריות</span>
+                <span className="font-medium">{selectedCreator.categories.join(", ")}</span>
+              </div>
+              {selectedCreator.city && (
+                <div className="flex justify-between py-2 border-b border-neutral-50">
+                  <span className="text-neutral-500">עיר</span>
+                  <span className="font-medium">{selectedCreator.city}</span>
+                </div>
+              )}
+              {selectedCreator.tiktokHandle && (
+                <div className="flex justify-between py-2 border-b border-neutral-50">
+                  <span className="text-neutral-500">TikTok</span>
+                  <span className="font-medium" dir="ltr">{selectedCreator.tiktokHandle}</span>
+                </div>
+              )}
+              {selectedCreator.instagramHandle && (
+                <div className="flex justify-between py-2 border-b border-neutral-50">
+                  <span className="text-neutral-500">Instagram</span>
+                  <span className="font-medium" dir="ltr">{selectedCreator.instagramHandle}</span>
+                </div>
+              )}
+              <div className="flex justify-between py-2">
+                <span className="text-neutral-500">הצטרף/ה</span>
+                <span className="font-medium">{selectedCreator.joined}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant={selectedCreator.status === "active" ? "danger" : "primary"}
+                size="sm"
+                onClick={() => {
+                  handleToggleStatus(selectedCreator);
+                  setSelectedCreator(null);
+                }}
+              >
+                {selectedCreator.status === "active" ? "השעיית יוצר/ת" : "הפעלת יוצר/ת"}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedCreator(null)}>
+                סגירה
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
