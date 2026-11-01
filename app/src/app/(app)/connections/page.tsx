@@ -13,12 +13,13 @@ const statusConfig: Record<
   { label: string; variant: "info" | "warning" | "purple" | "default" | "success" | "danger" | "pink"; tab: TabType }
 > = {
   pending: { label: "ממתין לאישור", variant: "default", tab: "pending" },
-  approved: { label: "אושר", variant: "success", tab: "active" },
+  approved: { label: "אושר — ממתין למשלוח", variant: "success", tab: "active" },
   rejected: { label: "נדחה", variant: "danger", tab: "completed" },
-  shipped: { label: "נשלח", variant: "info", tab: "active" },
+  shipped: { label: "נשלח — אשרו קבלה", variant: "info", tab: "active" },
+  delivered: { label: "נמסר — הגיע הזמן לצלם!", variant: "pink", tab: "active" },
   filming: { label: "בצילום", variant: "warning", tab: "active" },
   uploaded: { label: "הועלה", variant: "purple", tab: "active" },
-  in_review: { label: "בבדיקה", variant: "purple", tab: "active" },
+  in_review: { label: "בבדיקה אצל העסק", variant: "purple", tab: "active" },
   revision_requested: { label: "נדרש תיקון", variant: "warning", tab: "active" },
   completed: { label: "הושלם", variant: "success", tab: "completed" },
   cancelled: { label: "בוטל", variant: "danger", tab: "completed" },
@@ -30,6 +31,10 @@ interface Connection {
   brand: string;
   status: string;
   daysLeft: number | null;
+  deliveryType: "physical" | "digital";
+  trackingNumber: string | null;
+  digitalAccessValue: string | null;
+  revisionNotes: string | null;
 }
 
 function ConnectionSkeleton() {
@@ -48,7 +53,11 @@ function ConnectionSkeleton() {
 }
 
 function canUploadVideo(status: string) {
-  return ["shipped", "filming", "revision_requested"].includes(status);
+  return ["delivered", "filming", "revision_requested"].includes(status);
+}
+
+function canConfirmDelivery(status: string) {
+  return status === "shipped";
 }
 
 export default function ConnectionsPage() {
@@ -56,6 +65,7 @@ export default function ConnectionsPage() {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadConnectionIdRef = useRef<string | null>(null);
   const { user } = useAuth();
@@ -79,10 +89,14 @@ export default function ConnectionsPage() {
                 }
                 return {
                   id: c.id as string,
-                  product: (c.product_name as string) || "",
-                  brand: (c.brand_name as string) || (c.shop_name as string) || "",
+                  product: (c as any).products?.name || (c.product_name as string) || "",
+                  brand: (c as any).brand_profiles?.shop_name || (c.brand_name as string) || "",
                   status: (c.status as string) || "pending",
                   daysLeft,
+                  deliveryType: ((c as any).delivery_type as "physical" | "digital") || "physical",
+                  trackingNumber: (c.tracking_number as string) || null,
+                  digitalAccessValue: (c.digital_access_value as string) || null,
+                  revisionNotes: (c.revision_notes as string) || null,
                 };
               })
             );
@@ -146,6 +160,30 @@ export default function ConnectionsPage() {
       toast("שגיאה בהעלאת הסרטון", "error");
     } finally {
       setUploadingId(null);
+    }
+  }
+
+  async function confirmDelivery(connectionId: string) {
+    setConfirmingId(connectionId);
+    try {
+      const res = await fetch(`/api/connections/${connectionId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "delivered" }),
+      });
+      if (res.ok) {
+        setConnections((prev) =>
+          prev.map((c) => (c.id === connectionId ? { ...c, status: "delivered" } : c))
+        );
+        toast("קבלת המוצר אושרה! עכשיו הגיע הזמן לצלם", "success");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast((data as any).error || "שגיאה בעדכון", "error");
+      }
+    } catch {
+      toast("שגיאה בעדכון", "error");
+    } finally {
+      setConfirmingId(null);
     }
   }
 
@@ -259,6 +297,38 @@ export default function ConnectionsPage() {
                       </div>
                     </button>
 
+                    {/* Delivery confirmation for shipped items */}
+                    {canConfirmDelivery(conn.status) && (
+                      <div className="mt-3 pt-3 border-t border-neutral-100 space-y-2">
+                        {conn.trackingNumber && (
+                          <p className="text-xs text-neutral-500">מספר מעקב: <span className="font-mono">{conn.trackingNumber}</span></p>
+                        )}
+                        {conn.digitalAccessValue && (
+                          <p className="text-xs text-neutral-500">גישה: <span className="font-mono">{conn.digitalAccessValue}</span></p>
+                        )}
+                        <Button
+                          size="sm"
+                          fullWidth
+                          loading={confirmingId === conn.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            confirmDelivery(conn.id);
+                          }}
+                        >
+                          {conn.deliveryType === "digital" ? "אישור קבלת גישה" : "אישור קבלת המוצר"}
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Revision notes */}
+                    {conn.status === "revision_requested" && conn.revisionNotes && (
+                      <div className="mt-3 pt-3 border-t border-amber-100 bg-amber-50 -mx-4 -mb-4 px-4 pb-4 rounded-b-2xl">
+                        <p className="text-xs text-amber-700 font-medium mb-1">הערות תיקון:</p>
+                        <p className="text-xs text-amber-600">{conn.revisionNotes}</p>
+                      </div>
+                    )}
+
+                    {/* Video upload */}
                     {showUpload && (
                       <div className="mt-3 pt-3 border-t border-neutral-100">
                         <Button

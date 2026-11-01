@@ -16,6 +16,10 @@ interface Product {
   sourceUrl: string | null;
   applicantsCount: number;
   createdAt: string;
+  productType: "physical" | "digital";
+  digitalAccessType: string | null;
+  digitalAccessInstructions: string | null;
+  digitalAccessDurationDays: number | null;
 }
 
 const categories = ["ביוטי", "אופנה", "טכנולוגיה", "בית וגינה", "אוכל", "ספורט", "ילדים", "אחר"];
@@ -61,6 +65,10 @@ export default function BrandProductsPage() {
     imageUrl: "",
     shippingPolicy: "free",
     sourceUrl: "",
+    productType: "physical" as "physical" | "digital",
+    digitalAccessType: "",
+    digitalAccessInstructions: "",
+    digitalAccessDurationDays: "",
   });
 
   useEffect(() => {
@@ -86,6 +94,10 @@ export default function BrandProductsPage() {
               sourceUrl: (p.source_url as string) || null,
               applicantsCount: (p.applicants_count as number) || 0,
               createdAt: (p.created_at as string) || "",
+              productType: (p.product_type as string) || "physical",
+              digitalAccessType: (p.digital_access_type as string) || null,
+              digitalAccessInstructions: (p.digital_access_instructions as string) || null,
+              digitalAccessDurationDays: (p.digital_access_duration_days as number) || null,
             }))
           );
           setLoading(false);
@@ -100,7 +112,7 @@ export default function BrandProductsPage() {
   }
 
   function resetForm() {
-    setFormData({ name: "", description: "", price: "", category: "ביוטי", imageUrl: "", shippingPolicy: "free", sourceUrl: "" });
+    setFormData({ name: "", description: "", price: "", category: "ביוטי", imageUrl: "", shippingPolicy: "free", sourceUrl: "", productType: "physical", digitalAccessType: "", digitalAccessInstructions: "", digitalAccessDurationDays: "" });
     setEditingProduct(null);
   }
 
@@ -118,6 +130,10 @@ export default function BrandProductsPage() {
       imageUrl: product.imageUrl || "",
       shippingPolicy: product.shippingPolicy,
       sourceUrl: product.sourceUrl || "",
+      productType: product.productType || "physical",
+      digitalAccessType: product.digitalAccessType || "",
+      digitalAccessInstructions: product.digitalAccessInstructions || "",
+      digitalAccessDurationDays: product.digitalAccessDurationDays ? String(product.digitalAccessDurationDays) : "",
     });
     setEditingProduct(product);
     setShowAddModal(true);
@@ -131,7 +147,7 @@ export default function BrandProductsPage() {
 
     setSaving(true);
     try {
-      const body = {
+      const body: Record<string, unknown> = {
         name: formData.name.trim(),
         description: formData.description.trim(),
         price: Number(formData.price),
@@ -139,6 +155,10 @@ export default function BrandProductsPage() {
         image_url: formData.imageUrl.trim() || null,
         shipping_policy: formData.shippingPolicy,
         source_url: formData.sourceUrl.trim() || null,
+        product_type: formData.productType,
+        digital_access_type: formData.productType === "digital" ? formData.digitalAccessType || null : null,
+        digital_access_instructions: formData.productType === "digital" ? formData.digitalAccessInstructions.trim() || null : null,
+        digital_access_duration_days: formData.productType === "digital" && formData.digitalAccessDurationDays ? Number(formData.digitalAccessDurationDays) : null,
       };
 
       if (editingProduct) {
@@ -152,7 +172,20 @@ export default function BrandProductsPage() {
           setProducts((prev) =>
             prev.map((p) =>
               p.id === editingProduct.id
-                ? { ...p, ...body, imageUrl: body.image_url, shippingPolicy: body.shipping_policy, sourceUrl: body.source_url }
+                ? {
+                    ...p,
+                    name: body.name as string,
+                    description: body.description as string,
+                    price: body.price as number,
+                    category: body.category as string,
+                    imageUrl: (body.image_url as string) || null,
+                    shippingPolicy: body.shipping_policy as string,
+                    sourceUrl: (body.source_url as string) || null,
+                    productType: (body.product_type as "physical" | "digital") || "physical",
+                    digitalAccessType: (body.digital_access_type as string) || null,
+                    digitalAccessInstructions: (body.digital_access_instructions as string) || null,
+                    digitalAccessDurationDays: (body.digital_access_duration_days as number) || null,
+                  }
                 : p
             )
           );
@@ -171,16 +204,20 @@ export default function BrandProductsPage() {
           setProducts((prev) => [
             {
               id: data.product?.id || `local-${Date.now()}`,
-              name: body.name,
-              description: body.description,
-              price: body.price,
-              imageUrl: body.image_url,
+              name: body.name as string,
+              description: body.description as string,
+              price: body.price as number,
+              imageUrl: body.image_url as string | null,
               status: "active",
-              category: body.category,
-              shippingPolicy: body.shipping_policy,
-              sourceUrl: body.source_url,
+              category: body.category as string,
+              shippingPolicy: body.shipping_policy as string,
+              sourceUrl: body.source_url as string | null,
               applicantsCount: 0,
               createdAt: new Date().toISOString(),
+              productType: (body.product_type as "physical" | "digital") || "physical",
+              digitalAccessType: (body.digital_access_type as string) || null,
+              digitalAccessInstructions: (body.digital_access_instructions as string) || null,
+              digitalAccessDurationDays: (body.digital_access_duration_days as number) || null,
             },
             ...prev,
           ]);
@@ -298,7 +335,7 @@ export default function BrandProductsPage() {
                           <div className="flex items-center gap-3 text-xs text-neutral-400 mb-2">
                             <span>₪{product.price}</span>
                             <span>👥 {product.applicantsCount} בקשות</span>
-                            <span>{shippingLabels[product.shippingPolicy] || product.shippingPolicy}</span>
+                            <span>{product.productType === "digital" ? "📱 דיגיטלי" : shippingLabels[product.shippingPolicy] || product.shippingPolicy}</span>
                           </div>
                           <div className="flex gap-2">
                             <button
@@ -381,17 +418,81 @@ export default function BrandProductsPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-1">מדיניות משלוח</label>
-            <select
-              value={formData.shippingPolicy}
-              onChange={(e) => setFormData((p) => ({ ...p, shippingPolicy: e.target.value }))}
-              className="w-full px-4 py-2.5 rounded-xl bg-neutral-50 border border-neutral-200 text-sm outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-500/10"
-            >
-              <option value="free">משלוח חינם</option>
-              <option value="paid">משלוח בתשלום</option>
-              <option value="pickup">איסוף עצמי</option>
-            </select>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">סוג מוצר</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setFormData((p) => ({ ...p, productType: "physical" }))}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-all ${
+                  formData.productType === "physical"
+                    ? "bg-pink-50 border-pink-300 text-pink-600"
+                    : "bg-neutral-50 border-neutral-200 text-neutral-500"
+                }`}
+              >
+                📦 פיזי
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData((p) => ({ ...p, productType: "digital" }))}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-all ${
+                  formData.productType === "digital"
+                    ? "bg-pink-50 border-pink-300 text-pink-600"
+                    : "bg-neutral-50 border-neutral-200 text-neutral-500"
+                }`}
+              >
+                📱 דיגיטלי
+              </button>
+            </div>
           </div>
+
+          {formData.productType === "physical" ? (
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-1">מדיניות משלוח</label>
+              <select
+                value={formData.shippingPolicy}
+                onChange={(e) => setFormData((p) => ({ ...p, shippingPolicy: e.target.value }))}
+                className="w-full px-4 py-2.5 rounded-xl bg-neutral-50 border border-neutral-200 text-sm outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-500/10"
+              >
+                <option value="free">משלוח חינם</option>
+                <option value="paid">משלוח בתשלום</option>
+                <option value="pickup">איסוף עצמי</option>
+              </select>
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">סוג גישה דיגיטלית *</label>
+                <select
+                  value={formData.digitalAccessType}
+                  onChange={(e) => setFormData((p) => ({ ...p, digitalAccessType: e.target.value }))}
+                  className="w-full px-4 py-2.5 rounded-xl bg-neutral-50 border border-neutral-200 text-sm outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-500/10"
+                >
+                  <option value="">בחרו סוג...</option>
+                  <option value="link">קישור (לקורס, פלטפורמה)</option>
+                  <option value="code">קוד גישה / קופון</option>
+                  <option value="invite">הזמנה (אימייל/טלפון)</option>
+                  <option value="file">קובץ (ebook, מדריך)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">הוראות גישה</label>
+                <Textarea
+                  placeholder="הסבירו ליוצר איך להשתמש במוצר הדיגיטלי..."
+                  value={formData.digitalAccessInstructions}
+                  onChange={(e) => setFormData((p) => ({ ...p, digitalAccessInstructions: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">תקופת גישה (ימים, אופציונלי)</label>
+                <Input
+                  type="number"
+                  placeholder="למשל: 30"
+                  value={formData.digitalAccessDurationDays}
+                  onChange={(e) => setFormData((p) => ({ ...p, digitalAccessDurationDays: e.target.value }))}
+                />
+              </div>
+            </>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-neutral-700 mb-1">קישור לתמונה</label>

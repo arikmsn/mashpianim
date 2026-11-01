@@ -4,6 +4,7 @@ export type ConnectionStatus =
   | "approved"
   | "rejected"
   | "shipped"
+  | "delivered"
   | "filming"
   | "uploaded"
   | "in_review"
@@ -14,6 +15,8 @@ export type VideoStatus = "pending" | "approved" | "revision_requested";
 export type CreatorLevel = "creator" | "creator_plus" | "on_the_radar";
 export type ProductStatus = "active" | "paused" | "deleted";
 export type ShippingPolicy = "free" | "paid" | "pickup";
+export type ProductType = "physical" | "digital";
+export type DigitalAccessType = "link" | "code" | "invite" | "file";
 
 export interface Database {
   public: {
@@ -83,6 +86,10 @@ export interface Database {
           status: ProductStatus;
           source_url: string | null;
           created_at: string;
+          product_type: ProductType;
+          digital_access_type: DigitalAccessType | null;
+          digital_access_instructions: string | null;
+          digital_access_duration_days: number | null;
         };
         Insert: Omit<Database["public"]["Tables"]["products"]["Row"], "id" | "created_at">;
         Update: Partial<Database["public"]["Tables"]["products"]["Insert"]>;
@@ -97,13 +104,24 @@ export interface Database {
           created_at: string;
           approved_at: string | null;
           shipped_at: string | null;
+          delivered_at: string | null;
           filmed_at: string | null;
           completed_at: string | null;
           ship_deadline: string | null;
+          deliver_deadline: string | null;
           film_deadline: string | null;
           review_deadline: string | null;
           rejection_reason: string | null;
           revision_notes: string | null;
+          delivery_type: ProductType | null;
+          tracking_number: string | null;
+          tracking_url: string | null;
+          delivery_proof_url: string | null;
+          delivery_confirmed_at: string | null;
+          digital_access_value: string | null;
+          digital_access_expires_at: string | null;
+          credit_deducted: boolean;
+          revision_count: number;
         };
         Insert: Omit<Database["public"]["Tables"]["connections"]["Row"], "id" | "created_at">;
         Update: Partial<Database["public"]["Tables"]["connections"]["Insert"]>;
@@ -120,6 +138,11 @@ export interface Database {
           moderation_flags: string[];
           ai_review_result: Record<string, unknown> | null;
           created_at: string;
+          is_downloadable: boolean;
+          download_count: number;
+          storage_path: string | null;
+          approved_at: string | null;
+          approved_by: string | null;
         };
         Insert: Omit<Database["public"]["Tables"]["videos"]["Row"], "id" | "created_at">;
         Update: Partial<Database["public"]["Tables"]["videos"]["Insert"]>;

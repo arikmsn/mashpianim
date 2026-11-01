@@ -72,10 +72,19 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { name, description, price, image_url, shipping_policy, shipping_address, source_url } = body;
+  const {
+    name, description, price, image_url,
+    shipping_policy, shipping_address, source_url,
+    product_type, digital_access_type, digital_access_instructions, digital_access_duration_days,
+  } = body;
 
   if (!name || !price) {
     return NextResponse.json({ error: "שם ומחיר חובה" }, { status: 400 });
+  }
+
+  // Validate digital product fields
+  if (product_type === "digital" && !digital_access_type) {
+    return NextResponse.json({ error: "חובה לבחור סוג גישה למוצר דיגיטלי" }, { status: 400 });
   }
 
   const { data: product, error } = await supabase
@@ -90,6 +99,10 @@ export async function POST(request: NextRequest) {
       shipping_address: shipping_address || null,
       source_url: source_url || null,
       status: "active",
+      product_type: product_type || "physical",
+      digital_access_type: product_type === "digital" ? digital_access_type : null,
+      digital_access_instructions: product_type === "digital" ? (digital_access_instructions || null) : null,
+      digital_access_duration_days: product_type === "digital" ? (digital_access_duration_days || null) : null,
     } as any)
     .select()
     .single();

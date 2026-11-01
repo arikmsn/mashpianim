@@ -127,21 +127,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: publicUrl } = supabase.storage
+    // Generate a signed URL instead of public (videos bucket should be private)
+    const { data: signedData } = await supabase.storage
       .from("videos")
-      .getPublicUrl(fileName);
+      .createSignedUrl(fileName, 3600);
+
+    const videoUrl = signedData?.signedUrl || "";
 
     const { data: video, error: insertError } = await supabase
       .from("videos")
       .insert({
         connection_id: connectionId,
-        url: publicUrl.publicUrl,
+        url: videoUrl,
+        storage_path: fileName,
         thumbnail_url: null,
         duration_seconds: null,
         status: "pending",
         revision_notes: null,
         moderation_flags: [],
         ai_review_result: null,
+        is_downloadable: false,
+        download_count: 0,
       } as any)
       .select()
       .single();
