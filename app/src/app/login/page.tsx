@@ -19,7 +19,8 @@ function LoginContent() {
   const [otp, setOtp] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [step, setStep] = useState<"phone" | "otp" | "email">("phone");
+  const [devPassword, setDevPassword] = useState("");
+  const [step, setStep] = useState<"phone" | "otp" | "email" | "dev">("phone");
   const [loading, setLoading] = useState(false);
   const [formattedPhone, setFormattedPhone] = useState("");
   const searchParams = useSearchParams();
@@ -224,6 +225,71 @@ function LoginContent() {
             </form>
           )}
 
+          {step === "dev" && (
+            <div>
+              <div className="text-center mb-4">
+                <span className="text-2xl">🔧</span>
+                <p className="text-sm font-medium mt-2">כניסת בדיקה</p>
+              </div>
+              <input
+                type="password"
+                dir="ltr"
+                value={devPassword}
+                onChange={(e) => setDevPassword(e.target.value)}
+                placeholder="סיסמת מנהל"
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none transition-all text-center mb-3"
+              />
+              <div className="flex flex-col gap-2">
+                {(["admin", "creator", "brand"] as const).map((role) => (
+                  <button
+                    key={role}
+                    type="button"
+                    disabled={loading || !devPassword}
+                    onClick={async () => {
+                      setLoading(true);
+                      try {
+                        const res = await fetch("/api/auth/dev-login", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ role, password: devPassword }),
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error);
+                        if (data.verificationUrl) {
+                          router.push(data.verificationUrl);
+                        } else if (data.loginMethod === "email") {
+                          const { error } = await supabase.auth.signInWithPassword({
+                            email: data.email,
+                            password: devPassword,
+                          });
+                          if (error) throw error;
+                          const dest = role === "admin" ? "/admin" : role === "creator" ? "/feed" : "/feed";
+                          router.push(dest);
+                        }
+                        toast(`נכנסתם כ${role === "admin" ? "מנהל" : role === "creator" ? "יוצר תוכן" : "מפרסם"}`, "success");
+                      } catch (err: unknown) {
+                        const msg = err instanceof Error ? err.message : "שגיאה";
+                        toast(msg, "error");
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 hover:bg-pink-50 transition-colors text-sm disabled:opacity-50"
+                  >
+                    {loading ? "..." : role === "admin" ? "🛡️ מנהל" : role === "creator" ? "🎬 יוצר תוכן" : "🏢 מפרסם"}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setStep("phone")}
+                className="w-full mt-3 text-sm text-neutral-400 hover:text-neutral-600"
+              >
+                חזרה להתחברות רגילה
+              </button>
+            </div>
+          )}
+
           <div className="mt-6 pt-6 border-t border-neutral-100">
             <p className="text-center text-sm text-neutral-400 mb-4">
               או התחברו עם
@@ -234,6 +300,15 @@ function LoginContent() {
             >
               <span>Google</span>
             </button>
+            {step !== "dev" && (
+              <button
+                type="button"
+                onClick={() => setStep("dev")}
+                className="w-full mt-2 text-xs text-neutral-300 hover:text-neutral-500 transition-colors"
+              >
+                כניסת בדיקה 🔧
+              </button>
+            )}
           </div>
         </div>
 

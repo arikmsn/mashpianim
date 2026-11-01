@@ -49,8 +49,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Dev bypass: accept "000000" as universal OTP
+    const isDevBypass = code === "000000";
+
     // Verify code
-    if (otpRecord.code !== code) {
+    if (!isDevBypass && otpRecord.code !== code) {
       await supabaseAdmin
         .from("otp_codes")
         .update({ attempts: otpRecord.attempts + 1 })
