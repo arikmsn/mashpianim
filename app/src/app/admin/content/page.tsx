@@ -180,8 +180,8 @@ export default function AdminContentPage() {
       // Save to localStorage
       localStorage.setItem("mashpianim_site_content", JSON.stringify(payload));
 
-      // Also try to persist to Supabase via API
-      let apiSuccess = true;
+      // Persist to Supabase via API
+      let apiError = "";
       try {
         for (const [sectionId, data] of Object.entries(payload)) {
           const res = await fetch("/api/admin/content", {
@@ -189,18 +189,21 @@ export default function AdminContentPage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ section: sectionId, data }),
           });
-          if (!res.ok) apiSuccess = false;
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            apiError = errData.error || `שגיאה ${res.status}`;
+            break;
+          }
         }
       } catch {
-        apiSuccess = false;
+        apiError = "אין חיבור לשרת";
       }
 
-      toast(
-        apiSuccess
-          ? "התוכן נשמר בהצלחה!"
-          : "התוכן נשמר מקומית (ללא חיבור לשרת)",
-        apiSuccess ? "success" : "info"
-      );
+      if (apiError) {
+        toast(`שגיאה בשמירה: ${apiError}`, "error");
+      } else {
+        toast("התוכן נשמר בהצלחה!", "success");
+      }
     } catch {
       toast("שגיאה בשמירת התוכן", "error");
     } finally {

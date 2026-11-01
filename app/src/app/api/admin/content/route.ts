@@ -88,7 +88,7 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ error: "המערכת לא מוגדרת" }, { status: 503 });
   }
 
   const { isAdmin, supabase } = await verifyAdmin();

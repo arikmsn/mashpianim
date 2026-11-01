@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const SHARED_AUTH_PASSWORD = "Mashpianim!Admin612861";
+const SHARED_AUTH_PASSWORD = process.env.ADMIN_AUTH_SECRET || "change-me-in-env";
 
 const ROLE_CONFIG: Record<string, { email: string; phone: string; fullName: string; type: string }> = {
   admin: { email: "admin@mashpianim.co.il", phone: "+972502463555", fullName: "מנהל מערכת", type: "admin" },
@@ -51,10 +51,10 @@ export async function POST(request: NextRequest) {
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-    let user = existingUsers?.users?.find((u) => u.email === config.email);
+    let authUser = existingUsers?.users?.find((u) => u.email === config.email);
 
-    if (user) {
-      await (supabaseAdmin.auth.admin as any).updateUserById(user.id, {
+    if (authUser) {
+      await (supabaseAdmin.auth.admin as any).updateUserById(authUser.id, {
         password: SHARED_AUTH_PASSWORD,
       });
     } else {
@@ -73,34 +73,82 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
-      user = newUser.user;
+      authUser = newUser.user;
+    }
 
-      await supabaseAdmin.from("users").upsert({
-        auth_user_id: user.id,
-        phone: config.phone,
-        email: config.email,
-        full_name: config.fullName,
-        type: config.type,
-        is_active: true,
-      } as any);
+    // Always ensure user row exists in users table with correct type
+    const { data: existingDbUser } = await supabaseAdmin
+      .from("users")
+      .select("id, type")
+      .eq("auth_user_id", authUser!.id)
+      .single();
 
-      if (role === "creator") {
-        await supabaseAdmin.from("creator_profiles").upsert({
-          user_id: user.id,
+    let dbUserId: string;
+
+    if (existingDbUser) {
+      dbUserId = (existingDbUser as any).id;
+      if ((existingDbUser as any).type !== config.type) {
+        await (supabaseAdmin.from("users") as any)
+          .update({ type: config.type, full_name: config.fullName, is_active: true })
+          .eq("id", dbUserId);
+      }
+    } else {
+      const { data: newDbUser, error: insertError } = await (supabaseAdmin
+        .from("users") as any)
+        .insert({
+          auth_user_id: authUser!.id,
+          phone: config.phone,
+          email: config.email,
+          full_name: config.fullName,
+          type: config.type,
+          is_active: true,
+        })
+        .select("id")
+        .single();
+
+      if (insertError) {
+        console.error("[dev-login] insert user error:", insertError);
+        return NextResponse.json(
+          { error: `שגיאה ביצירת פרופיל: ${insertError.message}` },
+          { status: 500 }
+        );
+      }
+      dbUserId = newDbUser.id;
+    }
+
+    // Create role-specific profile if needed
+    if (role === "creator") {
+      const { data: existing } = await supabaseAdmin
+        .from("creator_profiles")
+        .select("id")
+        .eq("user_id", dbUserId)
+        .single();
+
+      if (!existing) {
+        await (supabaseAdmin.from("creator_profiles") as any).insert({
+          user_id: dbUserId,
           bio: "חשבון בדיקה ליוצר תוכן",
           categories: ["אופנה", "לייפסטייל"],
           level: "creator",
-        } as any);
-      } else if (role === "brand") {
-        await supabaseAdmin.from("brand_profiles").upsert({
-          user_id: user.id,
+        });
+      }
+    } else if (role === "brand") {
+      const { data: existing } = await supabaseAdmin
+        .from("brand_profiles")
+        .select("id")
+        .eq("user_id", dbUserId)
+        .single();
+
+      if (!existing) {
+        await (supabaseAdmin.from("brand_profiles") as any).insert({
+          user_id: dbUserId,
           shop_name: "מותג בדיקה",
           category: "טכנולוגיה",
           website_url: "https://example.com",
           description: "חשבון בדיקה למפרסם",
           total_credits: 10,
           used_credits: 0,
-        } as any);
+        });
       }
     }
 
