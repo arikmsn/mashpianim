@@ -1,7 +1,7 @@
 {
-  "name": "Mashpian — יוצרים תוכן, מחברים מותגים",
-  "short_name": "Mashpian",
-  "description": "הפלטפורמה הישראלית לחיבור יוצרי תוכן UGC עם מותגים",
+  "name": "משפיען אונליין — יוצרים תוכן, מחברים מותגים",
+  "short_name": "משפיען אונליין",
+  "description": "הפלטפורמה הישראלית לחיבור יוצרי תוכן UGC עם מותגים. מוצרים בחינם בתמורה לסרטונים אותנטיים.",
   "start_url": "/feed",
   "display": "standalone",
   "background_color": "#ffffff",

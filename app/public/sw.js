@@ -91,7 +91,7 @@ self.addEventListener('fetch', (event) => {
 
 // Push notifications
 self.addEventListener('push', (event) => {
-  let data = { title: 'Mashpianim', body: 'יש לך התראה חדשה', icon: '/icon-192.png' };
+  let data = { title: 'משפיען אונליין', body: 'יש לך התראה חדשה', icon: '/icon-192.png' };
 
   try {
     if (event.data) {

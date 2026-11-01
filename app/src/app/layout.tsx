@@ -9,14 +9,50 @@ const heebo = Heebo({
 });
 
 export const metadata: Metadata = {
-  title: "Mashpian — יוצרים תוכן, מחברים מותגים",
+  title: "משפיען אונליין | Mashpian — יוצרים תוכן, מחברים מותגים",
   description:
-    "הפלטפורמה הישראלית לחיבור יוצרי תוכן UGC עם מותגים ועסקים. מוצרים חינם בתמורה לסרטונים אותנטיים.",
+    "הפלטפורמה הישראלית לחיבור יוצרי תוכן UGC עם מותגים ועסקים. קבלו מוצרים בחינם בתמורה לסרטונים אותנטיים. הצטרפו עכשיו!",
   manifest: "/manifest.json",
+  metadataBase: new URL("https://www.mashpian.online"),
+  openGraph: {
+    type: "website",
+    locale: "he_IL",
+    url: "https://www.mashpian.online",
+    siteName: "משפיען אונליין",
+    title: "משפיען אונליין — הפלטפורמה הישראלית ליוצרי תוכן UGC",
+    description:
+      "חיבור יוצרי תוכן עם מותגים מובילים. מוצרים בחינם בתמורה לסרטונים אותנטיים. הצטרפו לקהילה!",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "משפיען אונליין | Mashpian",
+    description:
+      "הפלטפורמה הישראלית ליוצרי תוכן UGC — מוצרים בחינם בתמורה לסרטונים אותנטיים",
+  },
+  keywords: [
+    "יוצרי תוכן",
+    "UGC",
+    "משפיענים",
+    "שיווק משפיענים",
+    "מותגים",
+    "תוכן אותנטי",
+    "ישראל",
+    "סרטונים",
+    "שיתופי פעולה",
+    "מוצרים חינם",
+  ],
+  robots: {
+    index: true,
+    follow: true,
+  },
+  icons: {
+    icon: "/icon.svg",
+    apple: "/icon-192.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Mashpian",
+    title: "משפיען אונליין",
   },
 };
 
