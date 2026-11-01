@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
-export async function verifyAdmin() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function verifyAdmin(): Promise<{ isAdmin: boolean; userId: string | null; supabase: any }> {
   const supabaseUrl = process.env.NEXT_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_SUPABASE_ANON_KEY;
   const supabaseServiceKey = process.env.SUPABASE_SEC_KEY;
@@ -30,9 +31,9 @@ export async function verifyAdmin() {
 
     if ((dbUser as any)?.type === "admin") {
       // Return service role client so admin operations bypass RLS too
-      return { isAdmin: true, userId: user.id, supabase: adminClient };
+      return { isAdmin: true, userId: user.id, supabase: adminClient as any };
     }
-    return { isAdmin: false, userId: user.id, supabase };
+    return { isAdmin: false, userId: user.id, supabase: supabase as any };
   }
 
   // Fallback: try with anon client (may fail if RLS blocks)
