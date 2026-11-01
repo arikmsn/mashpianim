@@ -67,19 +67,40 @@ function useSiteContent(): SiteContent {
   const [content, setContent] = useState<SiteContent>(defaults);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("mashpianim_site_content");
-      if (stored) {
-        const parsed = JSON.parse(stored) as SiteContent;
-        const merged: SiteContent = {};
-        for (const section of Object.keys(defaults)) {
-          merged[section] = { ...defaults[section], ...parsed[section] };
+    async function loadContent() {
+      // Try API first (reads from Supabase when configured)
+      try {
+        const res = await fetch("/api/admin/content");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.content) {
+            const merged: SiteContent = {};
+            for (const section of Object.keys(defaults)) {
+              merged[section] = { ...defaults[section], ...data.content[section] };
+            }
+            setContent(merged);
+            return;
+          }
         }
-        setContent(merged);
+      } catch {
+        // Fall through to localStorage
       }
-    } catch {
-      // ignore parse errors, use defaults
+      // Fallback to localStorage
+      try {
+        const stored = localStorage.getItem("mashpianim_site_content");
+        if (stored) {
+          const parsed = JSON.parse(stored) as SiteContent;
+          const merged: SiteContent = {};
+          for (const section of Object.keys(defaults)) {
+            merged[section] = { ...defaults[section], ...parsed[section] };
+          }
+          setContent(merged);
+        }
+      } catch {
+        // use defaults
+      }
     }
+    loadContent();
   }, []);
 
   return content;

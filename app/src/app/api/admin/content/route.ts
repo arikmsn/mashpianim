@@ -64,25 +64,26 @@ export async function GET() {
     return NextResponse.json({ content: defaultContent });
   }
 
-  const { isAdmin, supabase } = await verifyAdmin();
-  if (!isAdmin || !supabase) {
-    return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
-  }
+  // Content reading is public (landing page needs it)
+  try {
+    const supabase = await (await import("@/lib/supabase/server")).createClient();
+    const { data, error } = await supabase
+      .from("site_content")
+      .select("id, data");
 
-  const { data, error } = await supabase
-    .from("site_content")
-    .select("id, data");
+    if (error) {
+      return NextResponse.json({ content: defaultContent });
+    }
 
-  if (error) {
+    const content = { ...defaultContent };
+    for (const row of (data || []) as any[]) {
+      content[row.id] = row.data as Record<string, string>;
+    }
+
+    return NextResponse.json({ content });
+  } catch {
     return NextResponse.json({ content: defaultContent });
   }
-
-  const content = { ...defaultContent };
-  for (const row of (data || []) as any[]) {
-    content[row.id] = row.data as Record<string, string>;
-  }
-
-  return NextResponse.json({ content });
 }
 
 export async function PUT(request: NextRequest) {
