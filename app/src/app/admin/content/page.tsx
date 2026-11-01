@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Card, CardTitle, Button } from "@/components/ui";
+import { useState, useEffect } from "react";
+import { Card, CardTitle, Button, useToast } from "@/components/ui";
 
 type ContentSection = {
   id: string;
@@ -94,11 +94,62 @@ const defaultContent: ContentSection[] = [
   },
 ];
 
+function mergeSavedContent(
+  defaults: ContentSection[],
+  saved: Record<string, Record<string, string>>
+): ContentSection[] {
+  return defaults.map((section) => {
+    const sectionData = saved[section.id];
+    if (!sectionData) return section;
+    return {
+      ...section,
+      fields: section.fields.map((field) =>
+        sectionData[field.key] !== undefined
+          ? { ...field, value: sectionData[field.key] }
+          : field
+      ),
+    };
+  });
+}
+
 export default function AdminContentPage() {
   const [sections, setSections] = useState<ContentSection[]>(defaultContent);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string | null>("hero");
+  const [loadingContent, setLoadingContent] = useState(true);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    async function loadContent() {
+      // Try API first
+      try {
+        const res = await fetch("/api/admin/content");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.content && Object.keys(data.content).length > 0) {
+            setSections(mergeSavedContent(defaultContent, data.content));
+            setLoadingContent(false);
+            return;
+          }
+        }
+      } catch {
+        // API not available, try localStorage
+      }
+
+      // Fallback to localStorage
+      try {
+        const stored = localStorage.getItem("mashpianim_site_content");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          setSections(mergeSavedContent(defaultContent, parsed));
+        }
+      } catch {
+        // use defaults
+      }
+      setLoadingContent(false);
+    }
+    loadContent();
+  }, []);
 
   function updateField(sectionId: string, fieldKey: string, newValue: string) {
     setSections((prev) =>
@@ -113,7 +164,6 @@ export default function AdminContentPage() {
           : s
       )
     );
-    setSaved(false);
   }
 
   async function handleSave() {
@@ -126,12 +176,49 @@ export default function AdminContentPage() {
           payload[section.id][field.key] = field.value;
         }
       }
+
+      // Save to localStorage
       localStorage.setItem("mashpianim_site_content", JSON.stringify(payload));
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+
+      // Also try to persist to Supabase via API
+      let apiSuccess = true;
+      try {
+        for (const [sectionId, data] of Object.entries(payload)) {
+          const res = await fetch("/api/admin/content", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ section: sectionId, data }),
+          });
+          if (!res.ok) apiSuccess = false;
+        }
+      } catch {
+        apiSuccess = false;
+      }
+
+      toast(
+        apiSuccess
+          ? "התוכן נשמר בהצלחה!"
+          : "התוכן נשמר מקומית (ללא חיבור לשרת)",
+        apiSuccess ? "success" : "info"
+      );
+    } catch {
+      toast("שגיאה בשמירת התוכן", "error");
     } finally {
       setSaving(false);
     }
+  }
+
+  if (loadingContent) {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold text-neutral-900 mb-8">ניהול תוכן האתר</h1>
+        <div className="space-y-3 max-w-3xl animate-pulse">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-16 bg-neutral-100 rounded-2xl" />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -142,10 +229,7 @@ export default function AdminContentPage() {
           <p className="text-neutral-500 text-sm mt-1">ערכו את כל הטקסטים בדף הבית</p>
         </div>
         <div className="flex items-center gap-3">
-          {saved && (
-            <span className="text-sm text-emerald-600 font-medium">נשמר בהצלחה</span>
-          )}
-          <Button size="lg" onClick={handleSave} disabled={saving}>
+          <Button size="lg" onClick={handleSave} disabled={saving} loading={saving}>
             {saving ? "שומר..." : "שמירת שינויים"}
           </Button>
         </div>

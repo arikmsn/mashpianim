@@ -33,7 +33,8 @@ export async function GET() {
     return NextResponse.json({ creators: mockCreators });
   }
 
-  const creators = (data || []).map((u: Record<string, unknown>) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const creators = (data || []).map((u: any) => {
     const profile = Array.isArray(u.creator_profiles) ? u.creator_profiles[0] : u.creator_profiles;
     return {
       id: u.id,

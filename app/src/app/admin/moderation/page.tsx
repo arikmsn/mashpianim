@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Avatar, Badge, Button, Card, CardTitle, Modal } from "@/components/ui";
+import { Badge, Button, Card, Modal, useToast } from "@/components/ui";
 
 type ModerationStatus = "pending" | "approved" | "rejected";
 
@@ -68,19 +68,24 @@ export default function AdminModerationPage() {
   const [tab, setTab] = useState<"videos" | "chat">("videos");
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
   const [items, setItems] = useState(mockQueue);
+  const { toast } = useToast();
 
   const pendingCount = items.filter((i) => i.status === "pending").length;
 
   function handleApprove(id: string) {
+    const item = items.find((i) => i.id === id);
     setItems((prev) =>
       prev.map((i) => (i.id === id ? { ...i, status: "approved" as ModerationStatus } : i))
     );
+    toast(`הסרטון "${item?.product}" אושר בהצלחה`, "success");
   }
 
   function handleReject(id: string) {
+    const item = items.find((i) => i.id === id);
     setItems((prev) =>
       prev.map((i) => (i.id === id ? { ...i, status: "rejected" as ModerationStatus } : i))
     );
+    toast(`הסרטון "${item?.product}" נדחה`, "error");
   }
 
   return (
@@ -193,6 +198,14 @@ export default function AdminModerationPage() {
               </motion.div>
             ))}
           </AnimatePresence>
+
+          {pendingCount === 0 && (
+            <div className="text-center py-12 text-neutral-400">
+              <span className="text-4xl block mb-3">✅</span>
+              <p className="font-medium">אין סרטונים ממתינים</p>
+              <p className="text-sm mt-1">כל הסרטונים נבדקו</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -239,6 +252,26 @@ export default function AdminModerationPage() {
             <p>נגן וידאו יופעל כאן</p>
             <p className="text-sm mt-2">כולל OCR אוטומטי וזיהוי דיבור</p>
           </div>
+        </div>
+        <div className="flex justify-center gap-3 mt-4">
+          <Button
+            variant="primary"
+            onClick={() => {
+              if (selectedVideo) handleApprove(selectedVideo);
+              setSelectedVideo(null);
+            }}
+          >
+            אישור הסרטון
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => {
+              if (selectedVideo) handleReject(selectedVideo);
+              setSelectedVideo(null);
+            }}
+          >
+            דחיית הסרטון
+          </Button>
         </div>
       </Modal>
     </div>

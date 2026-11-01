@@ -34,7 +34,8 @@ export async function GET() {
     return NextResponse.json({ brands: mockBrands });
   }
 
-  const brands = (data || []).map((u: Record<string, unknown>) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const brands = (data || []).map((u: any) => {
     const profile = Array.isArray(u.brand_profiles) ? u.brand_profiles[0] : u.brand_profiles;
     return {
       id: u.id,
