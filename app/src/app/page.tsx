@@ -176,7 +176,7 @@ export default function HomePage() {
               <span><span className="ig-gradient-text">M</span>ashpian</span>
             </Link>
             <div className="flex items-center gap-2">
-              <Link href="/login" className="text-sm font-medium text-neutral-500 hover:text-neutral-900 transition-colors px-4 py-2">
+              <Link href="/login" className="text-sm font-medium text-neutral-600 hover:text-neutral-900 transition-colors px-4 py-2">
                 התחברות
               </Link>
               <Link href="/register?type=creator" className="text-sm font-medium ig-gradient-bg text-white px-5 py-2.5 rounded-full hover:opacity-90 transition-all shadow-lg shadow-ig-pink/25">
@@ -222,7 +222,7 @@ export default function HomePage() {
           </motion.h1>
 
           <motion.p
-            className="mt-6 text-lg text-neutral-500 max-w-md mx-auto leading-relaxed"
+            className="mt-6 text-lg text-neutral-600 max-w-md mx-auto leading-relaxed"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.45 }}
@@ -264,7 +264,7 @@ export default function HomePage() {
                   <Image src="/logo.png" alt="משפיען" width={40} height={40} className="rounded-lg shadow-md shadow-ig-pink/30" />
                   <div className="flex-1">
                     <div className="text-sm font-semibold text-neutral-900">הפרופיל שלך</div>
-                    <div className="text-xs text-neutral-400">רמה &middot; סרטונים &middot; דירוג</div>
+                    <div className="text-xs text-neutral-500">רמה &middot; סרטונים &middot; דירוג</div>
                   </div>
                   <span className="text-xs font-medium bg-emerald-50 text-emerald-600 px-2.5 py-1 rounded-full border border-emerald-100">פעילה</span>
                 </div>
@@ -302,7 +302,7 @@ export default function HomePage() {
           {[...Array(2)].map((_, j) => (
             <div key={j} className="flex gap-8 items-center">
               {["ביוטי", "אופנה", "אוכל", "טכנולוגיה", "כושר", "בית", "ספורט", "משחקים", "מוזיקה", "טיולים"].map((cat) => (
-                <span key={`${j}-${cat}`} className="text-sm font-medium text-neutral-400 flex items-center gap-2">
+                <span key={`${j}-${cat}`} className="text-sm font-medium text-neutral-500 flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full ig-gradient-bg" />
                   {cat}
                 </span>
@@ -341,7 +341,7 @@ export default function HomePage() {
                     <Icon d={item.icon} className={`w-7 h-7 ${i === 0 ? "text-ig-purple" : i === 1 ? "text-ig-pink" : "text-ig-orange"}`} />
                   </div>
                   <h3 className="text-xl font-bold text-neutral-900">{item.title}</h3>
-                  <p className="mt-3 text-neutral-500 text-sm leading-relaxed">{item.desc}</p>
+                  <p className="mt-3 text-neutral-600 text-sm leading-relaxed">{item.desc}</p>
                 </div>
               </FadeIn>
             ))}
@@ -392,7 +392,7 @@ export default function HomePage() {
               <div className="bg-white rounded-[22px] p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-2 h-2 rounded-full ig-gradient-bg" />
-                  <p className="text-xs font-semibold text-neutral-500">החיבורים שלך</p>
+                  <p className="text-xs font-semibold text-neutral-600">החיבורים שלך</p>
                 </div>
                 <div className="space-y-2.5">
                   {[
@@ -410,7 +410,7 @@ export default function HomePage() {
                     >
                       <div>
                         <p className="text-sm font-semibold text-neutral-900">{item.name}</p>
-                        <p className="text-xs text-neutral-400 mt-0.5">{item.brand}</p>
+                        <p className="text-xs text-neutral-500 mt-0.5">{item.brand}</p>
                       </div>
                       <span className={`text-[11px] font-semibold px-3 py-1.5 rounded-full ${
                         item.statusColor === "amber" ? "bg-amber-50 text-amber-600 border border-amber-100" :
@@ -459,9 +459,9 @@ export default function HomePage() {
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-ig-orange" />
-                    <p className="text-xs font-semibold text-neutral-500">לוח בקרה</p>
+                    <p className="text-xs font-semibold text-neutral-600">לוח בקרה</p>
                   </div>
-                  <span className="text-[10px] font-medium text-neutral-400 bg-neutral-100 px-2 py-0.5 rounded-full">עדכון אחרון: היום</span>
+                  <span className="text-[10px] font-medium text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded-full">עדכון אחרון: היום</span>
                 </div>
                 <div className="space-y-2.5">
                   {[
@@ -547,7 +547,7 @@ export default function HomePage() {
             <h2 className="text-4xl md:text-6xl font-extrabold tracking-tight text-neutral-900">
               {c.cta_final.title_line1} <span className="ig-gradient-text">{c.cta_final.title_line2}</span>
             </h2>
-            <p className="mt-5 text-neutral-500 max-w-sm mx-auto leading-relaxed text-lg">
+            <p className="mt-5 text-neutral-600 max-w-sm mx-auto leading-relaxed text-lg">
               {c.cta_final.subtitle}
             </p>
             <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
@@ -582,15 +582,15 @@ export default function HomePage() {
                   <span className="ig-gradient-text">M</span>ashpian
                 </p>
               </div>
-              <p className="text-neutral-500 text-sm mt-1">{c.footer.tagline}</p>
+              <p className="text-neutral-400 text-sm mt-1">{c.footer.tagline}</p>
             </div>
-            <div className="flex gap-6 text-sm text-neutral-500">
+            <div className="flex gap-6 text-sm text-neutral-400">
               <Link href="/terms" className="hover:text-white transition-colors">תנאי שימוש</Link>
               <Link href="/about" className="hover:text-white transition-colors">אודות</Link>
               <Link href="/login" className="hover:text-white transition-colors">התחברות</Link>
             </div>
           </div>
-          <div className="mt-8 pt-8 border-t border-neutral-800 text-center text-neutral-600 text-xs">
+          <div className="mt-8 pt-8 border-t border-neutral-800 text-center text-neutral-500 text-xs">
             &copy; {new Date().getFullYear()} {c.footer.copyright}
           </div>
         </div>
