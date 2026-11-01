@@ -2,7 +2,6 @@
 
 import { Suspense, useState, useRef, useCallback } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui";
@@ -69,7 +68,7 @@ function LoginContent() {
       if (data.verificationUrl) {
         router.push(data.verificationUrl);
       } else if (data.needsOnboarding) {
-        router.push("/register");
+        router.push(`/register?verified=1&userId=${data.userId}&phone=${encodeURIComponent(formattedPhone)}`);
       } else {
         toast("התחברתם בהצלחה!", "success");
         const defaultRedirect = data.userType === "brand" ? "/brand" : "/feed";
@@ -193,9 +192,9 @@ function LoginContent() {
             className="text-3xl font-bold mb-2 cursor-default select-none"
             onClick={handleSecretTap}
           >
-            שלום!
+            ברוכים הבאים!
           </h1>
-          <p className="text-neutral-500">התחברו לחשבון שלכם</p>
+          <p className="text-neutral-500">התחברו או הצטרפו בקלות</p>
         </div>
 
         <div className="bg-white rounded-2xl p-6 shadow-lg shadow-pink-500/5">
@@ -369,10 +368,7 @@ function LoginContent() {
         </div>
 
         <p className="text-center mt-6 text-sm text-neutral-400">
-          אין לכם חשבון?{" "}
-          <Link href="/register" className="text-pink-500 font-medium hover:underline">
-            הירשמו עכשיו
-          </Link>
+          הזינו מספר טלפון — אם אין לכם חשבון, ניצור אחד אוטומטית
         </p>
       </div>
     </main>

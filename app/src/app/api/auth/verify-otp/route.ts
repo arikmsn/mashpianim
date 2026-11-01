@@ -8,6 +8,14 @@ function getSupabaseAdmin() {
   return createClient(url, key);
 }
 
+function formatPhone(phone: string): string {
+  let cleaned = phone.replace(/[\s\-()]/g, "");
+  if (cleaned.startsWith("+")) cleaned = cleaned.slice(1);
+  if (cleaned.startsWith("0")) cleaned = `972${cleaned.slice(1)}`;
+  if (!cleaned.startsWith("972")) cleaned = `972${cleaned}`;
+  return `+${cleaned}`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabaseAdmin = getSupabaseAdmin();
@@ -15,14 +23,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Supabase not configured" }, { status: 503 });
     }
 
-    const { phone, code } = await request.json();
+    const { phone: rawPhone, code } = await request.json();
 
-    if (!phone || !code) {
+    if (!rawPhone || !code) {
       return NextResponse.json(
         { error: "מספר טלפון וקוד חסרים" },
         { status: 400 }
       );
     }
+
+    const phone = formatPhone(rawPhone);
 
     // Look up OTP
     const { data: otpRecord, error: fetchError } = await supabaseAdmin

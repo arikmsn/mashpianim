@@ -176,11 +176,8 @@ export default function HomePage() {
               <span><span className="ig-gradient-text">M</span>ashpian</span>
             </Link>
             <div className="flex items-center gap-2">
-              <Link href="/login" className="text-sm font-medium text-neutral-600 hover:text-neutral-900 transition-colors px-4 py-2">
+              <Link href="/login" className="text-sm font-medium ig-gradient-bg text-white px-5 py-2.5 rounded-full hover:opacity-90 transition-all shadow-lg shadow-ig-pink/25">
                 התחברות
-              </Link>
-              <Link href="/register?type=creator" className="text-sm font-medium ig-gradient-bg text-white px-5 py-2.5 rounded-full hover:opacity-90 transition-all shadow-lg shadow-ig-pink/25">
-                הצטרפו
               </Link>
             </div>
           </div>

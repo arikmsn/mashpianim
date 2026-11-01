@@ -20,6 +20,9 @@ export default function RegisterPage() {
 function RegisterContent() {
   const searchParams = useSearchParams();
   const initialType = searchParams.get("type") as UserType;
+  const verifiedUserId = searchParams.get("userId");
+  const verifiedPhone = searchParams.get("phone");
+  const isPreVerified = searchParams.get("verified") === "1" && !!verifiedUserId;
   const [userType, setUserType] = useState<UserType>(initialType);
 
   return (
@@ -69,7 +72,7 @@ function RegisterContent() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
             >
-              <CreatorRegistration onBack={() => setUserType(null)} />
+              <CreatorRegistration onBack={() => setUserType(null)} preVerifiedUserId={verifiedUserId} preVerifiedPhone={verifiedPhone} />
             </motion.div>
           ) : (
             <motion.div
@@ -78,7 +81,7 @@ function RegisterContent() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
             >
-              <BrandRegistration onBack={() => setUserType(null)} />
+              <BrandRegistration onBack={() => setUserType(null)} preVerifiedUserId={verifiedUserId} preVerifiedPhone={verifiedPhone} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -86,7 +89,7 @@ function RegisterContent() {
         <p className="text-center mt-6 text-sm text-neutral-400">
           כבר יש לכם חשבון?{" "}
           <Link href="/login" className="text-pink-500 font-medium hover:underline">
-            התחברו
+            התחברו כאן
           </Link>
         </p>
       </div>
@@ -106,12 +109,12 @@ const CATEGORIES = [
   "אחר",
 ];
 
-function CreatorRegistration({ onBack }: { onBack: () => void }) {
+function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { onBack: () => void; preVerifiedUserId?: string | null; preVerifiedPhone?: string | null }) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     fullName: "",
-    phone: "",
+    phone: preVerifiedPhone || "",
     dateOfBirth: "",
     city: "",
     tiktokHandle: "",
@@ -135,9 +138,12 @@ function CreatorRegistration({ onBack }: { onBack: () => void }) {
   }
 
   async function handleSubmit() {
+    if (preVerifiedUserId) {
+      await registerProfile(preVerifiedUserId);
+      return;
+    }
     setLoading(true);
     try {
-      // First send OTP to verify phone
       const otpRes = await fetch("/api/auth/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -147,9 +153,34 @@ function CreatorRegistration({ onBack }: { onBack: () => void }) {
       if (!otpRes.ok) throw new Error(otpData.error);
 
       toast("קוד אימות נשלח בוואטסאפ! 💬", "success");
-      setStep(5); // OTP verification step
+      setStep(5);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "שגיאה בשליחת קוד";
+      toast(msg, "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function registerProfile(userId: string) {
+    setLoading(true);
+    try {
+      const registerRes = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          userType: "creator",
+          profile: form,
+        }),
+      });
+      const registerData = await registerRes.json();
+      if (!registerRes.ok) throw new Error(registerData.error);
+
+      toast("נרשמתם בהצלחה! 🎉", "success");
+      router.push("/feed");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "שגיאה בהרשמה";
       toast(msg, "error");
     } finally {
       setLoading(false);
@@ -159,7 +190,6 @@ function CreatorRegistration({ onBack }: { onBack: () => void }) {
   async function handleVerifyAndRegister(code: string) {
     setLoading(true);
     try {
-      // Verify OTP
       const verifyRes = await fetch("/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -168,25 +198,7 @@ function CreatorRegistration({ onBack }: { onBack: () => void }) {
       const verifyData = await verifyRes.json();
       if (!verifyRes.ok) throw new Error(verifyData.error);
 
-      // Register profile
-      const registerRes = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: verifyData.userId,
-          userType: "creator",
-          profile: form,
-        }),
-      });
-      const registerData = await registerRes.json();
-      if (!registerRes.ok) throw new Error(registerData.error);
-
-      toast("נרשמתם בהצלחה! 🎉", "success");
-      if (verifyData.verificationUrl) {
-        router.push(verifyData.verificationUrl);
-      } else {
-        router.push("/feed");
-      }
+      await registerProfile(verifyData.userId);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "שגיאה בהרשמה";
       toast(msg, "error");
@@ -378,12 +390,12 @@ function CreatorRegistration({ onBack }: { onBack: () => void }) {
   );
 }
 
-function BrandRegistration({ onBack }: { onBack: () => void }) {
+function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { onBack: () => void; preVerifiedUserId?: string | null; preVerifiedPhone?: string | null }) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     fullName: "",
-    phone: "",
+    phone: preVerifiedPhone || "",
     shopName: "",
     category: "",
     websiteUrl: "",
@@ -396,6 +408,10 @@ function BrandRegistration({ onBack }: { onBack: () => void }) {
   }
 
   async function handleSubmit() {
+    if (preVerifiedUserId) {
+      await registerProfile(preVerifiedUserId);
+      return;
+    }
     setLoading(true);
     try {
       const otpRes = await fetch("/api/auth/send-otp", {
@@ -416,6 +432,31 @@ function BrandRegistration({ onBack }: { onBack: () => void }) {
     }
   }
 
+  async function registerProfile(userId: string) {
+    setLoading(true);
+    try {
+      const registerRes = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          userType: "brand",
+          profile: form,
+        }),
+      });
+      const registerData = await registerRes.json();
+      if (!registerRes.ok) throw new Error(registerData.error);
+
+      toast("נרשמתם בהצלחה! 🎉", "success");
+      router.push("/brand");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "שגיאה בהרשמה";
+      toast(msg, "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleVerifyAndRegister(code: string) {
     setLoading(true);
     try {
@@ -427,24 +468,7 @@ function BrandRegistration({ onBack }: { onBack: () => void }) {
       const verifyData = await verifyRes.json();
       if (!verifyRes.ok) throw new Error(verifyData.error);
 
-      const registerRes = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: verifyData.userId,
-          userType: "brand",
-          profile: form,
-        }),
-      });
-      const registerData = await registerRes.json();
-      if (!registerRes.ok) throw new Error(registerData.error);
-
-      toast("נרשמתם בהצלחה! 🎉", "success");
-      if (verifyData.verificationUrl) {
-        router.push(verifyData.verificationUrl);
-      } else {
-        router.push("/feed");
-      }
+      await registerProfile(verifyData.userId);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "שגיאה בהרשמה";
       toast(msg, "error");
