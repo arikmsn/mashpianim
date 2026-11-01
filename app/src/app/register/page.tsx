@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/components/ui";
+import { createClient } from "@/lib/supabase/client";
 
 type UserType = "creator" | "brand" | null;
 
@@ -115,16 +116,17 @@ function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { 
   const [form, setForm] = useState({
     fullName: "",
     phone: preVerifiedPhone || "",
-    dateOfBirth: "",
     city: "",
     tiktokHandle: "",
     instagramHandle: "",
     categories: [] as string[],
+    ageConfirmed: false,
   });
   const router = useRouter();
   const { toast } = useToast();
+  const supabase = createClient();
 
-  function updateForm(field: string, value: string | string[]) {
+  function updateForm(field: string, value: string | string[] | boolean) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
@@ -198,6 +200,11 @@ function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { 
       const verifyData = await verifyRes.json();
       if (!verifyRes.ok) throw new Error(verifyData.error);
 
+      // Create session
+      if (verifyData.tokenHash) {
+        await supabase.auth.verifyOtp({ token_hash: verifyData.tokenHash, type: "magiclink" });
+      }
+
       await registerProfile(verifyData.userId);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "שגיאה בהרשמה";
@@ -244,12 +251,7 @@ function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { 
               value={form.phone}
               onChange={(e) => updateForm("phone", e.target.value)}
               className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none text-center"
-            />
-            <input
-              type="date"
-              value={form.dateOfBirth}
-              onChange={(e) => updateForm("dateOfBirth", e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none"
+              disabled={!!preVerifiedPhone}
             />
             <input
               type="text"
@@ -258,10 +260,19 @@ function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { 
               onChange={(e) => updateForm("city", e.target.value)}
               className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none"
             />
+            <label className="flex items-center gap-3 cursor-pointer py-2">
+              <input
+                type="checkbox"
+                checked={form.ageConfirmed}
+                onChange={(e) => updateForm("ageConfirmed", e.target.checked)}
+                className="w-5 h-5 rounded border-neutral-300 text-pink-500 focus:ring-pink-500/20 accent-pink-500"
+              />
+              <span className="text-sm text-neutral-600">אני מאשר/ת שגילי מעל 18</span>
+            </label>
           </div>
           <button
             onClick={() => setStep(2)}
-            disabled={!form.fullName || !form.phone}
+            disabled={!form.fullName || !form.phone || !form.ageConfirmed}
             className="w-full mt-4 px-6 py-3 rounded-xl bg-pink-500 text-white font-medium hover:bg-pink-600 transition-colors disabled:opacity-50"
           >
             המשך
@@ -373,12 +384,12 @@ function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { 
             disabled={loading}
             className="w-full px-6 py-3 rounded-xl bg-pink-500 text-white font-medium hover:bg-pink-600 transition-colors disabled:opacity-50"
           >
-            {loading ? "שולח קוד אימות..." : "אימות והרשמה"}
+            {loading ? "רושם..." : preVerifiedUserId ? "סיום הרשמה" : "אימות והרשמה"}
           </button>
         </div>
       )}
 
-      {step === 5 && (
+      {step === 5 && !preVerifiedUserId && (
         <OTPStep
           phone={form.phone}
           loading={loading}
@@ -402,6 +413,7 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
   });
   const router = useRouter();
   const { toast } = useToast();
+  const supabase = createClient();
 
   function updateForm(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -467,6 +479,13 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
       });
       const verifyData = await verifyRes.json();
       if (!verifyRes.ok) throw new Error(verifyData.error);
+
+      if (verifyData.tokenHash) {
+        await supabase.auth.verifyOtp({
+          token_hash: verifyData.tokenHash,
+          type: "magiclink",
+        });
+      }
 
       await registerProfile(verifyData.userId);
     } catch (err: unknown) {
@@ -639,12 +658,12 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
             disabled={loading}
             className="w-full px-6 py-3 rounded-xl bg-pink-500 text-white font-medium hover:bg-pink-600 transition-colors disabled:opacity-50"
           >
-            {loading ? "שולח קוד אימות..." : "אימות והרשמה"}
+            {loading ? "שולח..." : preVerifiedUserId ? "סיום הרשמה" : "אימות והרשמה"}
           </button>
         </div>
       )}
 
-      {step === 4 && (
+      {step === 4 && !preVerifiedUserId && (
         <OTPStep
           phone={form.phone}
           loading={loading}

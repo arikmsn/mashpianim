@@ -65,9 +65,18 @@ function LoginContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      if (data.verificationUrl) {
-        router.push(data.verificationUrl);
-      } else if (data.needsOnboarding) {
+      // Create Supabase session using the magic link token
+      if (data.tokenHash) {
+        const { error: sessionError } = await supabase.auth.verifyOtp({
+          token_hash: data.tokenHash,
+          type: "magiclink",
+        });
+        if (sessionError) {
+          console.error("[login] session error:", sessionError);
+        }
+      }
+
+      if (data.needsOnboarding) {
         router.push(`/register?verified=1&userId=${data.userId}&phone=${encodeURIComponent(formattedPhone)}`);
       } else {
         toast("התחברתם בהצלחה!", "success");

@@ -30,10 +30,10 @@ export async function POST(request: NextRequest) {
 
     const phone = authUser.user.phone || "";
 
-    // Create user record
-    const { error: userError } = await supabaseAdmin.from("users").upsert(
+    // Create user record — use (phone, type) unique constraint for upsert
+    const { data: insertedUser, error: userError } = await supabaseAdmin.from("users").upsert(
       {
-        id: userId,
+        auth_user_id: userId,
         type: userType,
         phone,
         full_name: profile.fullName || "",
@@ -41,13 +41,15 @@ export async function POST(request: NextRequest) {
         is_active: true,
         onboarding_completed: true,
       },
-      { onConflict: "id" }
-    );
+      { onConflict: "phone,type" }
+    ).select("id").single();
 
-    if (userError) {
+    if (userError || !insertedUser) {
       console.error("[register] user insert error:", userError);
       return NextResponse.json({ error: "שגיאה ביצירת חשבון" }, { status: 500 });
     }
+
+    const dbUserId = insertedUser.id;
 
     // Create profile based on type
     if (userType === "creator") {
@@ -55,7 +57,7 @@ export async function POST(request: NextRequest) {
         .from("creator_profiles")
         .upsert(
           {
-            user_id: userId,
+            user_id: dbUserId,
             bio: profile.bio || null,
             tiktok_handle: profile.tiktokHandle || null,
             tiktok_followers: profile.tiktokFollowers || 0,
@@ -82,7 +84,7 @@ export async function POST(request: NextRequest) {
         .from("brand_profiles")
         .upsert(
           {
-            user_id: userId,
+            user_id: dbUserId,
             shop_name: profile.shopName || "",
             category: profile.category || "",
             website_url: profile.websiteUrl || null,

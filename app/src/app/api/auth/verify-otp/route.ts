@@ -16,6 +16,10 @@ function formatPhone(phone: string): string {
   return `+${cleaned}`;
 }
 
+function pseudoEmail(phone: string): string {
+  return `${phone.replace("+", "")}@phone.mashpian.online`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabaseAdmin = getSupabaseAdmin();
@@ -77,67 +81,97 @@ export async function POST(request: NextRequest) {
     // OTP is valid — clean up
     await supabaseAdmin.from("otp_codes").delete().eq("phone", phone);
 
-    // Check if user exists, if not create one via Supabase Auth
-    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-    const existingUser = existingUsers?.users?.find(
-      (u) => u.phone === phone
-    );
+    const email = pseudoEmail(phone);
 
-    let userId: string;
+    // Check our users table first (source of truth for registered users)
+    const { data: dbUser } = await supabaseAdmin
+      .from("users")
+      .select("id, auth_user_id, type")
+      .eq("phone", phone)
+      .maybeSingle();
 
-    if (existingUser) {
-      userId = existingUser.id;
+    let authUserId: string;
+    let userType: string | null = null;
+    let needsOnboarding = true;
+
+    if (dbUser?.auth_user_id) {
+      // Existing registered user
+      authUserId = dbUser.auth_user_id;
+      userType = dbUser.type;
+      needsOnboarding = false;
+
+      // Ensure pseudo-email is set for session generation
+      await supabaseAdmin.auth.admin.updateUserById(authUserId, {
+        email,
+        email_confirm: true,
+      });
     } else {
+      // Try to create new auth user
       const { data: newUser, error: createError } =
         await supabaseAdmin.auth.admin.createUser({
           phone,
+          email,
           phone_confirm: true,
+          email_confirm: true,
         });
-      if (createError || !newUser.user) {
-        return NextResponse.json(
-          { error: "שגיאה ביצירת משתמש" },
-          { status: 500 }
-        );
+
+      if (createError) {
+        // User may exist in auth from a previous partial registration
+        // Try to find by searching through auth users
+        let foundUser = null;
+        let page = 1;
+        while (!foundUser && page <= 20) {
+          const { data: { users } } = await supabaseAdmin.auth.admin.listUsers({
+            page,
+            perPage: 100,
+          });
+          if (!users || users.length === 0) break;
+          foundUser = users.find((u) => u.phone === phone || u.email === email);
+          page++;
+        }
+
+        if (foundUser) {
+          authUserId = foundUser.id;
+          await supabaseAdmin.auth.admin.updateUserById(authUserId, {
+            email,
+            email_confirm: true,
+          });
+        } else {
+          console.error("[verify-otp] createUser error:", createError);
+          return NextResponse.json(
+            { error: "שגיאה ביצירת משתמש. נסו שוב" },
+            { status: 500 }
+          );
+        }
+      } else {
+        authUserId = newUser.user!.id;
       }
-      userId = newUser.user.id;
     }
 
-    // Look up user type for redirect
-    let userType: string | null = null;
-    if (existingUser) {
-      const { data: dbUser } = await supabaseAdmin
-        .from("users")
-        .select("type")
-        .eq("auth_user_id", userId)
-        .single();
-      userType = (dbUser as any)?.type || null;
-    }
-
-    // Generate a session token for the user
-    const { data: session, error: sessionError } =
+    // Generate a magic link for session creation
+    const { data: linkData, error: linkError } =
       await supabaseAdmin.auth.admin.generateLink({
         type: "magiclink",
-        email: `${phone.replace("+", "")}@phone.mashpian.online`,
+        email,
       });
 
-    if (sessionError) {
-      // Fallback: return user ID for client-side session creation
+    if (linkError) {
+      console.error("[verify-otp] generateLink error:", linkError);
+      // Fallback: return without session token — client will handle
       return NextResponse.json({
         success: true,
-        userId,
+        userId: authUserId,
         userType,
-        needsOnboarding: !existingUser,
+        needsOnboarding,
       });
     }
 
     return NextResponse.json({
       success: true,
-      userId,
+      userId: authUserId,
       userType,
-      needsOnboarding: !existingUser,
-      verificationUrl: session?.properties?.hashed_token
-        ? `/auth/callback?token_hash=${session.properties.hashed_token}&type=magiclink`
-        : undefined,
+      needsOnboarding,
+      tokenHash: linkData?.properties?.hashed_token || undefined,
     });
   } catch (err) {
     console.error("[verify-otp] error:", err);
