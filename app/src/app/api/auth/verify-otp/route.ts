@@ -96,6 +96,17 @@ export async function POST(request: NextRequest) {
       userId = newUser.user.id;
     }
 
+    // Look up user type for redirect
+    let userType: string | null = null;
+    if (existingUser) {
+      const { data: dbUser } = await supabaseAdmin
+        .from("users")
+        .select("type")
+        .eq("auth_user_id", userId)
+        .single();
+      userType = (dbUser as any)?.type || null;
+    }
+
     // Generate a session token for the user
     const { data: session, error: sessionError } =
       await supabaseAdmin.auth.admin.generateLink({
@@ -108,6 +119,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         userId,
+        userType,
         needsOnboarding: !existingUser,
       });
     }
@@ -115,6 +127,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       userId,
+      userType,
       needsOnboarding: !existingUser,
       verificationUrl: session?.properties?.hashed_token
         ? `/auth/callback?token_hash=${session.properties.hashed_token}&type=magiclink`

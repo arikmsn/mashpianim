@@ -71,7 +71,8 @@ function LoginContent() {
         router.push("/register");
       } else {
         toast("התחברתם בהצלחה!", "success");
-        router.push(redirect);
+        const defaultRedirect = data.userType === "brand" ? "/brand" : "/feed";
+        router.push(redirect !== "/feed" ? redirect : defaultRedirect);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "קוד שגוי";
@@ -85,10 +86,27 @@ function LoginContent() {
     e.preventDefault();
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       toast("התחברתם בהצלחה!", "success");
-      router.push(redirect);
+
+      // Determine redirect based on user type
+      let targetRedirect = redirect;
+      if (redirect === "/feed" && signInData?.user) {
+        try {
+          const { data: dbUser } = await supabase
+            .from("users")
+            .select("type")
+            .eq("auth_user_id", signInData.user.id)
+            .single();
+          if ((dbUser as any)?.type === "brand") {
+            targetRedirect = "/brand";
+          }
+        } catch {
+          // Default redirect
+        }
+      }
+      router.push(targetRedirect);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "שגיאה בהתחברות";
       toast(msg, "error");

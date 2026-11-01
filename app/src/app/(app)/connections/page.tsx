@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Badge, Avatar, Card, useToast } from "@/components/ui";
+import { Badge, Avatar, Card, Button, useToast } from "@/components/ui";
 import { useAuth } from "@/hooks/use-auth";
 
 type TabType = "active" | "pending" | "completed";
@@ -56,10 +56,17 @@ function ConnectionSkeleton() {
   );
 }
 
+function canUploadVideo(status: string) {
+  return ["shipped", "filming", "revision_requested"].includes(status);
+}
+
 export default function ConnectionsPage() {
   const [activeTab, setActiveTab] = useState<TabType>("active");
   const [connections, setConnections] = useState<Connection[]>(mockConnections);
   const [loading, setLoading] = useState(true);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadConnectionIdRef = useRef<string | null>(null);
   const { user } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
@@ -99,6 +106,58 @@ export default function ConnectionsPage() {
     fetchConnections();
   }, []);
 
+  function handleUploadClick(connectionId: string) {
+    uploadConnectionIdRef.current = connectionId;
+    fileInputRef.current?.click();
+  }
+
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    const connectionId = uploadConnectionIdRef.current;
+    if (!file || !connectionId) return;
+
+    e.target.value = "";
+
+    if (!file.type.startsWith("video/")) {
+      toast("יש לבחור קובץ וידאו", "error");
+      return;
+    }
+
+    if (file.size > 500 * 1024 * 1024) {
+      toast("הקובץ גדול מדי (מקסימום 500MB)", "error");
+      return;
+    }
+
+    setUploadingId(connectionId);
+
+    try {
+      const formData = new FormData();
+      formData.append("video", file);
+      formData.append("connectionId", connectionId);
+
+      const res = await fetch("/api/videos", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (res.ok) {
+        toast("הסרטון הועלה בהצלחה! 🎬", "success");
+        setConnections((prev) =>
+          prev.map((c) =>
+            c.id === connectionId ? { ...c, status: "uploaded" } : c
+          )
+        );
+      } else {
+        const data = await res.json();
+        toast(data.error || "שגיאה בהעלאת הסרטון", "error");
+      }
+    } catch {
+      toast("שגיאה בהעלאת הסרטון", "error");
+    } finally {
+      setUploadingId(null);
+    }
+  }
+
   const getTab = (status: string): TabType => {
     return statusConfig[status]?.tab || "pending";
   };
@@ -119,6 +178,14 @@ export default function ConnectionsPage() {
 
   return (
     <main className="min-h-screen bg-background">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="video/*"
+        className="hidden"
+        onChange={handleFileSelected}
+      />
+
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-neutral-100">
         <div className="max-w-2xl mx-auto px-4 py-4">
           <h1 className="text-2xl font-bold mb-4">החיבורים שלי</h1>
@@ -155,17 +222,20 @@ export default function ConnectionsPage() {
                 label: conn.status,
                 variant: "default" as const,
               };
+              const showUpload = canUploadVideo(conn.status);
+              const isUploading = uploadingId === conn.id;
+
               return (
                 <motion.div
                   key={conn.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                 >
-                  <button
-                    className="w-full text-right"
-                    onClick={() => router.push(`/messages?connection=${conn.id}`)}
-                  >
-                    <Card hover padding="md">
+                  <Card hover padding="md">
+                    <button
+                      className="w-full text-right"
+                      onClick={() => router.push(`/messages?connection=${conn.id}`)}
+                    >
                       <div className="flex items-center gap-4">
                         <Avatar name={conn.brand} size="lg" />
                         <div className="flex-1 min-w-0">
@@ -196,8 +266,25 @@ export default function ConnectionsPage() {
                           <path d="M15 18l-6-6 6-6" />
                         </svg>
                       </div>
-                    </Card>
-                  </button>
+                    </button>
+
+                    {showUpload && (
+                      <div className="mt-3 pt-3 border-t border-neutral-100">
+                        <Button
+                          size="sm"
+                          variant={isUploading ? "secondary" : "primary"}
+                          fullWidth
+                          loading={isUploading}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleUploadClick(conn.id);
+                          }}
+                        >
+                          {isUploading ? "מעלה סרטון..." : "📹 העלאת סרטון"}
+                        </Button>
+                      </div>
+                    )}
+                  </Card>
                 </motion.div>
               );
             })}
