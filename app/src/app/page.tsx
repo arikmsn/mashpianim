@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef, useEffect, useState } from "react";
 
@@ -170,8 +171,9 @@ export default function HomePage() {
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3">
           <div className="flex items-center justify-between glass rounded-2xl px-5 py-3 shadow-lg shadow-black/[0.04] border border-white/60">
-            <Link href="/" className="text-lg font-bold tracking-tight text-neutral-900">
-              <span className="ig-gradient-text">M</span>ashpian
+            <Link href="/" className="flex items-center gap-2 text-lg font-bold tracking-tight text-neutral-900">
+              <Image src="/logo.png" alt="משפיען אונליין" width={36} height={36} className="rounded-lg" />
+              <span><span className="ig-gradient-text">M</span>ashpian</span>
             </Link>
             <div className="flex items-center gap-2">
               <Link href="/login" className="text-sm font-medium text-neutral-500 hover:text-neutral-900 transition-colors px-4 py-2">
@@ -259,7 +261,7 @@ export default function HomePage() {
             <div className="relative rounded-3xl p-[2px] bg-gradient-to-br from-ig-purple via-ig-pink to-ig-orange shadow-2xl shadow-ig-pink/20">
               <div className="bg-white rounded-[22px] p-5">
                 <div className="flex items-center gap-3 mb-4 pb-4 border-b border-neutral-100">
-                  <div className="w-10 h-10 rounded-full ig-gradient-bg shadow-md shadow-ig-pink/30" />
+                  <Image src="/logo.png" alt="משפיען" width={40} height={40} className="rounded-lg shadow-md shadow-ig-pink/30" />
                   <div className="flex-1">
                     <div className="text-sm font-semibold text-neutral-900">הפרופיל שלך</div>
                     <div className="text-xs text-neutral-400">רמה &middot; סרטונים &middot; דירוג</div>
@@ -574,9 +576,12 @@ export default function HomePage() {
         <div className="max-w-5xl mx-auto relative">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div>
-              <p className="text-lg font-bold">
-                <span className="ig-gradient-text">M</span>ashpian
-              </p>
+              <div className="flex items-center gap-2">
+                <Image src="/logo.png" alt="משפיען אונליין" width={32} height={32} className="rounded-lg" />
+                <p className="text-lg font-bold">
+                  <span className="ig-gradient-text">M</span>ashpian
+                </p>
+              </div>
               <p className="text-neutral-500 text-sm mt-1">{c.footer.tagline}</p>
             </div>
             <div className="flex gap-6 text-sm text-neutral-500">

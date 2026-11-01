@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -23,9 +24,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Desktop Sidebar — right side for RTL */}
       <aside className="hidden md:flex w-64 bg-[#0B051D] text-white flex-col fixed right-0 top-0 h-screen z-40">
         <div className="p-6 border-b border-white/10">
-          <h1 className="text-lg font-bold">
-            <span className="text-ig-pink">Mashpian</span> Admin
-          </h1>
+          <div className="flex items-center gap-3">
+            <Image src="/logo.png" alt="משפיען" width={32} height={32} className="rounded-lg" />
+            <h1 className="text-lg font-bold">
+              <span className="text-ig-pink">Mashpian</span> Admin
+            </h1>
+          </div>
         </div>
         <nav className="flex-1 p-4 space-y-1">
           {navItems.map((item) => {
@@ -59,9 +63,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Mobile header */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-[#0B051D] text-white px-4 py-3 flex items-center justify-between">
-        <h1 className="text-sm font-bold">
-          <span className="text-ig-pink">Mashpian</span> Admin
-        </h1>
+        <div className="flex items-center gap-2">
+          <Image src="/logo.png" alt="משפיען" width={24} height={24} className="rounded-md" />
+          <h1 className="text-sm font-bold">
+            <span className="text-ig-pink">Mashpian</span> Admin
+          </h1>
+        </div>
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
           className="p-2 rounded-lg hover:bg-white/10 transition-colors"
@@ -87,9 +94,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           />
           <aside className="absolute right-0 top-0 h-full w-64 bg-[#0B051D] text-white flex flex-col animate-in slide-in-from-right">
             <div className="p-6 border-b border-white/10 flex items-center justify-between">
-              <h1 className="text-lg font-bold">
-                <span className="text-ig-pink">Mashpian</span> Admin
-              </h1>
+              <div className="flex items-center gap-3">
+                <Image src="/logo.png" alt="משפיען" width={32} height={32} className="rounded-lg" />
+                <h1 className="text-lg font-bold">
+                  <span className="text-ig-pink">Mashpian</span> Admin
+                </h1>
+              </div>
               <button
                 onClick={() => setMobileOpen(false)}
                 className="p-1 rounded-lg hover:bg-white/10"

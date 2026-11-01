@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -25,7 +26,8 @@ function RegisterContent() {
     <main className="min-h-screen flex items-center justify-center px-6 bg-gradient-to-br from-pink-50 to-background py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">הצטרפו אלינו ✨</h1>
+          <Image src="/logo.png" alt="משפיען אונליין" width={72} height={72} className="mx-auto rounded-2xl shadow-lg shadow-ig-pink/20 mb-4" />
+          <h1 className="text-3xl font-bold mb-2">הצטרפו אלינו</h1>
           <p className="text-neutral-500">בואו נתחיל — מי אתם?</p>
         </div>
 

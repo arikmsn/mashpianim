@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui";
 
@@ -70,11 +71,9 @@ export function InstallPrompt() {
         >
           <div className="bg-white rounded-2xl shadow-xl border border-neutral-100 p-4">
             <div className="flex items-start gap-3">
-              <div className="w-12 h-12 rounded-xl ig-gradient-bg flex items-center justify-center text-white text-xl flex-shrink-0">
-                M
-              </div>
+              <Image src="/logo.png" alt="משפיען אונליין" width={48} height={48} className="rounded-xl flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-sm">התקינו את Mashpian</h3>
+                <h3 className="font-bold text-sm">התקינו את משפיען אונליין</h3>
                 <p className="text-xs text-neutral-500 mt-0.5">
                   {isIos
                     ? "לחצו על כפתור השיתוף ⬆️ ואז ״הוסף למסך הבית״"

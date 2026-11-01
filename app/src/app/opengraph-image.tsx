@@ -1,11 +1,16 @@
 import { ImageResponse } from "next/og";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 export const alt = "משפיען אונליין — הפלטפורמה הישראלית ליוצרי תוכן UGC";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-export default function OGImage() {
+export default async function OGImage() {
+  const logoData = await readFile(join(process.cwd(), "public", "logo.png"));
+  const logoBase64 = `data:image/png;base64,${logoData.toString("base64")}`;
+
   return new ImageResponse(
     (
       <div
@@ -20,20 +25,12 @@ export default function OGImage() {
           fontFamily: "Arial, sans-serif",
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 140,
-            height: 140,
-            borderRadius: 32,
-            background: "rgba(255,255,255,0.2)",
-            marginBottom: 32,
-          }}
-        >
-          <span style={{ fontSize: 90, fontWeight: 800, color: "white" }}>M</span>
-        </div>
+        <img
+          src={logoBase64}
+          width={160}
+          height={160}
+          style={{ borderRadius: 36, marginBottom: 32, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
+        />
         <div
           style={{
             fontSize: 64,
