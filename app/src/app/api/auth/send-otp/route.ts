@@ -60,8 +60,11 @@ export async function POST(request: NextRequest) {
         );
       }
     } else {
-      // Dev fallback — log to console
-      console.log(`[DEV OTP] Phone: ${formattedPhone}, Code: ${code}`);
+      console.error("[send-otp] GreenAPI not configured — GREEN_API_INSTANCE_ID / GREEN_API_TOKEN missing");
+      return NextResponse.json(
+        { error: "שירות ההודעות לא מוגדר. פנו לתמיכה." },
+        { status: 503 }
+      );
     }
 
     return NextResponse.json({ success: true, phone: formattedPhone });
