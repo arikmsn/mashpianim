@@ -65,11 +65,11 @@ function LoginContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      // Create Supabase session using the magic link token
-      if (data.tokenHash) {
-        const { error: sessionError } = await supabase.auth.verifyOtp({
-          token_hash: data.tokenHash,
-          type: "magiclink",
+      // Create Supabase session
+      if (data.email && data.tempPassword) {
+        const { error: sessionError } = await supabase.auth.signInWithPassword({
+          email: data.email,
+          password: data.tempPassword,
         });
         if (sessionError) {
           console.error("[login] session error:", sessionError);

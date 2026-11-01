@@ -148,16 +148,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate a magic link for session creation
-    const { data: linkData, error: linkError } =
-      await supabaseAdmin.auth.admin.generateLink({
-        type: "magiclink",
-        email,
-      });
+    // Set a temp password for client-side session creation
+    const tempPassword = crypto.randomUUID();
+    const { error: pwError } = await supabaseAdmin.auth.admin.updateUserById(
+      authUserId,
+      { password: tempPassword }
+    );
 
-    if (linkError) {
-      console.error("[verify-otp] generateLink error:", linkError);
-      // Fallback: return without session token — client will handle
+    if (pwError) {
+      console.error("[verify-otp] setPassword error:", pwError);
       return NextResponse.json({
         success: true,
         userId: authUserId,
@@ -171,7 +170,8 @@ export async function POST(request: NextRequest) {
       userId: authUserId,
       userType,
       needsOnboarding,
-      tokenHash: linkData?.properties?.hashed_token || undefined,
+      email,
+      tempPassword,
     });
   } catch (err) {
     console.error("[verify-otp] error:", err);

@@ -201,8 +201,8 @@ function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { 
       if (!verifyRes.ok) throw new Error(verifyData.error);
 
       // Create session
-      if (verifyData.tokenHash) {
-        await supabase.auth.verifyOtp({ token_hash: verifyData.tokenHash, type: "magiclink" });
+      if (verifyData.email && verifyData.tempPassword) {
+        await supabase.auth.signInWithPassword({ email: verifyData.email, password: verifyData.tempPassword });
       }
 
       await registerProfile(verifyData.userId);
