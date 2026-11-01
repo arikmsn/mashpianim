@@ -137,9 +137,9 @@ const arrowIcon = "M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18";
 const playIcon = "M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z";
 
 const heroVideos = [
-  { label: "ביוטי", gradient: "from-pink-300 to-rose-400" },
-  { label: "טכנולוגיה", gradient: "from-purple-300 to-indigo-400" },
-  { label: "אופנה", gradient: "from-amber-300 to-orange-400" },
+  { label: "ביוטי", img: "/demo/v1.jpg" },
+  { label: "אופנה", img: "/demo/v2.jpg" },
+  { label: "אוכל", img: "/demo/v3.jpg" },
 ];
 
 export default function HomePage() {
@@ -252,9 +252,10 @@ export default function HomePage() {
               </div>
               <div className="grid grid-cols-3 gap-2">
                 {heroVideos.map((video) => (
-                  <div key={video.label} className={`relative aspect-[9/16] rounded-xl bg-gradient-to-b ${video.gradient} overflow-hidden group cursor-pointer`}>
+                  <div key={video.label} className="relative aspect-[9/16] rounded-xl overflow-hidden group cursor-pointer bg-neutral-100">
+                    <img src={video.img} alt={video.label} className="absolute inset-0 w-full h-full object-cover" />
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-10 h-10 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center group-hover:bg-white/50 transition-colors">
+                      <div className="w-10 h-10 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/40 transition-colors">
                         <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
                           <path d={playIcon} />
                         </svg>
