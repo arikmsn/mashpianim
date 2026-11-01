@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Avatar, Badge, Button, Card, Modal, Input, Textarea, useToast } from "@/components/ui";
 import { useAuth } from "@/hooks/use-auth";
-import { createClient } from "@/lib/supabase/client";
 
 interface CreatorProfile {
   name: string;
@@ -314,14 +313,12 @@ export default function ProfilePage() {
       }
 
       try {
-        const supabase = createClient();
-
-        const { data: rawUser } = await supabase
-          .from("users")
-          .select("*")
-          .eq("auth_user_id", user.id)
-          .single();
-        const userData = rawUser as any;
+        const res = await fetch("/api/profile");
+        if (!res.ok) {
+          setLoading(false);
+          return;
+        }
+        const { user: userData, profile: profileData } = await res.json();
 
         if (!userData) {
           setLoading(false);
@@ -329,70 +326,54 @@ export default function ProfilePage() {
         }
 
         if (userData.type === "creator") {
-          const { data: rawCreator } = await supabase
-            .from("creator_profiles")
-            .select("*")
-            .eq("user_id", userData.id)
-            .single();
-          const creatorData = rawCreator as any;
-
-          if (creatorData) {
-            setProfile({
-              name: userData.full_name,
-              level: levelLabels[creatorData.level] || creatorData.level,
-              hearts: creatorData.hearts,
-              completedConnections: creatorData.completed_connections,
-              categories: creatorData.categories || [],
-              bio: creatorData.bio || "",
-              stats: {
-                connections: creatorData.completed_connections,
-                videos: creatorData.completed_connections,
-                avgRating: 0,
-              },
-            });
-            setCreatorEditData({
-              full_name: userData.full_name,
-              bio: creatorData.bio || "",
-              categories: creatorData.categories || [],
-              city: creatorData.city || "",
-              tiktok_handle: creatorData.tiktok_handle || "",
-              instagram_handle: creatorData.instagram_handle || "",
-              date_of_birth: creatorData.date_of_birth || "",
-            });
-            setUserType("creator");
-          }
+          const creatorData = profileData as any;
+          setProfile({
+            name: userData.full_name,
+            level: levelLabels[creatorData?.level] || creatorData?.level || "creator",
+            hearts: creatorData?.hearts || 0,
+            completedConnections: creatorData?.completed_connections || 0,
+            categories: creatorData?.categories || [],
+            bio: creatorData?.bio || "",
+            stats: {
+              connections: creatorData?.completed_connections || 0,
+              videos: creatorData?.completed_connections || 0,
+              avgRating: 0,
+            },
+          });
+          setCreatorEditData({
+            full_name: userData.full_name,
+            bio: creatorData?.bio || "",
+            categories: creatorData?.categories || [],
+            city: creatorData?.city || "",
+            tiktok_handle: creatorData?.tiktok_handle || "",
+            instagram_handle: creatorData?.instagram_handle || "",
+            date_of_birth: creatorData?.date_of_birth || "",
+          });
+          setUserType("creator");
         } else if (userData.type === "brand") {
-          const { data: rawBrand } = await supabase
-            .from("brand_profiles")
-            .select("*")
-            .eq("user_id", userData.id)
-            .single();
-          const brandData = rawBrand as any;
-
-          if (brandData) {
-            setBrandProfile({
-              name: userData.full_name,
-              shopName: brandData.shop_name,
-              totalCredits: brandData.total_credits,
-              usedCredits: brandData.used_credits,
-              category: brandData.category || "",
-              description: brandData.description || "",
-              websiteUrl: brandData.website_url || "",
-              stats: {
-                products: 0,
-                connections: 0,
-                creditsLeft: brandData.total_credits - brandData.used_credits,
-              },
-            });
-            setBrandEditData({
-              full_name: userData.full_name,
-              shop_name: brandData.shop_name,
-              category: brandData.category || "",
-              website_url: brandData.website_url || "",
-              description: brandData.description || "",
-            });
-            setUserType("brand");
-          }
+          const brandData = profileData as any;
+          setBrandProfile({
+            name: userData.full_name,
+            shopName: brandData?.shop_name || "",
+            totalCredits: brandData?.total_credits || 0,
+            usedCredits: brandData?.used_credits || 0,
+            category: brandData?.category || "",
+            description: brandData?.description || "",
+            websiteUrl: brandData?.website_url || "",
+            stats: {
+              products: 0,
+              connections: 0,
+              creditsLeft: (brandData?.total_credits || 0) - (brandData?.used_credits || 0),
+            },
+          });
+          setBrandEditData({
+            full_name: userData.full_name,
+            shop_name: brandData?.shop_name || "",
+            category: brandData?.category || "",
+            website_url: brandData?.website_url || "",
+            description: brandData?.description || "",
+          });
+          setUserType("brand");
         }
       } catch {
         // API unavailable

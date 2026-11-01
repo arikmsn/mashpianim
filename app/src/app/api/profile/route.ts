@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_SUPABASE_URL;
+  const key = process.env.SUPABASE_SEC_KEY;
+  if (!url || !key) return null;
+  return createSupabaseClient(url, key);
+}
 
 function isSupabaseConfigured() {
   return !!(
@@ -22,7 +30,12 @@ export async function GET() {
     return NextResponse.json({ error: "לא מחובר" }, { status: 401 });
   }
 
-  const { data: rawUser } = await supabase
+  const admin = getSupabaseAdmin();
+  if (!admin) {
+    return NextResponse.json({ error: "המערכת לא מוגדרת" }, { status: 503 });
+  }
+
+  const { data: rawUser } = await admin
     .from("users")
     .select("*")
     .eq("auth_user_id", authUser.id)
@@ -34,7 +47,7 @@ export async function GET() {
   }
 
   if (userData.type === "creator") {
-    const { data: rawProfile } = await supabase
+    const { data: rawProfile } = await admin
       .from("creator_profiles")
       .select("*")
       .eq("user_id", userData.id)
@@ -45,7 +58,7 @@ export async function GET() {
       profile: rawProfile || {},
     });
   } else if (userData.type === "brand") {
-    const { data: rawProfile } = await supabase
+    const { data: rawProfile } = await admin
       .from("brand_profiles")
       .select("*")
       .eq("user_id", userData.id)
@@ -74,10 +87,15 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "לא מחובר" }, { status: 401 });
   }
 
+  const admin = getSupabaseAdmin();
+  if (!admin) {
+    return NextResponse.json({ error: "המערכת לא מוגדרת" }, { status: 503 });
+  }
+
   const body = await req.json();
   const { userFields, profileFields } = body;
 
-  const { data: rawUser } = await supabase
+  const { data: rawUser } = await admin
     .from("users")
     .select("*")
     .eq("auth_user_id", authUser.id)
@@ -89,8 +107,8 @@ export async function PUT(req: Request) {
   }
 
   if (userFields && Object.keys(userFields).length > 0) {
-    const { error } = await (supabase
-      .from("users") as any)
+    const { error } = await admin
+      .from("users")
       .update(userFields)
       .eq("id", userData.id);
 
@@ -102,8 +120,8 @@ export async function PUT(req: Request) {
 
   if (profileFields && Object.keys(profileFields).length > 0) {
     if (userData.type === "creator") {
-      const { error } = await (supabase
-        .from("creator_profiles") as any)
+      const { error } = await admin
+        .from("creator_profiles")
         .update(profileFields)
         .eq("user_id", userData.id);
 
@@ -112,8 +130,8 @@ export async function PUT(req: Request) {
         return NextResponse.json({ error: "שגיאה בעדכון פרופיל" }, { status: 500 });
       }
     } else if (userData.type === "brand") {
-      const { error } = await (supabase
-        .from("brand_profiles") as any)
+      const { error } = await admin
+        .from("brand_profiles")
         .update(profileFields)
         .eq("user_id", userData.id);
 
