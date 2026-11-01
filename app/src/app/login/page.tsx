@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -19,9 +19,12 @@ function LoginContent() {
   const [otp, setOtp] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [step, setStep] = useState<"phone" | "otp" | "email">("phone");
+  const [adminPhone, setAdminPhone] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [step, setStep] = useState<"phone" | "otp" | "email" | "admin-login" | "admin-roles">("phone");
   const [loading, setLoading] = useState(false);
   const [formattedPhone, setFormattedPhone] = useState("");
+  const tapRef = useRef({ count: 0, timer: 0 });
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/feed";
   const router = useRouter();

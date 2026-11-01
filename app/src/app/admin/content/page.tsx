@@ -52,12 +52,12 @@ const defaultContent: ContentSection[] = [
     id: "stats",
     label: "סטטיסטיקות",
     fields: [
-      { key: "stat1_value", label: "מספר 1", type: "text", value: "500+" },
-      { key: "stat1_label", label: "תיאור 1", type: "text", value: "יוצרי תוכן פעילים" },
-      { key: "stat2_value", label: "מספר 2", type: "text", value: "200+" },
-      { key: "stat2_label", label: "תיאור 2", type: "text", value: "מותגים ועסקים" },
-      { key: "stat3_value", label: "מספר 3", type: "text", value: "2,000+" },
-      { key: "stat3_label", label: "תיאור 3", type: "text", value: "סרטונים שנוצרו" },
+      { key: "stat1_value", label: "מספר 1", type: "text", value: "100%" },
+      { key: "stat1_label", label: "תיאור 1", type: "text", value: "חינם ליוצרים" },
+      { key: "stat2_value", label: "מספר 2", type: "text", value: "10" },
+      { key: "stat2_label", label: "תיאור 2", type: "text", value: "ימים ליצירת סרטון" },
+      { key: "stat3_value", label: "מספר 3", type: "text", value: "3" },
+      { key: "stat3_label", label: "תיאור 3", type: "text", value: "צעדים פשוטים" },
     ],
   },
   {
