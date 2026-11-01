@@ -187,7 +187,7 @@ export default function FeedPage() {
         const res = await fetch("/api/connections", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ productId }),
+          body: JSON.stringify({ product_id: productId }),
         });
 
         if (res.ok) {

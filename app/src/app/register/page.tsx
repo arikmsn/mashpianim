@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -25,6 +25,20 @@ function RegisterContent() {
   const verifiedPhone = searchParams.get("phone");
   const isPreVerified = searchParams.get("verified") === "1" && !!verifiedUserId;
   const [userType, setUserType] = useState<UserType>(initialType);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isPreVerified && verifiedUserId && !initialType) {
+      fetch(`/api/auth/user-type?userId=${verifiedUserId}`)
+        .then((res) => res.ok ? res.json() : null)
+        .then((data) => {
+          if (data?.userType) {
+            router.push(data.userType === "brand" ? "/brand" : "/feed");
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isPreVerified, verifiedUserId, initialType, router]);
 
   return (
     <main className="min-h-screen flex items-center justify-center px-6 bg-gradient-to-br from-pink-50 to-background py-12">
@@ -435,7 +449,7 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
       if (!otpRes.ok) throw new Error(otpData.error);
 
       toast("קוד אימות נשלח בוואטסאפ! 💬", "success");
-      setStep(4);
+      setStep(3);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "שגיאה בשליחת קוד";
       toast(msg, "error");
@@ -500,16 +514,16 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
           ←
         </button>
         <div className="flex-1 flex gap-1">
-          {[1, 2, 3].map((s) => (
+          {[1, 2].map((s) => (
             <div
               key={s}
               className={`h-1 flex-1 rounded-full transition-colors ${
-                s <= Math.min(step, 3) ? "bg-pink-500" : "bg-neutral-200"
+                s <= Math.min(step, 2) ? "bg-pink-500" : "bg-neutral-200"
               }`}
             />
           ))}
         </div>
-        <span className="text-xs text-neutral-400">{Math.min(step, 3)}/3</span>
+        <span className="text-xs text-neutral-400">{Math.min(step, 2)}/2</span>
       </div>
 
       {step === 1 && (
@@ -569,60 +583,6 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
 
       {step === 2 && (
         <div>
-          <h3 className="font-bold mb-4">בחרו חבילת קרדיטים</h3>
-          <p className="text-sm text-neutral-500 mb-4">
-            כל קרדיט = סרטון UGC אחד. אפשר גם לרכוש אחר כך
-          </p>
-          <div className="space-y-3">
-            {[
-              { name: "ניסיון", videos: 1, price: 100, perVideo: 100 },
-              { name: "בסיסי", videos: 5, price: 375, perVideo: 75 },
-              { name: "הכי פופולרי", videos: 12, price: 720, perVideo: 60, popular: true },
-              { name: "הכי משתלם", videos: 25, price: 1250, perVideo: 50, best: true },
-            ].map((pkg) => (
-              <button
-                key={pkg.name}
-                className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 text-right transition-all hover:border-pink-500 ${
-                  pkg.popular ? "border-pink-500 bg-pink-50" : "border-neutral-200"
-                }`}
-              >
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold">{pkg.videos} סרטונים</span>
-                    {pkg.popular && (
-                      <span className="text-xs bg-pink-500 text-white px-2 py-0.5 rounded-full">
-                        פופולרי
-                      </span>
-                    )}
-                    {pkg.best && (
-                      <span className="text-xs bg-foreground text-background px-2 py-0.5 rounded-full">
-                        משתלם
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-sm text-neutral-500">₪{pkg.perVideo} לסרטון</div>
-                </div>
-                <div className="text-lg font-bold">₪{pkg.price}</div>
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={() => setStep(3)}
-            className="w-full mt-4 px-6 py-3 rounded-xl bg-pink-500 text-white font-medium hover:bg-pink-600 transition-colors"
-          >
-            המשך
-          </button>
-          <button
-            onClick={() => setStep(3)}
-            className="w-full mt-2 text-sm text-neutral-400 hover:text-neutral-600"
-          >
-            דלגו — אקנה קרדיטים אחר כך
-          </button>
-        </div>
-      )}
-
-      {step === 3 && (
-        <div>
           <h3 className="font-bold mb-4">סיכום 🏪</h3>
           <div className="space-y-2 mb-6 text-sm">
             <div className="flex justify-between py-2 border-b border-neutral-50">
@@ -660,12 +620,12 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
         </div>
       )}
 
-      {step === 4 && !preVerifiedUserId && (
+      {step === 3 && !preVerifiedUserId && (
         <OTPStep
           phone={form.phone}
           loading={loading}
           onVerify={handleVerifyAndRegister}
-          onBack={() => setStep(3)}
+          onBack={() => setStep(2)}
         />
       )}
     </div>

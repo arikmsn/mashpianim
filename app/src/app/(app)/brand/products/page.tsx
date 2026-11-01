@@ -20,6 +20,8 @@ interface Product {
   digitalAccessType: string | null;
   digitalAccessInstructions: string | null;
   digitalAccessDurationDays: number | null;
+  expirationDate: string | null;
+  quantity: number | null;
 }
 
 const categories = ["ביוטי", "אופנה", "טכנולוגיה", "בית וגינה", "אוכל", "ספורט", "ילדים", "אחר"];
@@ -69,7 +71,10 @@ export default function BrandProductsPage() {
     digitalAccessType: "",
     digitalAccessInstructions: "",
     digitalAccessDurationDays: "",
+    expirationDate: "",
+    quantity: "",
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
   useEffect(() => {
     fetchProducts();
@@ -98,6 +103,8 @@ export default function BrandProductsPage() {
               digitalAccessType: (p.digital_access_type as string) || null,
               digitalAccessInstructions: (p.digital_access_instructions as string) || null,
               digitalAccessDurationDays: (p.digital_access_duration_days as number) || null,
+              expirationDate: (p.expiration_date as string) || null,
+              quantity: (p.quantity as number) || null,
             }))
           );
           setLoading(false);
@@ -112,7 +119,8 @@ export default function BrandProductsPage() {
   }
 
   function resetForm() {
-    setFormData({ name: "", description: "", price: "", category: "ביוטי", imageUrl: "", shippingPolicy: "free", sourceUrl: "", productType: "physical", digitalAccessType: "", digitalAccessInstructions: "", digitalAccessDurationDays: "" });
+    setFormData({ name: "", description: "", price: "", category: "ביוטי", imageUrl: "", shippingPolicy: "free", sourceUrl: "", productType: "physical", digitalAccessType: "", digitalAccessInstructions: "", digitalAccessDurationDays: "", expirationDate: "", quantity: "" });
+    setImageFile(null);
     setEditingProduct(null);
   }
 
@@ -134,7 +142,10 @@ export default function BrandProductsPage() {
       digitalAccessType: product.digitalAccessType || "",
       digitalAccessInstructions: product.digitalAccessInstructions || "",
       digitalAccessDurationDays: product.digitalAccessDurationDays ? String(product.digitalAccessDurationDays) : "",
+      expirationDate: product.expirationDate || "",
+      quantity: product.quantity ? String(product.quantity) : "",
     });
+    setImageFile(null);
     setEditingProduct(product);
     setShowAddModal(true);
   }
@@ -147,18 +158,37 @@ export default function BrandProductsPage() {
 
     setSaving(true);
     try {
+      let imageUrl = formData.imageUrl.trim() || null;
+
+      // Upload image file if selected
+      if (imageFile) {
+        const imgFormData = new FormData();
+        imgFormData.append("image", imageFile);
+        const uploadRes = await fetch("/api/products/upload-image", { method: "POST", body: imgFormData });
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          imageUrl = uploadData.url;
+        } else {
+          toast("שגיאה בהעלאת התמונה", "error");
+          setSaving(false);
+          return;
+        }
+      }
+
       const body: Record<string, unknown> = {
         name: formData.name.trim(),
         description: formData.description.trim(),
         price: Number(formData.price),
         category: formData.category,
-        image_url: formData.imageUrl.trim() || null,
+        image_url: imageUrl,
         shipping_policy: formData.shippingPolicy,
         source_url: formData.sourceUrl.trim() || null,
         product_type: formData.productType,
         digital_access_type: formData.productType === "digital" ? formData.digitalAccessType || null : null,
         digital_access_instructions: formData.productType === "digital" ? formData.digitalAccessInstructions.trim() || null : null,
         digital_access_duration_days: formData.productType === "digital" && formData.digitalAccessDurationDays ? Number(formData.digitalAccessDurationDays) : null,
+        expiration_date: formData.expirationDate || null,
+        quantity: formData.quantity ? Number(formData.quantity) : null,
       };
 
       if (editingProduct) {
@@ -185,6 +215,8 @@ export default function BrandProductsPage() {
                     digitalAccessType: (body.digital_access_type as string) || null,
                     digitalAccessInstructions: (body.digital_access_instructions as string) || null,
                     digitalAccessDurationDays: (body.digital_access_duration_days as number) || null,
+                    expirationDate: (body.expiration_date as string) || null,
+                    quantity: (body.quantity as number) || null,
                   }
                 : p
             )
@@ -218,6 +250,8 @@ export default function BrandProductsPage() {
               digitalAccessType: (body.digital_access_type as string) || null,
               digitalAccessInstructions: (body.digital_access_instructions as string) || null,
               digitalAccessDurationDays: (body.digital_access_duration_days as number) || null,
+              expirationDate: (body.expiration_date as string) || null,
+              quantity: (body.quantity as number) || null,
             },
             ...prev,
           ]);
@@ -374,7 +408,7 @@ export default function BrandProductsPage() {
         title={editingProduct ? "עריכת מוצר" : "הוספת מוצר חדש"}
         size="lg"
       >
-        <div className="space-y-4">
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto">
           <div>
             <label className="block text-sm font-medium text-neutral-700 mb-1">שם המוצר *</label>
             <Input
@@ -495,13 +529,52 @@ export default function BrandProductsPage() {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-1">קישור לתמונה</label>
-            <Input
-              type="url"
-              placeholder="https://..."
-              value={formData.imageUrl}
-              onChange={(e) => setFormData((p) => ({ ...p, imageUrl: e.target.value }))}
+            <label className="block text-sm font-medium text-neutral-700 mb-1">תמונת מוצר</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const f = e.target.files?.[0] || null;
+                setImageFile(f);
+                if (f) setFormData((p) => ({ ...p, imageUrl: "" }));
+              }}
+              className="w-full text-sm text-neutral-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-pink-50 file:text-pink-500 hover:file:bg-pink-100 transition-all"
             />
+            {imageFile && (
+              <p className="text-xs text-neutral-400 mt-1">{imageFile.name} ({(imageFile.size / 1024 / 1024).toFixed(1)} MB)</p>
+            )}
+            {!imageFile && (
+              <div className="mt-2">
+                <p className="text-xs text-neutral-400 mb-1">או הדביקו קישור לתמונה:</p>
+                <Input
+                  type="url"
+                  placeholder="https://..."
+                  value={formData.imageUrl}
+                  onChange={(e) => setFormData((p) => ({ ...p, imageUrl: e.target.value }))}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-1">תאריך תפוגה</label>
+              <Input
+                type="date"
+                value={formData.expirationDate}
+                onChange={(e) => setFormData((p) => ({ ...p, expirationDate: e.target.value }))}
+                dir="ltr"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-1">כמות במלאי</label>
+              <Input
+                type="number"
+                placeholder="ללא הגבלה"
+                value={formData.quantity}
+                onChange={(e) => setFormData((p) => ({ ...p, quantity: e.target.value }))}
+              />
+            </div>
           </div>
 
           <div>

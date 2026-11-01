@@ -136,6 +136,18 @@ export async function POST(request: NextRequest) {
             email,
             email_confirm: true,
           });
+
+          // Check if this auth user has a completed registration in the users table
+          const { data: dbUserByAuth } = await supabaseAdmin
+            .from("users")
+            .select("id, type")
+            .eq("auth_user_id", authUserId)
+            .maybeSingle();
+
+          if (dbUserByAuth?.type) {
+            userType = dbUserByAuth.type;
+            needsOnboarding = false;
+          }
         } else {
           console.error("[verify-otp] createUser error:", createError);
           return NextResponse.json(

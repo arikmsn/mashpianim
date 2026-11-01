@@ -554,7 +554,7 @@ export default function ProfilePage() {
               {[
                 { value: brandProfile.stats.products, label: "מוצרים" },
                 { value: brandProfile.stats.connections, label: "חיבורים" },
-                { value: brandProfile.stats.creditsLeft, label: "קרדיטים" },
+                { value: brandProfile.stats.creditsLeft, label: "סרטונים נותרים" },
               ].map((stat) => (
                 <div key={stat.label} className="text-center">
                   <div className="text-xl font-bold text-neutral-900">{stat.value}</div>
@@ -566,9 +566,9 @@ export default function ProfilePage() {
             <Card padding="sm" className="mt-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">
-                  🎫 {brandProfile.totalCredits - brandProfile.usedCredits} קרדיטים זמינים
+                  🎬 {brandProfile.totalCredits - brandProfile.usedCredits} סרטונים נותרים
                 </span>
-                <Button size="sm" variant="secondary">רכישת קרדיטים</Button>
+                <Button size="sm" variant="secondary">רכישת סרטונים</Button>
               </div>
             </Card>
           </div>

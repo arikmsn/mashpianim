@@ -331,7 +331,7 @@ function LoginContent() {
                 {[
                   { role: "admin", label: "ממשק מנהל", desc: "דשבורד, מודרציה, הגדרות", color: "pink" },
                   { role: "creator", label: "ממשק יוצר תוכן", desc: "פיד, פרופיל, חיבורים", color: "purple" },
-                  { role: "brand", label: "ממשק מפרסם", desc: "קמפיינים, יוצרים, קרדיטים", color: "blue" },
+                  { role: "brand", label: "ממשק מפרסם", desc: "קמפיינים, יוצרים, סרטונים", color: "blue" },
                 ].map((item) => (
                   <button
                     key={item.role}

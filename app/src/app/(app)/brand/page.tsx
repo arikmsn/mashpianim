@@ -115,7 +115,7 @@ export default function BrandDashboard() {
     { value: stats.activeProducts, label: "מוצרים פעילים", icon: "📦", color: "from-pink-500 to-rose-400" },
     { value: stats.pendingConnections, label: "ממתינים לאישור", icon: "⏳", color: "from-amber-500 to-orange-400" },
     { value: stats.totalVideos, label: "סרטונים שהתקבלו", icon: "🎬", color: "from-purple-500 to-indigo-400" },
-    { value: stats.creditsRemaining, label: "קרדיטים זמינים", icon: "🎫", color: "from-emerald-500 to-teal-400" },
+    { value: stats.creditsRemaining, label: "סרטונים נותרים", icon: "🎬", color: "from-emerald-500 to-teal-400" },
   ];
 
   return (
@@ -164,9 +164,9 @@ export default function BrandDashboard() {
 
         <Card padding="sm" className="mb-6">
           <div className="flex items-center justify-between px-2 py-2">
-            <span className="text-sm font-medium">🎫 {stats.creditsRemaining} קרדיטים זמינים</span>
-            <Button size="sm" variant="secondary" onClick={() => toast("רכישת קרדיטים תהיה זמינה בקרוב", "info")}>
-              רכישת קרדיטים
+            <span className="text-sm font-medium">🎬 {stats.creditsRemaining} סרטונים נותרים</span>
+            <Button size="sm" variant="secondary" onClick={() => toast("רכישת סרטונים תהיה זמינה בקרוב", "info")}>
+              רכישת סרטונים
             </Button>
           </div>
         </Card>

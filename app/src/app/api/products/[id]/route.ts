@@ -75,7 +75,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
   const body = await request.json();
   const { name, description, price, image_url, shipping_policy, shipping_address, source_url, status,
-    product_type, digital_access_type, digital_access_instructions, digital_access_duration_days } = body;
+    product_type, digital_access_type, digital_access_instructions, digital_access_duration_days,
+    category, expiration_date, quantity } = body;
 
   const updates: Record<string, unknown> = {};
   if (name !== undefined) updates.name = name;
@@ -90,6 +91,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   if (digital_access_type !== undefined) updates.digital_access_type = digital_access_type;
   if (digital_access_instructions !== undefined) updates.digital_access_instructions = digital_access_instructions;
   if (digital_access_duration_days !== undefined) updates.digital_access_duration_days = digital_access_duration_days;
+  if (category !== undefined) updates.category = category;
+  if (expiration_date !== undefined) updates.expiration_date = expiration_date;
+  if (quantity !== undefined) updates.quantity = quantity;
 
   const { error } = await (admin.from("products") as any)
     .update(updates)
