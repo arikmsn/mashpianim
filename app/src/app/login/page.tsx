@@ -130,18 +130,15 @@ function LoginContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      if (data.verificationUrl) {
-        router.push(data.verificationUrl);
-      } else if (data.loginMethod === "email") {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: data.email,
-          password: adminPassword,
-        });
-        if (error) throw error;
-        router.push(role === "admin" ? "/admin" : "/feed");
-      }
+      const { error } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.authPassword,
+      });
+      if (error) throw error;
+
       const roleLabel = role === "admin" ? "מנהל" : role === "creator" ? "יוצר תוכן" : "מפרסם";
       toast(`נכנסתם כ${roleLabel}`, "success");
+      router.push(data.redirect);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "שגיאה";
       toast(msg, "error");

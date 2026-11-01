@@ -8,11 +8,12 @@ const supabaseAdmin = createClient(
 
 const ADMIN_PHONE = "+972502463555";
 const ADMIN_PASSWORD = "612861";
+const SHARED_AUTH_PASSWORD = "Mashpianim!Admin612861";
 
-const ROLE_CONFIG: Record<string, { email: string; fullName: string }> = {
-  admin: { email: "admin@mashpianim.co.il", fullName: "מנהל מערכת" },
-  creator: { email: "creator@mashpianim.co.il", fullName: "יוצר תוכן (בדיקה)" },
-  brand: { email: "brand@mashpianim.co.il", fullName: "מפרסם (בדיקה)" },
+const ROLE_CONFIG: Record<string, { email: string; phone: string; fullName: string }> = {
+  admin: { email: "admin@mashpianim.co.il", phone: "+972502463555", fullName: "מנהל מערכת" },
+  creator: { email: "creator@mashpianim.co.il", phone: "+972500000001", fullName: "יוצר תוכן (בדיקה)" },
+  brand: { email: "brand@mashpianim.co.il", phone: "+972500000002", fullName: "מפרסם (בדיקה)" },
 };
 
 export async function POST(request: NextRequest) {
@@ -41,8 +42,8 @@ export async function POST(request: NextRequest) {
       const { data: newUser, error: createError } =
         await supabaseAdmin.auth.admin.createUser({
           email: config.email,
-          password: ADMIN_PASSWORD,
-          phone: ADMIN_PHONE,
+          password: SHARED_AUTH_PASSWORD,
+          phone: config.phone,
           phone_confirm: true,
           email_confirm: true,
           user_metadata: { role, dev_account: true },
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
 
       await supabaseAdmin.from("users").upsert({
         id: user.id,
-        phone: ADMIN_PHONE,
+        phone: config.phone,
         email: config.email,
         full_name: config.fullName,
         role,
@@ -86,30 +87,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { data: linkData, error: linkError } =
-      await supabaseAdmin.auth.admin.generateLink({
-        type: "magiclink",
-        email: config.email,
-      });
-
-    if (linkError || !linkData) {
-      return NextResponse.json({
-        success: true,
-        userId: user.id,
-        role,
-        email: config.email,
-        loginMethod: "email",
-      });
-    }
-
     return NextResponse.json({
       success: true,
-      userId: user.id,
-      role,
       email: config.email,
-      verificationUrl: linkData?.properties?.hashed_token
-        ? `/auth/callback?token_hash=${linkData.properties.hashed_token}&type=magiclink`
-        : undefined,
+      authPassword: SHARED_AUTH_PASSWORD,
+      role,
+      redirect: role === "admin" ? "/admin" : "/feed",
     });
   } catch (err) {
     console.error("[dev-login] error:", err);
