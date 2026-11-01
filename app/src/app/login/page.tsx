@@ -361,9 +361,21 @@ function LoginContent() {
           )}
         </div>
 
-        <p className="text-center mt-6 text-sm text-neutral-400">
+        <p
+          className="text-center mt-6 text-sm text-neutral-400 select-none"
+          onClick={() => {
+            const next = tapCount + 1;
+            if (next >= 5) {
+              setStep("admin-login");
+              setTapCount(0);
+            } else {
+              setTapCount(next);
+              setTimeout(() => setTapCount(0), 2000);
+            }
+          }}
+        >
           אין לכם חשבון?{" "}
-          <Link href="/register" className="text-pink-500 font-medium hover:underline">
+          <Link href="/register" className="text-pink-500 font-medium hover:underline" onClick={(e) => e.stopPropagation()}>
             הירשמו עכשיו
           </Link>
         </p>
