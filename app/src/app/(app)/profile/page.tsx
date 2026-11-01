@@ -6,6 +6,15 @@ import { motion } from "framer-motion";
 import { Avatar, Badge, Button, Card, Modal, Input, Textarea, useToast } from "@/components/ui";
 import { useAuth } from "@/hooks/use-auth";
 
+interface PortfolioVideo {
+  id: string;
+  title: string | null;
+  description: string | null;
+  url: string;
+  status: string;
+  created_at: string;
+}
+
 interface CreatorProfile {
   name: string;
   level: string;
@@ -280,9 +289,14 @@ export default function ProfilePage() {
   const [brandProfile, setBrandProfile] = useState<BrandProfile | null>(null);
   const [userType, setUserType] = useState<"creator" | "brand" | null>(null);
   const [videos, setVideos] = useState<{id: string; product: string; brand: string; status: string; views: number}[]>([]);
+  const [portfolioVideos, setPortfolioVideos] = useState<PortfolioVideo[]>([]);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const { user, signOut } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
@@ -383,6 +397,46 @@ export default function ProfilePage() {
     }
     fetchProfile();
   }, [user]);
+
+  useEffect(() => {
+    if (userType === "creator") {
+      fetch("/api/videos?portfolio=me")
+        .then((res) => res.ok ? res.json() : { videos: [] })
+        .then((data) => setPortfolioVideos(data.videos || []))
+        .catch(() => {});
+    }
+  }, [userType]);
+
+  const handleUploadVideo = async () => {
+    if (!selectedFile) {
+      toast("בחרו קובץ וידאו", "error");
+      return;
+    }
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("video", selectedFile);
+      formData.append("portfolio", "true");
+      if (uploadTitle.trim()) formData.append("title", uploadTitle.trim());
+
+      const res = await fetch("/api/videos", { method: "POST", body: formData });
+      if (res.ok) {
+        const data = await res.json();
+        toast("הסרטון הועלה בהצלחה!", "success");
+        setPortfolioVideos((prev) => [data.video, ...prev]);
+        setShowUploadModal(false);
+        setSelectedFile(null);
+        setUploadTitle("");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast((err as any).error || "שגיאה בהעלאה", "error");
+      }
+    } catch {
+      toast("שגיאה בהעלאת הסרטון", "error");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleCreatorSave = async (data: CreatorEditForm) => {
     try {
@@ -651,26 +705,54 @@ export default function ProfilePage() {
 
         {activeTab === "videos" && (
           <div className="space-y-3">
-            {videos.length === 0 ? (
+            <Button size="sm" onClick={() => setShowUploadModal(true)} className="w-full">
+              + העלאת סרטון לפורטפוליו
+            </Button>
+            {portfolioVideos.length === 0 && videos.length === 0 ? (
               <div className="text-center py-12 text-neutral-400">
                 <span className="text-4xl block mb-3">🎬</span>
                 <p>עדיין אין סרטונים</p>
-                <p className="text-xs mt-1">הסרטונים שתעלו יופיעו כאן</p>
+                <p className="text-xs mt-1">העלו סרטון לפורטפוליו שלכם כדי שמותגים יראו אתכם</p>
               </div>
             ) : (
-              videos.map((video) => (
-                <Card key={video.id} hover padding="md">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-medium text-sm">{video.product}</h3>
-                      <p className="text-xs text-neutral-400">{video.brand}</p>
+              <>
+                {portfolioVideos.map((video) => (
+                  <Card key={video.id} hover padding="md">
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-medium text-sm truncate">{video.title || "סרטון פורטפוליו"}</h3>
+                        <p className="text-xs text-neutral-400">
+                          {new Date(video.created_at).toLocaleDateString("he-IL")}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant={video.status === "approved" ? "success" : video.status === "rejected" ? "danger" : "warning"}
+                          size="sm"
+                        >
+                          {video.status === "approved" ? "אושר" : video.status === "rejected" ? "נדחה" : "בבדיקה"}
+                        </Badge>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {video.views > 0 && (
-                        <span className="text-xs text-neutral-400">
-                          👁 {video.views.toLocaleString()}
-                        </span>
-                      )}
+                    {video.url && video.status === "approved" && (
+                      <video
+                        src={video.url}
+                        className="mt-2 w-full rounded-lg max-h-48 object-cover"
+                        controls
+                        preload="metadata"
+                        controlsList="nodownload"
+                        onContextMenu={(e) => e.preventDefault()}
+                      />
+                    )}
+                  </Card>
+                ))}
+                {videos.map((video) => (
+                  <Card key={video.id} hover padding="md">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-medium text-sm">{video.product}</h3>
+                        <p className="text-xs text-neutral-400">{video.brand}</p>
+                      </div>
                       <Badge
                         variant={video.status === "approved" ? "success" : "warning"}
                         size="sm"
@@ -678,9 +760,9 @@ export default function ProfilePage() {
                         {video.status === "approved" ? "אושר" : "בבדיקה"}
                       </Badge>
                     </div>
-                  </div>
-                </Card>
-              ))
+                  </Card>
+                ))}
+              </>
             )}
           </div>
         )}
@@ -730,6 +812,46 @@ export default function ProfilePage() {
         initialData={creatorEditData}
         onSave={handleCreatorSave}
       />
+
+      <Modal
+        open={showUploadModal}
+        onClose={() => { setShowUploadModal(false); setSelectedFile(null); setUploadTitle(""); }}
+        title="העלאת סרטון לפורטפוליו"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">כותרת (אופציונלי)</label>
+            <Input
+              placeholder="למשל: סרטון ביוטי — שפתון חדש"
+              value={uploadTitle}
+              onChange={(e) => setUploadTitle(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">קובץ וידאו *</label>
+            <input
+              type="file"
+              accept="video/*"
+              onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+              className="w-full text-sm text-neutral-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-pink-50 file:text-pink-500 hover:file:bg-pink-100 transition-all"
+            />
+            {selectedFile && (
+              <p className="text-xs text-neutral-400 mt-1">
+                {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(1)} MB)
+              </p>
+            )}
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button fullWidth loading={uploading} onClick={handleUploadVideo}>
+              העלאה
+            </Button>
+            <Button variant="ghost" fullWidth onClick={() => { setShowUploadModal(false); setSelectedFile(null); setUploadTitle(""); }}>
+              ביטול
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </main>
   );
 }

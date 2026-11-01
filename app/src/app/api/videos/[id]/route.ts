@@ -87,7 +87,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   if (storagePath) {
     const { data } = await supabase.storage
       .from("videos")
-      .createSignedUrl(storagePath, 3600);
+      .createSignedUrl(storagePath, 86400);
     signedUrl = data?.signedUrl || null;
   }
 
@@ -100,7 +100,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   if (canDownload && storagePath) {
     const { data } = await supabase.storage
       .from("videos")
-      .createSignedUrl(storagePath, 300, { download: true });
+      .createSignedUrl(storagePath, 3600, { download: true });
     downloadUrl = data?.signedUrl || null;
 
     // Increment download counter

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
-import { createClient } from "@/lib/supabase/client";
 
 interface NavItem {
   href: string;
@@ -76,14 +75,12 @@ function BottomNav() {
 
     async function fetchUserType() {
       try {
-        const supabase = createClient();
-        const { data } = await supabase
-          .from("users")
-          .select("type")
-          .eq("auth_user_id", user!.id)
-          .single();
-        if (data) {
-          setUserType((data as any).type as "creator" | "brand");
+        const res = await fetch("/api/profile");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.user?.type) {
+            setUserType(data.user.type as "creator" | "brand");
+          }
         }
       } catch {
         // Default to creator nav
