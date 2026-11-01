@@ -191,7 +191,11 @@ function MessagesContent() {
         body: JSON.stringify({ text: msgText }),
       });
       if (!res.ok) {
-        // Message still shows locally even if API isn't ready
+        const data = await res.json().catch(() => null);
+        if (res.status === 400 && data?.error) {
+          toast(data.error, "error");
+          setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+        }
       }
     } catch {
       // Message shows locally
@@ -362,6 +366,7 @@ function MessagesContent() {
                 שלחו
               </button>
             </div>
+            <p className="text-[10px] text-neutral-400 text-center mt-1.5">שיתוף פרטי קשר אישיים אסור</p>
           </div>
         </div>
       )}
