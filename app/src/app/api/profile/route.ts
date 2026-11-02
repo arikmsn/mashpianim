@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { pickAllowedFields, USER_EDITABLE_FIELDS, CREATOR_EDITABLE_FIELDS, BRAND_EDITABLE_FIELDS } from "@/lib/authz";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -120,10 +121,12 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 404 });
   }
 
-  if (userFields && Object.keys(userFields).length > 0) {
+  // Only explicitly editable fields are applied; role, activation, phone, credits, level, etc. are ignored
+  const safeUserFields = pickAllowedFields(userFields, USER_EDITABLE_FIELDS);
+  if (Object.keys(safeUserFields).length > 0) {
     const { error } = await admin
       .from("users")
-      .update(userFields)
+      .update(safeUserFields)
       .eq("id", userData.id);
 
     if (error) {
@@ -132,22 +135,22 @@ export async function PUT(req: Request) {
     }
   }
 
-  if (profileFields && Object.keys(profileFields).length > 0) {
+  if (profileFields && typeof profileFields === "object") {
     if (userData.type === "creator" || userData.type === "admin") {
-      const { error } = await admin
-        .from("creator_profiles")
-        .update(profileFields)
-        .eq("user_id", userData.id);
+      const safeProfile = pickAllowedFields(profileFields, CREATOR_EDITABLE_FIELDS);
+      const { error } = Object.keys(safeProfile).length > 0
+        ? await admin.from("creator_profiles").update(safeProfile).eq("user_id", userData.id)
+        : { error: null };
 
       if (error) {
         console.error("[profile] update creator error:", error);
         return NextResponse.json({ error: "שגיאה בעדכון פרופיל" }, { status: 500 });
       }
     } else if (userData.type === "brand") {
-      const { error } = await admin
-        .from("brand_profiles")
-        .update(profileFields)
-        .eq("user_id", userData.id);
+      const safeProfile = pickAllowedFields(profileFields, BRAND_EDITABLE_FIELDS);
+      const { error } = Object.keys(safeProfile).length > 0
+        ? await admin.from("brand_profiles").update(safeProfile).eq("user_id", userData.id)
+        : { error: null };
 
       if (error) {
         console.error("[profile] update brand error:", error);

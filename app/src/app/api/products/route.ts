@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { toPublicProduct } from "@/lib/authz";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -22,30 +23,47 @@ export async function GET(request: NextRequest) {
 
   let resolvedBrandId = brandId;
 
+  // Who is asking? Owners of the listed brand and admins get the full rows; everyone else the public shape.
+  const userClient = await createServerClient();
+  const { data: { user } } = await userClient.auth.getUser();
+  let viewer: { id: string; type: string } | null = null;
+  if (user) {
+    const { data: dbUser } = await admin
+      .from("users")
+      .select("id, type")
+      .eq("auth_user_id", user.id)
+      .single();
+    viewer = (dbUser as any) || null;
+  }
+
   if (brandMe === "me") {
-    const userClient = await createServerClient();
-    const { data: { user } } = await userClient.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "לא מחובר" }, { status: 401 });
     }
-    const { data: dbUser } = await admin
-      .from("users")
-      .select("id")
-      .eq("auth_user_id", user.id)
-      .single();
-    if (!dbUser) {
+    if (!viewer) {
       return NextResponse.json({ products: [] });
     }
     const { data: brandProfile } = await admin
       .from("brand_profiles")
       .select("id")
-      .eq("user_id", (dbUser as any).id)
+      .eq("user_id", viewer.id)
       .single();
     if (brandProfile) {
       resolvedBrandId = (brandProfile as any).id;
     } else {
       return NextResponse.json({ products: [] });
     }
+  }
+
+  let privileged = viewer?.type === "admin" || brandMe === "me";
+  if (!privileged && viewer && resolvedBrandId) {
+    const { data: owned } = await admin
+      .from("brand_profiles")
+      .select("id")
+      .eq("id", resolvedBrandId)
+      .eq("user_id", viewer.id)
+      .maybeSingle();
+    privileged = !!owned;
   }
 
   let query = admin
@@ -68,14 +86,17 @@ export async function GET(request: NextRequest) {
     const brandCats: string[] = Array.isArray(p.brand_profiles?.categories) && p.brand_profiles.categories.length > 0
       ? p.brand_profiles.categories
       : [p.brand_profiles?.category].filter(Boolean);
-    return {
-    ...p,
-    brand_name: p.brand_profiles?.shop_name || "",
-    brand_user_id: p.brand_profiles?.user_id || null,
-    category: brandCats[0] || "",
-    categories: brandCats,
-    logo_url: p.brand_profiles?.logo_url || null,
+    const row = { ...p };
+    delete row.brand_profiles;
+    const shaped = {
+      ...row,
+      brand_name: p.brand_profiles?.shop_name || "",
+      brand_user_id: p.brand_profiles?.user_id || null,
+      category: brandCats[0] || "",
+      categories: brandCats,
+      logo_url: p.brand_profiles?.logo_url || null,
     };
+    return privileged ? shaped : toPublicProduct(shaped);
   });
 
   return NextResponse.json({ products });

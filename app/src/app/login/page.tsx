@@ -156,15 +156,10 @@ function LoginContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      const { error } = await supabase.auth.signInWithPassword({
-        email: data.email,
-        password: data.authPassword,
-      });
-      if (error) throw error;
-
-      const roleLabel = role === "admin" ? "מנהל" : role === "creator" ? "יוצר תוכן" : "מפרסם";
+      // The session cookie was set by the server; a full navigation picks it up
+      const roleLabel = role === "creator" ? "יוצר תוכן" : "מפרסם";
       toast(`נכנסתם כ${roleLabel}`, "success");
-      router.push(data.redirect);
+      window.location.assign(data.redirect || "/feed");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "שגיאה";
       toast(msg, "error");
@@ -326,7 +321,6 @@ function LoginContent() {
               </div>
               <div className="flex flex-col gap-2">
                 {[
-                  { role: "admin", label: "ממשק מנהל", desc: "דשבורד, מודרציה, הגדרות", color: "pink" },
                   { role: "creator", label: "ממשק יוצר תוכן", desc: "פיד, פרופיל, חיבורים", color: "purple" },
                   { role: "brand", label: "ממשק מפרסם", desc: "קמפיינים, יוצרים, סרטונים", color: "blue" },
                 ].map((item) => (

@@ -1,20 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 import { getGreenAPI } from "@/lib/adapters/greenapi";
+import { isAllowedRegistrationType } from "@/lib/authz";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
   const key = process.env.SUPABASE_SEC_KEY;
   if (!url || !key) return null;
   return createClient(url, key);
-}
-
-function formatPhone(phone: string): string {
-  let cleaned = phone.replace(/[\s\-()]/g, "");
-  if (cleaned.startsWith("+")) cleaned = cleaned.slice(1);
-  if (cleaned.startsWith("0")) cleaned = `972${cleaned.slice(1)}`;
-  if (!cleaned.startsWith("972")) cleaned = `972${cleaned}`;
-  return `+${cleaned}`;
 }
 
 export async function POST(request: NextRequest) {
@@ -25,11 +19,26 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { userId, userType, profile } = body;
+    const { userId: requestedUserId, userType } = body;
+    const profile: Record<string, any> = body.profile && typeof body.profile === "object" ? body.profile : {};
 
-    if (!userId || !userType) {
+    if (!userType) {
       return NextResponse.json({ error: "פרטים חסרים" }, { status: 400 });
     }
+    if (!isAllowedRegistrationType(userType)) {
+      return NextResponse.json({ error: "סוג משתמש לא תקין" }, { status: 400 });
+    }
+
+    // Identity comes from the session, never from the request body
+    const userClient = await createServerClient();
+    const { data: { user: sessionUser } } = await userClient.auth.getUser();
+    if (!sessionUser) {
+      return NextResponse.json({ error: "לא מחובר — אמתו את הטלפון ונסו שוב" }, { status: 401 });
+    }
+    if (requestedUserId && requestedUserId !== sessionUser.id) {
+      return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
+    }
+    const userId = sessionUser.id;
 
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(userId);
     if (authError || !authUser?.user) {
@@ -37,35 +46,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 404 });
     }
 
-    // Use phone from auth user, fallback to profile phone
-    let phone = authUser.user.phone || "";
-    if (!phone && profile.phone) {
-      phone = formatPhone(profile.phone);
-    }
+    const { data: existingUser } = await supabaseAdmin
+      .from("users")
+      .select("id, type, phone")
+      .eq("auth_user_id", userId)
+      .maybeSingle();
 
+    // The phone is the verified one on the auth account; it is never taken from the request
+    const phone = authUser.user.phone || existingUser?.phone || "";
     if (!phone) {
       return NextResponse.json({ error: "מספר טלפון חסר" }, { status: 400 });
     }
 
-    // Try insert first, if auth_user_id already exists, update that row instead
-    const { data: existingUser } = await supabaseAdmin
-      .from("users")
-      .select("id")
-      .eq("auth_user_id", userId)
-      .maybeSingle();
-
     let dbUserId: string;
+    // An existing account keeps its role; registration can only complete it
+    const effectiveType: string = existingUser?.type || userType;
+    const isNewUser = !existingUser;
 
     if (existingUser) {
-      // Update existing row
       const { data: updatedUser, error: updateError } = await supabaseAdmin
         .from("users")
         .update({
-          type: userType,
           phone,
           full_name: profile.fullName || "",
           email: profile.email || authUser.user.email || null,
-          is_active: true,
           onboarding_completed: true,
         })
         .eq("id", existingUser.id)
@@ -74,11 +78,10 @@ export async function POST(request: NextRequest) {
 
       if (updateError || !updatedUser) {
         console.error("[register] user update error:", updateError);
-        return NextResponse.json({ error: `שגיאה בעדכון חשבון: ${updateError?.message || "unknown"}` }, { status: 500 });
+        return NextResponse.json({ error: "שגיאה בעדכון חשבון" }, { status: 500 });
       }
       dbUserId = updatedUser.id;
     } else {
-      // Insert new row
       const { data: insertedUser, error: insertError } = await supabaseAdmin
         .from("users")
         .insert({
@@ -95,80 +98,76 @@ export async function POST(request: NextRequest) {
 
       if (insertError || !insertedUser) {
         console.error("[register] user insert error:", insertError);
-        return NextResponse.json({ error: `שגיאה ביצירת חשבון: ${insertError?.message || "unknown"}` }, { status: 500 });
+        return NextResponse.json({ error: "שגיאה ביצירת חשבון" }, { status: 500 });
       }
       dbUserId = insertedUser.id;
     }
 
-    // Create profile based on type
-    if (userType === "creator") {
-      const { error: profileError } = await supabaseAdmin
+    // Create the role profile once; an existing profile is never overwritten by re-registration
+    if (effectiveType === "creator") {
+      const { data: existingProfile } = await supabaseAdmin
         .from("creator_profiles")
-        .upsert(
-          {
-            user_id: dbUserId,
-            bio: profile.bio || null,
-            tiktok_handle: profile.tiktokHandle || null,
-            tiktok_followers: profile.tiktokFollowers || 0,
-            instagram_handle: profile.instagramHandle || null,
-            instagram_followers: profile.instagramFollowers || 0,
-            categories: profile.categories || [],
-            level: "creator",
-            city: profile.city || null,
-            date_of_birth: profile.dateOfBirth || null,
-            intro_video_url: profile.introVideoUrl || null,
-          },
-          { onConflict: "user_id" }
-        );
-
-      if (profileError) {
-        console.error("[register] creator profile error:", profileError);
-        return NextResponse.json(
-          { error: `שגיאה ביצירת פרופיל: ${profileError.message}` },
-          { status: 500 }
-        );
+        .select("id")
+        .eq("user_id", dbUserId)
+        .maybeSingle();
+      if (!existingProfile) {
+        const { error: profileError } = await supabaseAdmin.from("creator_profiles").insert({
+          user_id: dbUserId,
+          bio: profile.bio || null,
+          tiktok_handle: profile.tiktokHandle || null,
+          tiktok_followers: Math.max(0, parseInt(String(profile.tiktokFollowers ?? 0), 10) || 0),
+          instagram_handle: profile.instagramHandle || null,
+          instagram_followers: Math.max(0, parseInt(String(profile.instagramFollowers ?? 0), 10) || 0),
+          categories: Array.isArray(profile.categories) ? profile.categories.filter((c: unknown) => typeof c === "string") : [],
+          level: "creator",
+          city: profile.city || null,
+          date_of_birth: profile.dateOfBirth || null,
+          intro_video_url: profile.introVideoUrl || null,
+        });
+        if (profileError) {
+          console.error("[register] creator profile error:", profileError);
+          return NextResponse.json({ error: "שגיאה ביצירת פרופיל" }, { status: 500 });
+        }
       }
-    } else if (userType === "brand") {
-      const { error: profileError } = await supabaseAdmin
+    } else if (effectiveType === "brand") {
+      const { data: existingProfile } = await supabaseAdmin
         .from("brand_profiles")
-        .upsert(
-          {
-            user_id: dbUserId,
-            shop_name: profile.shopName || "",
-            category: profile.category || "",
-            categories: profile.category ? [profile.category] : [],
-            website_url: profile.websiteUrl || null,
-            description: profile.description || null,
-            logo_url: profile.logoUrl || null,
-          },
-          { onConflict: "user_id" }
-        );
-
-      if (profileError) {
-        console.error("[register] brand profile error:", profileError);
-        return NextResponse.json(
-          { error: `שגיאה ביצירת פרופיל עסקי: ${profileError.message}` },
-          { status: 500 }
-        );
+        .select("id")
+        .eq("user_id", dbUserId)
+        .maybeSingle();
+      if (!existingProfile) {
+        const { error: profileError } = await supabaseAdmin.from("brand_profiles").insert({
+          user_id: dbUserId,
+          shop_name: profile.shopName || "",
+          category: profile.category || "",
+          categories: profile.category ? [profile.category] : [],
+          website_url: profile.websiteUrl || null,
+          description: profile.description || null,
+          logo_url: profile.logoUrl || null,
+        });
+        if (profileError) {
+          console.error("[register] brand profile error:", profileError);
+          return NextResponse.json({ error: "שגיאה ביצירת פרופיל עסקי" }, { status: 500 });
+        }
       }
     }
 
-    // Send welcome message via WhatsApp (non-blocking)
+    // Welcome message only for brand-new accounts
     const greenAPI = getGreenAPI();
-    if (greenAPI && phone) {
+    if (greenAPI && phone && isNewUser) {
       const name = profile.fullName || "";
-      if (userType === "creator") {
+      if (effectiveType === "creator") {
         greenAPI.sendWelcomeCreator(phone, name).catch((err) =>
           console.error("[register] welcome message error:", err)
         );
-      } else if (userType === "brand") {
+      } else if (effectiveType === "brand") {
         greenAPI.sendWelcomeBrand(phone, name, profile.shopName || "").catch((err) =>
           console.error("[register] welcome message error:", err)
         );
       }
     }
 
-    return NextResponse.json({ success: true, userType });
+    return NextResponse.json({ success: true, userType: effectiveType });
   } catch (err) {
     console.error("[register] error:", err);
     return NextResponse.json({ error: "שגיאה בהרשמה" }, { status: 500 });

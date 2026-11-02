@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { toPublicProduct } from "@/lib/authz";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -21,7 +22,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
   const { data, error } = await admin
     .from("products")
-    .select("*, brand_profiles(shop_name, user_id)")
+    .select("*, brand_profiles(shop_name, user_id, logo_url)")
     .eq("id", id)
     .single();
 
@@ -29,12 +30,32 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "מוצר לא נמצא" }, { status: 404 });
   }
 
-  return NextResponse.json({
-    product: {
-      ...(data as any),
-      brand_name: ((data as any).brand_profiles as { shop_name: string })?.shop_name || "",
-    },
-  });
+  const row = data as any;
+  const ownerUserId = row.brand_profiles?.user_id as string | undefined;
+
+  // Owner and admins see everything; anyone else sees the public shape only
+  let privileged = false;
+  const userClient = await createServerClient();
+  const { data: { user } } = await userClient.auth.getUser();
+  if (user) {
+    const { data: dbUser } = await admin
+      .from("users")
+      .select("id, type")
+      .eq("auth_user_id", user.id)
+      .single();
+    privileged = !!dbUser && ((dbUser as any).type === "admin" || (dbUser as any).id === ownerUserId);
+  }
+
+  const fields = { ...row };
+  delete fields.brand_profiles;
+  const shaped = {
+    ...fields,
+    brand_name: row.brand_profiles?.shop_name || "",
+    brand_user_id: ownerUserId || null,
+    logo_url: row.brand_profiles?.logo_url || null,
+  };
+
+  return NextResponse.json({ product: privileged ? shaped : toPublicProduct(shaped) });
 }
 
 export async function PUT(request: NextRequest, context: RouteContext) {

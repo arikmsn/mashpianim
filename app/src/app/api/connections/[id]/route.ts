@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from "@/lib/admin-auth";
 import { filterContactInfo } from "@/lib/moderation/chat-filter";
 import { notifyConnectionStatusChange, logActivity, createNotification } from "@/lib/notifications";
 import { performMatch, countPortfolioVideos, portfolioGateError, MIN_PORTFOLIO_VIDEOS } from "@/lib/match";
+import { isConnectionParticipant } from "@/lib/authz";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -33,12 +34,21 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 
+  const { data: dbUser } = await admin
+    .from("users")
+    .select("id, type")
+    .eq("auth_user_id", user.id)
+    .single();
+  if (!dbUser) {
+    return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 404 });
+  }
+
   const { data, error } = await admin
     .from("connections")
     .select(`
       *,
       products(name, image_url, price, description, product_type, digital_access_type, digital_access_instructions, digital_access_duration_days, shipping_policy),
-      creator_profiles!connections_creator_id_fkey(id, user_id, bio, categories, level, hearts, completed_connections, users(full_name, avatar_url, phone)),
+      creator_profiles!connections_creator_id_fkey(id, user_id, bio, categories, level, hearts, completed_connections, users(full_name, avatar_url)),
       brand_profiles!connections_brand_id_fkey(id, user_id, shop_name, logo_url, users(full_name, avatar_url))
     `)
     .eq("id", id)
@@ -46,6 +56,15 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
   if (error || !data) {
     return NextResponse.json({ error: "חיבור לא נמצא" }, { status: 404 });
+  }
+
+  // Only the two parties (or an admin) may see a connection and its chat
+  const parties = {
+    creatorUserId: (data as any).creator_profiles?.user_id,
+    brandUserId: (data as any).brand_profiles?.user_id,
+  };
+  if ((dbUser as any).type !== "admin" && !isConnectionParticipant(parties, (dbUser as any).id)) {
+    return NextResponse.json({ error: "אין הרשאה לחיבור זה" }, { status: 403 });
   }
 
   const { data: messages } = await admin
@@ -393,15 +412,33 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   const { data: conn } = await admin
     .from("connections")
-    .select("status")
+    .select(`
+      status,
+      creator_profiles!connections_creator_id_fkey(user_id),
+      brand_profiles!connections_brand_id_fkey(user_id)
+    `)
     .eq("id", id)
     .single();
 
+  if (!conn) {
+    return NextResponse.json({ error: "חיבור לא נמצא" }, { status: 404 });
+  }
+
+  // Only the two parties may write into the chat
+  const parties = {
+    creatorUserId: (conn as any).creator_profiles?.user_id,
+    brandUserId: (conn as any).brand_profiles?.user_id,
+  };
+  if (!isConnectionParticipant(parties, (userData as any).id)) {
+    return NextResponse.json({ error: "אין הרשאה לחיבור זה" }, { status: 403 });
+  }
+
   const messagingStatuses = new Set(["approved", "shipped", "delivered", "filming", "uploaded", "in_review", "revision_requested"]);
-  if (!conn || !messagingStatuses.has((conn as any).status)) {
+  if (!messagingStatuses.has((conn as any).status)) {
     return NextResponse.json({ error: "לא ניתן לשלוח הודעות בשלב זה" }, { status: 400 });
   }
 
+  // Ordinary chat can never produce a system message; sender is always the session user
   const { data: message, error } = await admin
     .from("messages")
     .insert({

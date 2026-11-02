@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { participantRole } from "@/lib/authz";
 
 function getAdminClient() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -36,8 +37,33 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "חסר מזהה חיבור" }, { status: 400 });
   }
 
-  const userType = (dbUser as any).type;
-  const readColumn = userType === "brand" ? "brand_read_at" : "creator_read_at";
+  const { data: conn } = await admin
+    .from("connections")
+    .select(`
+      id,
+      creator_profiles!connections_creator_id_fkey(user_id),
+      brand_profiles!connections_brand_id_fkey(user_id)
+    `)
+    .eq("id", connection_id)
+    .single();
+
+  if (!conn) {
+    return NextResponse.json({ error: "חיבור לא נמצא" }, { status: 404 });
+  }
+
+  // Only a party to the connection can mark it read, and only on their own side
+  const role = participantRole(
+    {
+      creatorUserId: (conn as any).creator_profiles?.user_id,
+      brandUserId: (conn as any).brand_profiles?.user_id,
+    },
+    (dbUser as any).id
+  );
+  if (!role) {
+    return NextResponse.json({ error: "אין הרשאה לחיבור זה" }, { status: 403 });
+  }
+
+  const readColumn = role === "brand" ? "brand_read_at" : "creator_read_at";
 
   await admin
     .from("connections")
