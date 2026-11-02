@@ -10,6 +10,7 @@ import {
   isConnectionParticipant,
   toPublicProduct,
   devLoginEnabled,
+  resolveDevRole,
 } from "../src/lib/authz.ts";
 
 describe("SEC-01 registration role whitelist", () => {
@@ -168,5 +169,26 @@ describe("SEC-04 dev login availability", () => {
   test("local development is allowed", () => {
     assert.equal(devLoginEnabled({ NODE_ENV: "development" }), true);
     assert.equal(devLoginEnabled({}), true);
+  });
+});
+
+describe("SEC-04 dev login role resolution", () => {
+  const config = { creator: { redirect: "/feed" }, brand: { redirect: "/brand" } };
+
+  test("designated roles resolve", () => {
+    assert.deepEqual(resolveDevRole("creator", config), { redirect: "/feed" });
+    assert.deepEqual(resolveDevRole("brand", config), { redirect: "/brand" });
+  });
+
+  test("admin, unknown and prototype keys never resolve", () => {
+    for (const bad of ["admin", "Creator", "", "__proto__", "constructor", "toString", "hasOwnProperty", "valueOf"]) {
+      assert.equal(resolveDevRole(bad, config), null, `should reject ${JSON.stringify(bad)}`);
+    }
+  });
+
+  test("non-string roles never resolve", () => {
+    for (const bad of [null, undefined, 1, {}, ["creator"], { toString: () => "creator" }]) {
+      assert.equal(resolveDevRole(bad, config), null, `should reject ${JSON.stringify(bad)}`);
+    }
   });
 });

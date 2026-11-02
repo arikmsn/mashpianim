@@ -105,6 +105,14 @@ export function toPublicProduct(product: Record<string, unknown>): Record<string
   return out;
 }
 
+// Looks up a role in a config map using own properties only, so prototype keys
+// ("__proto__", "constructor", "toString") can never resolve to a value.
+export function resolveDevRole<T>(role: unknown, config: Record<string, T>): T | null {
+  if (typeof role !== "string" || role.length === 0) return null;
+  if (!Object.hasOwn(config, role)) return null;
+  return config[role];
+}
+
 export interface DevLoginEnv {
   VERCEL_ENV?: string;
   NODE_ENV?: string;

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
-import { devLoginEnabled } from "@/lib/authz";
+import { devLoginEnabled, resolveDevRole } from "@/lib/authz";
 
 // Test-account login for non-production environments only.
 // It never touches real accounts: only synthetic accounts flagged `dev_account` are created or signed in,
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, step: "choose_role" });
     }
 
-    const config = ROLE_CONFIG[role];
+    const config = resolveDevRole(role, ROLE_CONFIG);
     if (!config) {
       return NextResponse.json({ error: "תפקיד לא תקין" }, { status: 400 });
     }
