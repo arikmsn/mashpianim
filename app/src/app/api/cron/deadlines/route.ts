@@ -9,13 +9,14 @@ function getAdminClient() {
   return createClient(url, key);
 }
 
-// Called by Vercel Cron or external scheduler
-// GET /api/cron/deadlines?secret=<CRON_SECRET>
+// Called by Vercel Cron (Authorization: Bearer <CRON_SECRET>, sent automatically)
+// or by an external scheduler via GET /api/cron/deadlines?secret=<CRON_SECRET>
 export async function GET(request: NextRequest) {
-  const secret = request.nextUrl.searchParams.get("secret");
   const cronSecret = process.env.CRON_SECRET;
+  const querySecret = request.nextUrl.searchParams.get("secret");
+  const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
 
-  if (!cronSecret || secret !== cronSecret) {
+  if (!cronSecret || (querySecret !== cronSecret && bearer !== cronSecret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

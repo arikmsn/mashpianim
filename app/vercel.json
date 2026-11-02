@@ -5,8 +5,8 @@
   "outputDirectory": ".next",
   "crons": [
     {
-      "path": "/api/cron/deadlines?secret=${CRON_SECRET}",
-      "schedule": "0 8 * * *"
+      "path": "/api/cron/deadlines",
+      "schedule": "0 6 * * *"
     }
   ]
 }
