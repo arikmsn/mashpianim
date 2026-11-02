@@ -52,7 +52,7 @@ export default function AdminDashboard() {
             { label: "חיבורים פעילים", value: String(s.active_connections ?? 0), change: "", trend: "up", icon: "🔗" },
             { label: "סרטונים ממתינים", value: String(s.pending_videos ?? 0), change: "", trend: "down", icon: "🎬" },
             { label: "הכנסות החודש", value: `₪${(s.monthly_revenue ?? 0).toLocaleString()}`, change: "", trend: "up", icon: "💰" },
-            { label: "קרדיטים שנמכרו", value: String(s.credits_sold ?? 0), change: "", trend: "up", icon: "🎫" },
+            { label: "פניות שנמכרו", value: String(s.credits_sold ?? 0), change: "", trend: "up", icon: "🎫" },
           ]);
         } else if (Array.isArray(data.stats)) {
           setStats(data.stats);

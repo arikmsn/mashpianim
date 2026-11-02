@@ -41,7 +41,7 @@ const defaultContent: Record<string, Record<string, string>> = {
     title_line1: "תוכן שעובד",
     title_line2: "בלי הפקות יקרות",
     benefit1: "תוכן UGC אותנטי שמביא תוצאות",
-    benefit2: "מחירים שפויים — קרדיט אחד = סרטון אחד",
+    benefit2: "מחירים שפויים — פנייה אחת = סרטון אחד",
     benefit3: "יוצרים מאומתים ומדורגים",
     benefit4: "ניהול קל דרך לוח בקרה חכם",
     cta: "הצטרפו כמפרסמים",

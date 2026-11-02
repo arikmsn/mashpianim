@@ -143,11 +143,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "מוצר לא זמין" }, { status: 404 });
   }
 
-  // Check brand has available credits
+  // Check brand has available slots
   const brandProfile = (product as any).brand_profiles;
-  const availableCredits = (brandProfile?.total_credits || 0) - (brandProfile?.used_credits || 0);
-  if (availableCredits <= 0) {
-    return NextResponse.json({ error: "לעסק אין קרדיטים זמינים. לא ניתן לשלוח בקשה כרגע." }, { status: 400 });
+  const availableSlots = (brandProfile?.total_credits || 0) - (brandProfile?.used_credits || 0);
+  if (availableSlots <= 0) {
+    return NextResponse.json({ error: "לעסק אין פניות זמינות. לא ניתן לשלוח בקשה כרגע." }, { status: 400 });
   }
 
   // Check for duplicate active connection

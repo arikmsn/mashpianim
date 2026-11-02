@@ -67,7 +67,7 @@ const defaultContent: ContentSection[] = [
       { key: "title_line1", label: "כותרת שורה 1", type: "text", value: "תוכן שעובד" },
       { key: "title_line2", label: "כותרת שורה 2 (צבעונית)", type: "text", value: "בלי הפקות יקרות" },
       { key: "benefit1", label: "יתרון 1", type: "text", value: "תוכן UGC אותנטי שמביא תוצאות" },
-      { key: "benefit2", label: "יתרון 2", type: "text", value: "מחירים שפויים — קרדיט אחד = סרטון אחד" },
+      { key: "benefit2", label: "יתרון 2", type: "text", value: "מחירים שפויים — פנייה אחת = סרטון אחד" },
       { key: "benefit3", label: "יתרון 3", type: "text", value: "יוצרים מאומתים ומדורגים" },
       { key: "benefit4", label: "יתרון 4", type: "text", value: "ניהול קל דרך לוח בקרה חכם" },
       { key: "cta", label: "כפתור CTA", type: "text", value: "הצטרפו כמפרסמים" },

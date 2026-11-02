@@ -151,12 +151,12 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       updates.ship_deadline = new Date(now.getTime() + 7 * 86400000).toISOString();
       updates.delivery_type = product?.product_type || "physical";
 
-      // Deduct credit from brand
+      // Deduct slot from brand
       if (brandProfile && !(connection as any).credit_deducted) {
         const currentUsed = brandProfile.used_credits || 0;
         const currentTotal = brandProfile.total_credits || 0;
         if (currentUsed >= currentTotal) {
-          return NextResponse.json({ error: "אין קרדיטים זמינים" }, { status: 400 });
+          return NextResponse.json({ error: "אין פניות זמינות" }, { status: 400 });
         }
         await admin
           .from("brand_profiles")

@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
           userId: brandUser.id,
           type: "connection_auto_cancelled",
           title: "חיבור בוטל אוטומטית",
-          body: `החיבור למוצר "${conn.products?.name}" בוטל כי המוצר לא נשלח בזמן. הקרדיט הוחזר.`,
+          body: `החיבור למוצר "${conn.products?.name}" בוטל כי המוצר לא נשלח בזמן. הפנייה הוחזרה.`,
           data: { connectionId: conn.id },
         });
       }

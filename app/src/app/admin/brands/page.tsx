@@ -88,7 +88,7 @@ export default function AdminBrandsPage() {
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">עסק</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">סטטוס</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">מוצרים</th>
-                <th className="px-4 py-3 text-xs font-medium text-neutral-400">קרדיטים</th>
+                <th className="px-4 py-3 text-xs font-medium text-neutral-400">פניות</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">הוצאה כוללת</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">חיבורים</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">פעולות</th>
@@ -184,7 +184,7 @@ export default function AdminBrandsPage() {
               </div>
               <div className="text-center p-3 bg-neutral-50 rounded-xl">
                 <p className="text-lg font-bold">{selectedBrand.credits}</p>
-                <p className="text-xs text-neutral-500">קרדיטים</p>
+                <p className="text-xs text-neutral-500">פניות</p>
               </div>
               <div className="text-center p-3 bg-neutral-50 rounded-xl">
                 <p className="text-lg font-bold">{selectedBrand.connections}</p>

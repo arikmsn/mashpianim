@@ -94,12 +94,12 @@ export default function AdminSettingsPage() {
         </Card>
 
         <Card padding="lg">
-          <CardTitle className="mb-4">הגדרות קרדיטים</CardTitle>
+          <CardTitle className="mb-4">הגדרות פניות</CardTitle>
           <div className="grid grid-cols-2 gap-4">
-            <Input label="מחיר קרדיט בודד (₪)" value={settings.credits.single} onChange={(e) => updateCredits("single", e.target.value)} type="number" dir="ltr" />
-            <Input label="חבילת 5 קרדיטים (₪)" value={settings.credits.pack5} onChange={(e) => updateCredits("pack5", e.target.value)} type="number" dir="ltr" />
-            <Input label="חבילת 10 קרדיטים (₪)" value={settings.credits.pack10} onChange={(e) => updateCredits("pack10", e.target.value)} type="number" dir="ltr" />
-            <Input label="חבילת 20 קרדיטים (₪)" value={settings.credits.pack20} onChange={(e) => updateCredits("pack20", e.target.value)} type="number" dir="ltr" />
+            <Input label="מחיר פנייה בודדת (₪)" value={settings.credits.single} onChange={(e) => updateCredits("single", e.target.value)} type="number" dir="ltr" />
+            <Input label="חבילת 5 פניות (₪)" value={settings.credits.pack5} onChange={(e) => updateCredits("pack5", e.target.value)} type="number" dir="ltr" />
+            <Input label="חבילת 10 פניות (₪)" value={settings.credits.pack10} onChange={(e) => updateCredits("pack10", e.target.value)} type="number" dir="ltr" />
+            <Input label="חבילת 20 פניות (₪)" value={settings.credits.pack20} onChange={(e) => updateCredits("pack20", e.target.value)} type="number" dir="ltr" />
           </div>
         </Card>
 
