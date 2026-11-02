@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Avatar, Badge, Button, Card, Modal, Input, Textarea, useToast } from "@/components/ui";
 import { useAuth } from "@/hooks/use-auth";
+import { createClient } from "@/lib/supabase/client";
 
 interface PortfolioVideo {
   id: string;
@@ -53,7 +54,13 @@ interface BrandEditForm {
   category: string;
   website_url: string;
   description: string;
+  logo_url?: string;
 }
+
+const brandCategories = [
+  "ביוטי וטיפוח", "אופנה", "מזון ומשקאות", "ניקיון ובית",
+  "ילדים ותינוקות", "ספורט ובריאות", "טכנולוגיה", "חיות מחמד", "אחר",
+];
 
 const allCategories = [
   "ביוטי", "אופנה", "טכנולוגיה", "בית וגינה", "אוכל",
@@ -272,10 +279,39 @@ function BrandEditModal({
 }) {
   const [form, setForm] = useState<BrandEditForm>(initialData);
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [customCategory, setCustomCategory] = useState("");
+  const { toast } = useToast();
 
   useEffect(() => {
-    if (open) setForm(initialData);
+    if (open) {
+      setForm(initialData);
+      setCustomCategory("");
+    }
   }, [open, initialData]);
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingLogo(true);
+    try {
+      const formData = new FormData();
+      formData.append("avatar", file);
+      const res = await fetch("/api/profile/upload-avatar", { method: "POST", body: formData });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        setForm((prev) => ({ ...prev, logo_url: data.url }));
+        toast("הלוגו עודכן!", "success");
+      } else {
+        toast(data.error || "שגיאה בהעלאת הלוגו", "error");
+      }
+    } catch {
+      toast("שגיאה בהעלאת הלוגו", "error");
+    } finally {
+      setUploadingLogo(false);
+      e.target.value = "";
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -283,9 +319,33 @@ function BrandEditModal({
     setSaving(false);
   };
 
+  const isCategorySelected = (cat: string) => form.category === cat;
+
   return (
     <Modal open={open} onClose={onClose} title="עריכת פרופיל עסק" size="lg">
-      <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+      <div className="space-y-4 max-h-[60vh] overflow-y-auto px-1">
+        {/* Logo upload */}
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <Avatar src={form.logo_url} name={form.shop_name} size="xl" />
+            <label className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-full cursor-pointer opacity-0 hover:opacity-100 transition-opacity">
+              <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+              {uploadingLogo ? (
+                <span className="text-white text-xs">מעלה...</span>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                  <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+                  <circle cx="12" cy="13" r="4"/>
+                </svg>
+              )}
+            </label>
+          </div>
+          <div className="text-sm text-neutral-500">
+            <p className="font-medium text-neutral-700">לוגו העסק</p>
+            <p className="text-xs">לחצו על התמונה לעדכון</p>
+          </div>
+        </div>
+
         <Input
           label="שם איש קשר"
           value={form.full_name}
@@ -296,12 +356,64 @@ function BrandEditModal({
           value={form.shop_name}
           onChange={(e) => setForm({ ...form, shop_name: e.target.value })}
         />
-        <Input
-          label="קטגוריה"
-          value={form.category}
-          onChange={(e) => setForm({ ...form, category: e.target.value })}
-          placeholder="אופנה, ביוטי, טכנולוגיה..."
-        />
+
+        {/* Category chips */}
+        <div>
+          <label className="block text-sm font-medium mb-2">קטגוריה</label>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {brandCategories.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setForm({ ...form, category: isCategorySelected(cat) ? "" : cat })}
+                className={`px-3 py-1.5 rounded-full text-sm transition-all ${
+                  isCategorySelected(cat)
+                    ? "bg-pink-500 text-white"
+                    : "bg-neutral-100 text-neutral-600 hover:bg-pink-50 hover:text-pink-600"
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={customCategory}
+              onChange={(e) => setCustomCategory(e.target.value)}
+              placeholder="או הקלידו קטגוריה חופשית..."
+              className="flex-1 px-3 py-2 rounded-xl border border-neutral-200 text-sm focus:border-pink-300 outline-none"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && customCategory.trim()) {
+                  e.preventDefault();
+                  setForm({ ...form, category: customCategory.trim() });
+                  setCustomCategory("");
+                }
+              }}
+            />
+            {customCategory.trim() && (
+              <button
+                type="button"
+                onClick={() => {
+                  setForm({ ...form, category: customCategory.trim() });
+                  setCustomCategory("");
+                }}
+                className="px-3 py-2 rounded-xl bg-pink-500 text-white text-sm"
+              >
+                הוסף
+              </button>
+            )}
+          </div>
+          {form.category && !brandCategories.includes(form.category) && (
+            <div className="mt-2">
+              <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm bg-pink-500 text-white">
+                {form.category}
+                <button type="button" onClick={() => setForm({ ...form, category: "" })} className="mr-1 hover:opacity-70">×</button>
+              </span>
+            </div>
+          )}
+        </div>
+
         <Input
           label="אתר אינטרנט"
           value={form.website_url}
@@ -436,6 +548,7 @@ export default function ProfilePage() {
             category: brandData?.category || "",
             website_url: brandData?.website_url || "",
             description: brandData?.description || "",
+            logo_url: brandData?.logo_url || "",
           });
           setUserType("brand");
         }
@@ -464,12 +577,32 @@ export default function ProfilePage() {
     }
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("video", selectedFile);
-      formData.append("portfolio", "true");
-      if (uploadTitle.trim()) formData.append("title", uploadTitle.trim());
+      const supabase = createClient();
+      const ext = selectedFile.name.split(".").pop() || "mp4";
+      const fileName = `portfolio/${user!.id}/${Date.now()}.${ext}`;
 
-      const res = await fetch("/api/videos", { method: "POST", body: formData });
+      const { error: uploadError } = await supabase.storage
+        .from("videos")
+        .upload(fileName, selectedFile, {
+          contentType: selectedFile.type || "video/mp4",
+          upsert: false,
+        });
+
+      if (uploadError) {
+        console.error("Storage upload error:", uploadError);
+        toast("שגיאה בהעלאת הקובץ: " + uploadError.message, "error");
+        return;
+      }
+
+      const res = await fetch("/api/videos/save-portfolio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storagePath: fileName,
+          title: uploadTitle.trim() || null,
+        }),
+      });
+
       if (res.ok) {
         const data = await res.json();
         toast("הסרטון הועלה בהצלחה!", "success");
@@ -479,7 +612,7 @@ export default function ProfilePage() {
         setUploadTitle("");
       } else {
         const err = await res.json().catch(() => ({}));
-        toast((err as any).error || "שגיאה בהעלאה", "error");
+        toast((err as any).error || "שגיאה בשמירת הסרטון", "error");
       }
     } catch {
       toast("שגיאה בהעלאת הסרטון", "error");
@@ -541,6 +674,7 @@ export default function ProfilePage() {
             category: data.category,
             website_url: data.website_url,
             description: data.description,
+            ...(data.logo_url ? { logo_url: data.logo_url } : {}),
           },
         }),
       });
@@ -588,7 +722,7 @@ export default function ProfilePage() {
         <div className="bg-gradient-to-b from-pink-100 to-background px-4 pt-8 pb-4">
           <div className="max-w-2xl mx-auto">
             <div className="flex items-start gap-4">
-              <Avatar name={brandProfile.shopName} size="xl" />
+              <Avatar src={brandEditData.logo_url} name={brandProfile.shopName} size="xl" />
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <h1 className="text-xl font-bold">{brandProfile.shopName}</h1>

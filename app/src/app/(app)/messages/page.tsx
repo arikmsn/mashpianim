@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 interface Conversation {
   id: string;
   name: string;
+  avatar: string | null;
   lastMessage: string;
   time: string;
   unread: number;
@@ -83,11 +84,16 @@ function MessagesContent() {
               const cp = c.creator_profiles as Record<string, unknown> | null;
               const prod = c.products as Record<string, unknown> | null;
               const brandName = (bp?.shop_name as string) || "";
+              const brandUser = bp?.users as Record<string, unknown> | null;
+              const brandAvatar = (bp?.logo_url as string) || (brandUser?.avatar_url as string) || null;
               const creatorUser = cp?.users as Record<string, unknown> | null;
               const creatorName = (creatorUser?.full_name as string) || "";
+              const creatorAvatar = (creatorUser?.avatar_url as string) || null;
+              const showBrand = !!brandName;
               return {
                 id: c.id as string,
-                name: brandName || creatorName || "",
+                name: showBrand ? brandName : creatorName || "",
+                avatar: showBrand ? brandAvatar : creatorAvatar,
                 lastMessage: (c.last_message as string) || "התחילו שיחה...",
                 time: c.created_at ? formatTime(c.created_at as string) : "",
                 unread: (c.unread_count as number) || 0,
@@ -306,7 +312,7 @@ function MessagesContent() {
               whileTap={{ scale: 0.98 }}
             >
               <div className="relative">
-                <Avatar name={conv.name} size="md" />
+                <Avatar src={conv.avatar} name={conv.name} size="md" />
                 {conv.unread > 0 && (
                   <span className="absolute -top-0.5 -left-0.5 w-4 h-4 rounded-full bg-pink-500 text-white text-[9px] flex items-center justify-center font-bold ring-2 ring-white">
                     {conv.unread}
@@ -362,7 +368,7 @@ function MessagesContent() {
                 <path d="M9 18l6-6-6-6" />
               </svg>
             </button>
-            <Avatar name={selectedConversation?.name || ""} size="sm" />
+            <Avatar src={selectedConversation?.avatar} name={selectedConversation?.name || ""} size="sm" />
             <div>
               <p className="font-medium text-sm">{selectedConversation?.name}</p>
               <p className="text-xs text-pink-500">

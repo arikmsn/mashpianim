@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 
+export const maxDuration = 60;
+
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
   const key = process.env.SUPABASE_SEC_KEY;

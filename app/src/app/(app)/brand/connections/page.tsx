@@ -256,7 +256,7 @@ export default function BrandConnectionsPage() {
                 >
                   <Card hover padding="md" onClick={() => setSelectedConnection(conn)}>
                     <div className="flex items-center gap-3">
-                      <Avatar name={conn.creatorName} size="md" />
+                      <Avatar src={conn.creatorAvatar} name={conn.creatorName} size="md" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-0.5">
                           <p className="font-medium text-sm truncate">{conn.creatorName}</p>
@@ -312,7 +312,7 @@ export default function BrandConnectionsPage() {
           return (
             <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <Avatar name={selectedConnection.creatorName} size="lg" />
+                <Avatar src={selectedConnection.creatorAvatar} name={selectedConnection.creatorName} size="lg" />
                 <div>
                   <p className="font-bold text-lg">{selectedConnection.creatorName}</p>
                   <p className="text-sm text-pink-500">{selectedConnection.productName}</p>

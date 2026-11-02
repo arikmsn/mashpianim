@@ -218,6 +218,7 @@ function LoginContent() {
                 placeholder="05X-XXX-XXXX"
                 className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-ig-pink focus:ring-2 focus:ring-ig-pink/20 outline-none transition-all text-center text-lg"
                 required
+                autoFocus
               />
               <p className="text-xs text-neutral-400 mt-2 text-center">נשלח קוד אימות בוואטסאפ</p>
               <button
@@ -248,6 +249,7 @@ function LoginContent() {
                 maxLength={6}
                 className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-ig-pink focus:ring-2 focus:ring-ig-pink/20 outline-none transition-all text-center text-2xl tracking-[0.5em]"
                 required
+                autoFocus
               />
               <button
                 type="submit"
@@ -266,7 +268,7 @@ function LoginContent() {
             <form onSubmit={handleEmailLogin}>
               <label className="block text-sm font-medium mb-2">אימייל</label>
               <input type="email" dir="ltr" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@example.com"
-                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-ig-pink focus:ring-2 focus:ring-ig-pink/20 outline-none transition-all text-center" required />
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-ig-pink focus:ring-2 focus:ring-ig-pink/20 outline-none transition-all text-center" required autoFocus />
               <label className="block text-sm font-medium mb-2 mt-3">סיסמה</label>
               <input type="password" dir="ltr" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••"
                 className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-ig-pink focus:ring-2 focus:ring-ig-pink/20 outline-none transition-all text-center" required />
@@ -293,6 +295,7 @@ function LoginContent() {
                 onChange={(e) => setAdminPhone(e.target.value)}
                 placeholder="05X-XXX-XXXX"
                 className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-ig-pink focus:ring-2 focus:ring-ig-pink/20 outline-none transition-all text-center mb-3"
+                autoFocus
               />
               <label className="block text-sm font-medium mb-2">סיסמה</label>
               <input

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Badge, Button, Card, useToast } from "@/components/ui";
+import { Avatar, Badge, Button, Card, useToast } from "@/components/ui";
 import { useAuth } from "@/hooks/use-auth";
 import { useNotifications } from "@/hooks/use-notifications";
 import { createClient } from "@/lib/supabase/client";
@@ -119,9 +119,12 @@ function ProductCard({
       )}
       <div className="p-4">
         <div className="flex items-start justify-between mb-2">
-          <div>
-            <h3 className="font-bold text-neutral-900">{product.name}</h3>
-            <p className="text-sm text-neutral-500">{product.brand}</p>
+          <div className="flex items-center gap-2">
+            <Avatar src={product.brandAvatar} name={product.brand} size="sm" />
+            <div>
+              <h3 className="font-bold text-neutral-900">{product.name}</h3>
+              <p className="text-sm text-neutral-500">{product.brand}</p>
+            </div>
           </div>
           <Badge variant="pink" size="sm">
             ₪{product.value}

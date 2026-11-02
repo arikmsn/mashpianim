@@ -30,6 +30,7 @@ interface Connection {
   id: string;
   product: string;
   brand: string;
+  brandAvatar: string | null;
   status: string;
   daysLeft: number | null;
   deliveryType: "physical" | "digital";
@@ -92,6 +93,7 @@ export default function ConnectionsPage() {
                   id: c.id as string,
                   product: (c as any).products?.name || (c.product_name as string) || "",
                   brand: (c as any).brand_profiles?.shop_name || (c.brand_name as string) || "",
+                  brandAvatar: (c as any).brand_profiles?.logo_url || (c as any).brand_profiles?.users?.avatar_url || null,
                   status: (c.status as string) || "pending",
                   daysLeft,
                   deliveryType: ((c as any).delivery_type as "physical" | "digital") || "physical",
@@ -316,7 +318,7 @@ export default function ConnectionsPage() {
                       onClick={() => router.push(`/messages?connection=${conn.id}`)}
                     >
                       <div className="flex items-center gap-4">
-                        <Avatar name={conn.brand} size="lg" />
+                        <Avatar src={conn.brandAvatar} name={conn.brand} size="lg" />
                         <div className="flex-1 min-w-0">
                           <h3 className="font-bold text-neutral-900 truncate">
                             {conn.product}

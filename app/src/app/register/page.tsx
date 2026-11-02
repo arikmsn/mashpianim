@@ -257,6 +257,7 @@ function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { 
               value={form.fullName}
               onChange={(e) => updateForm("fullName", e.target.value)}
               className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none"
+              autoFocus
             />
             <input
               type="tel"
@@ -418,6 +419,7 @@ function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { 
 function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { onBack: () => void; preVerifiedUserId?: string | null; preVerifiedPhone?: string | null }) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [customCategory, setCustomCategory] = useState("");
   const [form, setForm] = useState({
     fullName: "",
     phone: preVerifiedPhone || "",
@@ -536,6 +538,7 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
               value={form.fullName}
               onChange={(e) => updateForm("fullName", e.target.value)}
               className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none"
+              autoFocus
             />
             <input
               type="text"
@@ -552,16 +555,55 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
               onChange={(e) => updateForm("phone", e.target.value)}
               className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none text-center"
             />
-            <select
-              value={form.category}
-              onChange={(e) => updateForm("category", e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none bg-white"
-            >
-              <option value="">קטגוריה</option>
-              {CATEGORIES.map((cat) => (
-                <option key={cat}>{cat}</option>
-              ))}
-            </select>
+            <div>
+              <label className="block text-sm text-neutral-500 mb-2">קטגוריה</label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {CATEGORIES.map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => updateForm("category", form.category === cat ? "" : cat)}
+                    className={`px-3 py-1.5 rounded-full border text-sm transition-all ${
+                      form.category === cat
+                        ? "bg-pink-500 text-white border-pink-500"
+                        : "border-neutral-200 hover:border-pink-500 hover:bg-pink-50"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+                {form.category && !CATEGORIES.includes(form.category) && (
+                  <span className="px-3 py-1.5 rounded-full bg-pink-500 text-white text-sm flex items-center gap-1">
+                    {form.category}
+                    <button type="button" onClick={() => updateForm("category", "")} className="mr-1 text-white/80 hover:text-white">✕</button>
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="או הקלידו קטגוריה..."
+                  value={customCategory}
+                  onChange={(e) => setCustomCategory(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && customCategory.trim()) {
+                      updateForm("category", customCategory.trim());
+                      setCustomCategory("");
+                    }
+                  }}
+                  className="flex-1 px-3 py-2 rounded-xl border border-neutral-200 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none text-sm"
+                />
+                {customCategory.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => { updateForm("category", customCategory.trim()); setCustomCategory(""); }}
+                    className="px-3 py-2 rounded-xl bg-pink-500 text-white text-sm font-medium"
+                  >
+                    הוסף
+                  </button>
+                )}
+              </div>
+            </div>
             <input
               type="url"
               dir="ltr"
@@ -660,6 +702,7 @@ function OTPStep({
         placeholder="000000"
         maxLength={6}
         className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none transition-all text-center text-2xl tracking-[0.5em]"
+        autoFocus
       />
       <button
         onClick={() => onVerify(code)}
