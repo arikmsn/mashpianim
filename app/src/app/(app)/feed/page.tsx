@@ -8,8 +8,7 @@ import { Badge, Button, Card, useToast } from "@/components/ui";
 import { useAuth } from "@/hooks/use-auth";
 import { useNotifications } from "@/hooks/use-notifications";
 
-const categories = [
-  "הכל",
+const allFeedCategories = [
   "אופנה",
   "ביוטי",
   "טכנולוגיה",
@@ -19,6 +18,18 @@ const categories = [
   "ילדים",
   "כללי",
 ];
+
+const registrationToFeedMap: Record<string, string> = {
+  "אופנה": "אופנה",
+  "ביוטי וטיפוח": "ביוטי",
+  "מזון ומשקאות": "אוכל",
+  "ניקיון ובית": "בית וגינה",
+  "ילדים ותינוקות": "ילדים",
+  "ספורט ובריאות": "ספורט",
+  "טכנולוגיה": "טכנולוגיה",
+  "חיות מחמד": "כללי",
+  "אחר": "כללי",
+};
 
 function toDirectImageUrl(url: string | null): string | null {
   if (!url) return null;
@@ -140,16 +151,45 @@ function ProductCard({
   );
 }
 
+function buildCategoryList(userCategories: string[]): string[] {
+  const mapped = userCategories
+    .map((c) => registrationToFeedMap[c] || c)
+    .filter((c) => allFeedCategories.includes(c));
+  const unique = [...new Set(mapped)];
+  const rest = allFeedCategories.filter((c) => !unique.includes(c));
+  return [...unique, "הכל", ...rest];
+}
+
 export default function FeedPage() {
-  const [activeCategory, setActiveCategory] = useState("הכל");
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState<string | null>(null);
+  const [categories, setCategories] = useState<string[]>(["הכל", ...allFeedCategories]);
   const { user } = useAuth();
   const { toast } = useToast();
   const { unreadCount } = useNotifications();
   const router = useRouter();
+
+  useEffect(() => {
+    async function fetchUserCategories() {
+      try {
+        const res = await fetch("/api/profile");
+        if (res.ok) {
+          const data = await res.json();
+          const profile = data.profile || {};
+          const userCats: string[] = profile.categories || (profile.category ? [profile.category] : []);
+          if (userCats.length > 0) {
+            setCategories(buildCategoryList(userCats));
+          }
+        }
+      } catch {
+        // Use default order
+      }
+    }
+    fetchUserCategories();
+  }, []);
 
   useEffect(() => {
     async function fetchProducts() {
@@ -184,6 +224,19 @@ export default function FeedPage() {
     }
     fetchProducts();
   }, []);
+
+  useEffect(() => {
+    if (activeCategory !== null || loading) return;
+    const firstUserCat = categories[0];
+    if (firstUserCat && firstUserCat !== "הכל") {
+      const hasProducts = products.some(
+        (p) => p.category.startsWith(firstUserCat) || p.category === firstUserCat
+      );
+      setActiveCategory(hasProducts ? firstUserCat : "הכל");
+    } else {
+      setActiveCategory("הכל");
+    }
+  }, [loading, categories, products, activeCategory]);
 
   const handleApply = useCallback(
     async (productId: string) => {
@@ -222,8 +275,10 @@ export default function FeedPage() {
     [user, router, toast]
   );
 
+  const effectiveCategory = activeCategory || "הכל";
+
   const filtered = products.filter((p) => {
-    if (activeCategory !== "הכל" && !p.category.startsWith(activeCategory) && p.category !== activeCategory) return false;
+    if (effectiveCategory !== "הכל" && !p.category.startsWith(effectiveCategory) && p.category !== effectiveCategory) return false;
     if (
       searchQuery &&
       !p.name.includes(searchQuery) &&
@@ -290,7 +345,7 @@ export default function FeedPage() {
                 key={cat}
                 onClick={() => setActiveCategory(cat)}
                 className={`whitespace-nowrap px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  activeCategory === cat
+                  effectiveCategory === cat
                     ? "bg-pink-500 text-white"
                     : "bg-neutral-50 text-neutral-600 hover:bg-neutral-100"
                 }`}
