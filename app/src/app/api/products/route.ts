@@ -91,15 +91,23 @@ export async function POST(request: NextRequest) {
     .eq("auth_user_id", user.id)
     .single();
 
-  if ((dbUser as any)?.type !== "brand") {
+  if ((dbUser as any)?.type !== "brand" && (dbUser as any)?.type !== "admin") {
     return NextResponse.json({ error: "רק עסקים יכולים להוסיף מוצרים" }, { status: 403 });
   }
 
-  const { data: brandProfile } = await admin
+  let { data: brandProfile } = await admin
     .from("brand_profiles")
     .select("id")
     .eq("user_id", (dbUser as any).id)
     .single();
+
+  if (!brandProfile && (dbUser as any)?.type === "admin") {
+    const { data: newProfile } = await (admin.from("brand_profiles") as any)
+      .insert({ user_id: (dbUser as any).id, shop_name: "מנהל מערכת", category: "כללי", total_credits: 100, used_credits: 0 })
+      .select("id")
+      .single();
+    brandProfile = newProfile;
+  }
 
   if (!brandProfile) {
     return NextResponse.json({ error: "פרופיל עסקי לא נמצא" }, { status: 404 });

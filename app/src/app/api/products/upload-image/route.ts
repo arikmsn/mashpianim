@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       .eq("auth_user_id", user.id)
       .single();
 
-    if (!dbUser || (dbUser as any).type !== "brand") {
+    if (!dbUser || ((dbUser as any).type !== "brand" && (dbUser as any).type !== "admin")) {
       return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
     }
 
