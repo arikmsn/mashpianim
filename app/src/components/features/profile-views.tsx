@@ -28,6 +28,7 @@ export interface BrandPublicProfile {
   contactName: string;
   avatar: string | null;
   category: string;
+  categories: string[];
   description: string;
   website: string;
   memberSince: string;
@@ -250,7 +251,9 @@ export function BrandProfileView({ profile, compact = false }: { profile: BrandP
         <div className="flex-1 min-w-0">
           <h3 className="text-lg font-bold truncate">{profile.name}</h3>
           <div className="flex items-center gap-2 flex-wrap mt-1">
-            {profile.category && <Badge variant="pink" size="sm">{profile.category}</Badge>}
+            {(profile.categories?.length ? profile.categories : [profile.category].filter(Boolean)).map((cat) => (
+              <Badge key={cat} variant="pink" size="sm">{cat}</Badge>
+            ))}
             {profile.memberSince && <span className="text-xs text-neutral-500">בפלטפורמה מ-{memberSinceLabel(profile.memberSince)}</span>}
           </div>
           {siteHref && (

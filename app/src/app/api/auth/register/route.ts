@@ -136,6 +136,7 @@ export async function POST(request: NextRequest) {
             user_id: dbUserId,
             shop_name: profile.shopName || "",
             category: profile.category || "",
+            categories: profile.category ? [profile.category] : [],
             website_url: profile.websiteUrl || null,
             description: profile.description || null,
             logo_url: profile.logoUrl || null,

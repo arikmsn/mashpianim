@@ -31,7 +31,7 @@ interface BrandProfile {
   shopName: string;
   totalCredits: number;
   usedCredits: number;
-  category: string;
+  categories: string[];
   description: string;
   websiteUrl: string;
   stats: { products: number; connections: number; creditsLeft: number };
@@ -53,7 +53,7 @@ interface CreatorEditForm {
 interface BrandEditForm {
   full_name: string;
   shop_name: string;
-  category: string;
+  categories: string[];
   website_url: string;
   description: string;
   logo_url?: string;
@@ -74,6 +74,44 @@ const levelLabels: Record<string, string> = {
   creator_plus: "יוצרת+",
   on_the_radar: "על הרדאר",
 };
+
+function brandCategoriesFrom(brandData: any): string[] {
+  const arr = Array.isArray(brandData?.categories) ? (brandData.categories as string[]).filter(Boolean) : [];
+  if (arr.length > 0) return arr;
+  return brandData?.category ? [brandData.category as string] : [];
+}
+
+function LogoutConfirmModal({
+  open,
+  loading,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  loading: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Modal open={open} onClose={onCancel} size="sm">
+      <div className="text-center space-y-4">
+        <span className="text-4xl block">🚪</span>
+        <div>
+          <h3 className="text-lg font-bold">להתנתק מהחשבון?</h3>
+          <p className="text-sm text-neutral-500 mt-1">תוכלו להתחבר שוב בכל רגע עם קוד לווטסאפ.</p>
+        </div>
+        <div className="flex gap-3">
+          <Button variant="danger" fullWidth loading={loading} onClick={onConfirm}>
+            כן, התנתקות
+          </Button>
+          <Button variant="ghost" fullWidth onClick={onCancel} disabled={loading}>
+            ביטול
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
 
 function getMilestones(videoCount: number) {
   return [
@@ -345,7 +383,19 @@ function BrandEditModal({
     setSaving(false);
   };
 
-  const isCategorySelected = (cat: string) => form.category === cat;
+  const isCategorySelected = (cat: string) => form.categories.includes(cat);
+  const toggleCategory = (cat: string) =>
+    setForm((prev) => ({
+      ...prev,
+      categories: prev.categories.includes(cat) ? prev.categories.filter((c) => c !== cat) : [...prev.categories, cat],
+    }));
+  const addCustomCategory = () => {
+    const value = customCategory.trim();
+    if (!value) return;
+    if (!form.categories.includes(value)) setForm((prev) => ({ ...prev, categories: [...prev.categories, value] }));
+    setCustomCategory("");
+  };
+  const customCategories = form.categories.filter((c) => !brandCategories.includes(c));
 
   return (
     <Modal open={open} onClose={onClose} title="עריכת פרופיל עסק" size="lg">
@@ -385,13 +435,14 @@ function BrandEditModal({
 
         {/* Category chips */}
         <div>
-          <label className="block text-sm font-medium mb-2">קטגוריה</label>
+          <label className="block text-sm font-medium mb-1">קטגוריות</label>
+          <p className="text-xs text-neutral-400 mb-2">אפשר לבחור כמה קטגוריות — המוצרים שלכם יופיעו ליוצרים בכל אחת מהן</p>
           <div className="flex flex-wrap gap-2 mb-2">
             {brandCategories.map((cat) => (
               <button
                 key={cat}
                 type="button"
-                onClick={() => setForm({ ...form, category: isCategorySelected(cat) ? "" : cat })}
+                onClick={() => toggleCategory(cat)}
                 className={`px-3 py-1.5 rounded-full text-sm transition-all ${
                   isCategorySelected(cat)
                     ? "bg-pink-500 text-white"
@@ -412,30 +463,28 @@ function BrandEditModal({
               onKeyDown={(e) => {
                 if (e.key === "Enter" && customCategory.trim()) {
                   e.preventDefault();
-                  setForm({ ...form, category: customCategory.trim() });
-                  setCustomCategory("");
+                  addCustomCategory();
                 }
               }}
             />
             {customCategory.trim() && (
               <button
                 type="button"
-                onClick={() => {
-                  setForm({ ...form, category: customCategory.trim() });
-                  setCustomCategory("");
-                }}
+                onClick={addCustomCategory}
                 className="px-3 py-2 rounded-xl bg-pink-500 text-white text-sm"
               >
                 הוסף
               </button>
             )}
           </div>
-          {form.category && !brandCategories.includes(form.category) && (
-            <div className="mt-2">
-              <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm bg-pink-500 text-white">
-                {form.category}
-                <button type="button" onClick={() => setForm({ ...form, category: "" })} className="mr-1 hover:opacity-70">×</button>
-              </span>
+          {customCategories.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {customCategories.map((cat) => (
+                <span key={cat} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm bg-pink-500 text-white">
+                  {cat}
+                  <button type="button" onClick={() => toggleCategory(cat)} className="mr-1 hover:opacity-70" aria-label={`הסרת ${cat}`}>×</button>
+                </span>
+              ))}
             </div>
           )}
         </div>
@@ -501,10 +550,11 @@ export default function ProfilePage() {
   const [brandEditData, setBrandEditData] = useState<BrandEditForm>({
     full_name: "",
     shop_name: "",
-    category: "",
+    categories: [],
     website_url: "",
     description: "",
   });
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
   useEffect(() => {
     async function fetchProfile() {
@@ -563,7 +613,7 @@ export default function ProfilePage() {
             shopName: brandData?.shop_name || "",
             totalCredits: brandData?.total_credits || 0,
             usedCredits: brandData?.used_credits || 0,
-            category: brandData?.category || "",
+            categories: brandCategoriesFrom(brandData),
             description: brandData?.description || "",
             websiteUrl: brandData?.website_url || "",
             stats: {
@@ -575,7 +625,7 @@ export default function ProfilePage() {
           setBrandEditData({
             full_name: userData.full_name,
             shop_name: brandData?.shop_name || "",
-            category: brandData?.category || "",
+            categories: brandCategoriesFrom(brandData),
             website_url: brandData?.website_url || "",
             description: brandData?.description || "",
             logo_url: brandData?.logo_url || "",
@@ -703,7 +753,8 @@ export default function ProfilePage() {
           userFields: { full_name: data.full_name },
           profileFields: {
             shop_name: data.shop_name,
-            category: data.category,
+            categories: data.categories,
+            category: data.categories[0] || "",
             website_url: data.website_url,
             description: data.description,
             ...(data.logo_url ? { logo_url: data.logo_url } : {}),
@@ -718,7 +769,7 @@ export default function ProfilePage() {
                 ...prev,
                 name: data.full_name,
                 shopName: data.shop_name,
-                category: data.category,
+                categories: data.categories,
                 description: data.description,
                 websiteUrl: data.website_url,
               }
@@ -761,8 +812,12 @@ export default function ProfilePage() {
                   <Badge variant="pink" size="sm">עסק</Badge>
                 </div>
                 <p className="text-sm text-neutral-500 mb-3">{brandProfile.name}</p>
-                {brandProfile.category && (
-                  <Badge variant="default" size="sm">{brandProfile.category}</Badge>
+                {brandProfile.categories.length > 0 && (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {brandProfile.categories.map((cat) => (
+                      <Badge key={cat} variant="default" size="sm">{cat}</Badge>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
@@ -798,7 +853,7 @@ export default function ProfilePage() {
           <Button
             variant="ghost"
             fullWidth
-            onClick={handleLogout}
+            onClick={() => setLogoutConfirmOpen(true)}
             loading={loggingOut}
             className="text-red-500 hover:text-red-600 hover:bg-red-50"
           >
@@ -811,6 +866,12 @@ export default function ProfilePage() {
           onClose={() => setEditOpen(false)}
           initialData={brandEditData}
           onSave={handleBrandSave}
+        />
+        <LogoutConfirmModal
+          open={logoutConfirmOpen}
+          loading={loggingOut}
+          onCancel={() => setLogoutConfirmOpen(false)}
+          onConfirm={handleLogout}
         />
       </main>
     );
@@ -959,16 +1020,11 @@ export default function ProfilePage() {
                           {new Date(video.created_at).toLocaleDateString("he-IL")}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant={video.status === "approved" ? "success" : video.status === "rejected" ? "danger" : "warning"}
-                          size="sm"
-                        >
-                          {video.status === "approved" ? "אושר" : video.status === "rejected" ? "נדחה" : "בבדיקה"}
-                        </Badge>
-                      </div>
+                      {video.status === "rejected" && (
+                        <Badge variant="danger" size="sm">נדחה</Badge>
+                      )}
                     </div>
-                    {video.url && video.status === "approved" && (
+                    {video.url && video.status !== "rejected" && (
                       <video
                         src={video.url}
                         className="mt-2 w-full rounded-lg max-h-48 object-cover"
@@ -1031,7 +1087,7 @@ export default function ProfilePage() {
           <Button
             variant="ghost"
             fullWidth
-            onClick={handleLogout}
+            onClick={() => setLogoutConfirmOpen(true)}
             loading={loggingOut}
             className="text-red-500 hover:text-red-600 hover:bg-red-50"
           >
@@ -1045,6 +1101,12 @@ export default function ProfilePage() {
         onClose={() => setEditOpen(false)}
         initialData={creatorEditData}
         onSave={handleCreatorSave}
+      />
+      <LogoutConfirmModal
+        open={logoutConfirmOpen}
+        loading={loggingOut}
+        onCancel={() => setLogoutConfirmOpen(false)}
+        onConfirm={handleLogout}
       />
 
       <Modal

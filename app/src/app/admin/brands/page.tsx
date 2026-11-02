@@ -45,7 +45,9 @@ export default function AdminBrandsPage() {
             totalCredits: (b.total_credits as number) || 0,
             usedCredits: (b.used_credits as number) || 0,
             joined: b.created_at ? new Date(b.created_at as string).toLocaleDateString("he-IL") : "",
-            category: (b.category as string) || undefined,
+            category: (Array.isArray(b.categories) && (b.categories as string[]).length > 0
+              ? (b.categories as string[]).join(" · ")
+              : (b.category as string)) || undefined,
             websiteUrl: (b.website_url as string) || undefined,
             description: (b.description as string) || undefined,
           }))

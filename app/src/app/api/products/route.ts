@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
 
   let query = admin
     .from("products")
-    .select("*, brand_profiles!inner(shop_name, user_id, category, logo_url)")
+    .select("*, brand_profiles!inner(shop_name, user_id, category, categories, logo_url)")
     .neq("status", "deleted")
     .order("created_at", { ascending: false });
 
@@ -64,13 +64,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "שגיאה בטעינת מוצרים" }, { status: 500 });
   }
 
-  const products = (data || []).map((p: any) => ({
+  const products = (data || []).map((p: any) => {
+    const brandCats: string[] = Array.isArray(p.brand_profiles?.categories) && p.brand_profiles.categories.length > 0
+      ? p.brand_profiles.categories
+      : [p.brand_profiles?.category].filter(Boolean);
+    return {
     ...p,
     brand_name: p.brand_profiles?.shop_name || "",
     brand_user_id: p.brand_profiles?.user_id || null,
-    category: p.brand_profiles?.category || "",
+    category: brandCats[0] || "",
+    categories: brandCats,
     logo_url: p.brand_profiles?.logo_url || null,
-  }));
+    };
+  });
 
   return NextResponse.json({ products });
 }

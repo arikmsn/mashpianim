@@ -15,7 +15,7 @@ export async function GET() {
     .from("users")
     .select(`
       id, full_name, phone, is_active, avatar_url, created_at,
-      brand_profiles(shop_name, category, website_url, total_credits, used_credits, description, logo_url)
+      brand_profiles(shop_name, category, categories, website_url, total_credits, used_credits, description, logo_url)
     `)
     .eq("type", "brand")
     .order("created_at", { ascending: false });
@@ -37,6 +37,9 @@ export async function GET() {
       created_at: u.created_at,
       shop_name: profile?.shop_name || "",
       category: profile?.category || "",
+      categories: Array.isArray(profile?.categories) && profile.categories.length > 0
+        ? profile.categories
+        : [profile?.category].filter(Boolean),
       website_url: profile?.website_url,
       total_credits: profile?.total_credits || 0,
       used_credits: profile?.used_credits || 0,

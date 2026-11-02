@@ -40,7 +40,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   if (t.type === "brand") {
     const { data: bp } = await supabase
       .from("brand_profiles")
-      .select("id, shop_name, logo_url, category, website_url, description")
+      .select("id, shop_name, logo_url, category, categories, website_url, description")
       .eq("user_id", t.id)
       .single();
     const profile = bp as any;
@@ -74,6 +74,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         contactName: t.full_name || "",
         avatar: profile?.logo_url || t.avatar_url || null,
         category: profile?.category || "",
+        categories: Array.isArray(profile?.categories) && profile.categories.length > 0
+          ? profile.categories
+          : [profile?.category].filter(Boolean),
         description: profile?.description || "",
         website: profile?.website_url || "",
         memberSince: t.created_at,

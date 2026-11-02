@@ -50,6 +50,7 @@ interface Product {
   brandUserId: string | null;
   image: string | null;
   category: string;
+  categories: string[];
   value: number;
   description: string;
   requirements: string;
@@ -170,6 +171,12 @@ function ProductCard({
   );
 }
 
+function productMatchesCategory(p: Product, cat: string): boolean {
+  if (cat === "הכל") return true;
+  const cats = p.categories.length > 0 ? p.categories : [p.category];
+  return cats.some((c) => c === cat || c.startsWith(cat));
+}
+
 function buildCategoryList(userCategories: string[]): string[] {
   const mapped = userCategories
     .map((c) => registrationToFeedMap[c] || c)
@@ -231,6 +238,7 @@ export default function FeedPage() {
                 brandUserId: (p.brand_user_id as string) || null,
                 image: toDirectImageUrl((p.image_url as string) || null),
                 category: (p.category as string) || "",
+                categories: Array.isArray(p.categories) ? (p.categories as string[]) : [],
                 value: Number(p.price) || 0,
                 description: (p.description as string) || "",
                 requirements: (p.requirements as string) || "סרטון UGC",
@@ -273,6 +281,7 @@ export default function FeedPage() {
                     brandUserId: (p.brand_user_id as string) || null,
                     image: toDirectImageUrl((p.image_url as string) || null),
                     category: (p.category as string) || "",
+                categories: Array.isArray(p.categories) ? (p.categories as string[]) : [],
                     value: Number(p.price) || 0,
                     description: (p.description as string) || "",
                     requirements: (p.requirements as string) || "סרטון UGC",
@@ -299,9 +308,7 @@ export default function FeedPage() {
     if (activeCategory !== null || loading) return;
     const firstUserCat = categories[0];
     if (firstUserCat && firstUserCat !== "הכל") {
-      const hasProducts = products.some(
-        (p) => p.category.startsWith(firstUserCat) || p.category === firstUserCat
-      );
+      const hasProducts = products.some((p) => productMatchesCategory(p, firstUserCat));
       setActiveCategory(hasProducts ? firstUserCat : "הכל");
     } else {
       setActiveCategory("הכל");
@@ -348,7 +355,7 @@ export default function FeedPage() {
   const effectiveCategory = activeCategory || "הכל";
 
   const filtered = products.filter((p) => {
-    if (effectiveCategory !== "הכל" && !p.category.startsWith(effectiveCategory) && p.category !== effectiveCategory) return false;
+    if (!productMatchesCategory(p, effectiveCategory)) return false;
     if (
       searchQuery &&
       !p.name.includes(searchQuery) &&
