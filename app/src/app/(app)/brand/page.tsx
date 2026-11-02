@@ -70,10 +70,17 @@ export default function BrandDashboard() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [productsRes, connectionsRes] = await Promise.all([
+        const [productsRes, connectionsRes, profileRes] = await Promise.all([
           fetch("/api/products?brand=me"),
           fetch("/api/connections"),
+          fetch("/api/profile"),
         ]);
+
+        if (profileRes.ok) {
+          const { profile } = await profileRes.json();
+          const remaining = Math.max(0, (profile?.total_credits || 0) - (profile?.used_credits || 0));
+          setStats((prev) => ({ ...prev, creditsRemaining: remaining }));
+        }
 
         if (productsRes.ok) {
           const prodData = await productsRes.json();

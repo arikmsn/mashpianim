@@ -59,10 +59,26 @@ export async function PUT(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { userId, is_active } = body;
+  const { userId, is_active, total_credits } = body;
 
   if (!userId) {
     return NextResponse.json({ error: "מזהה משתמש חסר" }, { status: 400 });
+  }
+
+  if (total_credits !== undefined) {
+    const credits = Number(total_credits);
+    if (!Number.isInteger(credits) || credits < 0) {
+      return NextResponse.json({ error: "מספר סרטונים לא תקין" }, { status: 400 });
+    }
+    const { error } = await (supabase
+      .from("brand_profiles") as any)
+      .update({ total_credits: credits })
+      .eq("user_id", userId);
+
+    if (error) {
+      console.error("[admin/brands] credits update error:", error);
+      return NextResponse.json({ error: "שגיאה בעדכון סרטונים" }, { status: 500 });
+    }
   }
 
   if (is_active !== undefined) {

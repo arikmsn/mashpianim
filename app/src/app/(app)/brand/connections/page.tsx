@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 
 interface Connection {
   id: string;
+  creatorId: string | null;
   creatorName: string;
   creatorAvatar: string | null;
   productName: string;
@@ -22,6 +23,13 @@ interface Connection {
   trackingUrl: string | null;
   digitalAccessValue: string | null;
   revisionCount: number;
+}
+
+interface PortfolioVideo {
+  id: string;
+  title: string | null;
+  url: string | null;
+  created_at: string;
 }
 
 type TabId = "pending" | "active" | "completed";
@@ -76,11 +84,28 @@ export default function BrandConnectionsPage() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [shipForm, setShipForm] = useState({ trackingNumber: "", trackingUrl: "", digitalAccessValue: "" });
   const [revisionNotes, setRevisionNotes] = useState("");
+  const [portfolioCache, setPortfolioCache] = useState<{ creatorId: string; videos: PortfolioVideo[] } | null>(null);
   const { toast } = useToast();
+
+  const selectedCreatorId = selectedConnection?.creatorId || null;
+  const portfolio = selectedCreatorId && portfolioCache?.creatorId === selectedCreatorId ? portfolioCache.videos : null;
+  const portfolioLoading = !!selectedCreatorId && portfolio === null;
 
   useEffect(() => {
     fetchConnections();
   }, []);
+
+  useEffect(() => {
+    if (!selectedCreatorId) return;
+    let cancelled = false;
+    fetch(`/api/videos?portfolio=${encodeURIComponent(selectedCreatorId)}`)
+      .then((res) => (res.ok ? res.json() : { videos: [] }))
+      .catch(() => ({ videos: [] }))
+      .then((data) => {
+        if (!cancelled) setPortfolioCache({ creatorId: selectedCreatorId, videos: data.videos || [] });
+      });
+    return () => { cancelled = true; };
+  }, [selectedCreatorId]);
 
   // Realtime: refresh connections on any change
   useEffect(() => {
@@ -111,6 +136,7 @@ export default function BrandConnectionsPage() {
           setConnections(
             conns.map((c: Record<string, unknown>) => ({
               id: c.id as string,
+              creatorId: (c as any).creator_profiles?.user_id || null,
               creatorName: (c as any).creator_profiles?.users?.full_name || (c as any).creator?.full_name || "יוצר/ת",
               creatorAvatar: (c as any).creator_profiles?.users?.avatar_url || null,
               productName: (c as any).products?.name || "מוצר",
@@ -365,6 +391,51 @@ export default function BrandConnectionsPage() {
                   <div className="flex justify-between text-sm">
                     <span className="text-neutral-500">בקשות תיקון</span>
                     <span>{selectedConnection.revisionCount}/2</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Creator portfolio */}
+              <div>
+                <p className="text-sm font-medium text-neutral-700 mb-2">
+                  🎬 תיק עבודות של {selectedConnection.creatorName}
+                  {portfolio && portfolio.length > 0 && (
+                    <span className="text-neutral-400 font-normal"> ({portfolio.length})</span>
+                  )}
+                </p>
+                {portfolioLoading || !portfolio ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    {[1, 2].map((i) => (
+                      <div key={i} className="aspect-[9/16] max-h-48 rounded-xl bg-neutral-100 animate-pulse" />
+                    ))}
+                  </div>
+                ) : portfolio.length === 0 ? (
+                  <p className="text-sm text-neutral-400 bg-neutral-50 rounded-xl p-3 text-center">
+                    היוצר/ת עדיין לא העלו סרטונים לתיק העבודות
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 max-h-[420px] overflow-y-auto">
+                    {portfolio.map((video) => (
+                      <div key={video.id} className="rounded-xl overflow-hidden bg-black">
+                        {video.url ? (
+                          <video
+                            src={video.url}
+                            className="w-full aspect-[9/16] max-h-48 object-cover"
+                            controls
+                            preload="metadata"
+                            controlsList="nodownload"
+                            onContextMenu={(e) => e.preventDefault()}
+                          />
+                        ) : (
+                          <div className="w-full aspect-[9/16] max-h-48 flex items-center justify-center text-neutral-400 text-xs">
+                            לא זמין
+                          </div>
+                        )}
+                        {video.title && (
+                          <p className="text-xs text-white/90 px-2 py-1 truncate">{video.title}</p>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

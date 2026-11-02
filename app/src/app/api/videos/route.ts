@@ -36,13 +36,23 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 403 });
   }
 
-  if (creatorPortfolio === "me") {
-    const { data, error } = await supabase
+  if (creatorPortfolio) {
+    const isOwn = creatorPortfolio === "me" || creatorPortfolio === (dbUser as any).id;
+    const canViewOthers = (dbUser as any).type === "brand" || (dbUser as any).type === "admin";
+    if (!isOwn && !canViewOthers) {
+      return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
+    }
+    const targetCreatorId = isOwn ? (dbUser as any).id : creatorPortfolio;
+
+    let query = supabase
       .from("videos")
       .select("*")
-      .eq("creator_id", (dbUser as any).id)
+      .eq("creator_id", targetCreatorId)
       .is("connection_id", null)
       .order("created_at", { ascending: false });
+    if (!isOwn) query = query.neq("status", "rejected");
+
+    const { data, error } = await query;
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
