@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Badge, Button, Card, useToast } from "@/components/ui";
 import { useAuth } from "@/hooks/use-auth";
 import { useNotifications } from "@/hooks/use-notifications";
+import { createClient } from "@/lib/supabase/client";
 
 const allFeedCategories = [
   "אופנה",
@@ -227,6 +228,50 @@ export default function FeedPage() {
       }
     }
     fetchProducts();
+  }, []);
+
+  // Realtime: refresh feed when products change
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel("feed-products")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "products" },
+        async () => {
+          try {
+            const res = await fetch("/api/products?status=active");
+            if (res.ok) {
+              const data = await res.json();
+              if (data.products) {
+                setProducts(
+                  data.products.map((p: Record<string, unknown>) => ({
+                    id: p.id as string,
+                    name: p.name as string,
+                    brand: (p.brand_name as string) || (p.shop_name as string) || "",
+                    brandAvatar: (p.logo_url as string) || null,
+                    image: toDirectImageUrl((p.image_url as string) || null),
+                    category: (p.category as string) || "",
+                    value: Number(p.price) || 0,
+                    description: (p.description as string) || "",
+                    requirements: (p.requirements as string) || "סרטון UGC",
+                    deadline: (p.film_deadline_days as number) || 10,
+                    applicants: (p.applicants_count as number) || 0,
+                    maxCreators: (p.max_creators as number) || 3,
+                  }))
+                );
+              }
+            }
+          } catch {
+            // ignore
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   useEffect(() => {

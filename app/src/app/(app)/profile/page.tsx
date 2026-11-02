@@ -44,6 +44,7 @@ interface CreatorEditForm {
   tiktok_handle: string;
   instagram_handle: string;
   date_of_birth: string;
+  avatar_url: string;
 }
 
 interface BrandEditForm {
@@ -119,6 +120,8 @@ function CreatorEditModal({
 }) {
   const [form, setForm] = useState<CreatorEditForm>(initialData);
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (open) setForm(initialData);
@@ -133,6 +136,28 @@ function CreatorEditModal({
     }));
   };
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      const fd = new FormData();
+      fd.append("avatar", file);
+      const res = await fetch("/api/profile/upload-avatar", { method: "POST", body: fd });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        setForm((prev) => ({ ...prev, avatar_url: data.url }));
+        toast("התמונה הועלתה!", "success");
+      } else {
+        toast(data.error || "שגיאה בהעלאה", "error");
+      }
+    } catch {
+      toast("שגיאה בהעלאת התמונה", "error");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     await onSave(form);
@@ -142,6 +167,26 @@ function CreatorEditModal({
   return (
     <Modal open={open} onClose={onClose} title="עריכת פרופיל" size="lg">
       <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <Avatar src={form.avatar_url || null} name={form.full_name} size="xl" />
+            <label className="absolute -bottom-1 -left-1 w-7 h-7 rounded-full bg-pink-500 text-white flex items-center justify-center cursor-pointer shadow-lg hover:bg-pink-600 transition-colors">
+              {uploadingAvatar ? (
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                  <circle cx="12" cy="13" r="4" />
+                </svg>
+              )}
+              <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={uploadingAvatar} />
+            </label>
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-neutral-700">תמונת פרופיל</p>
+            <p className="text-xs text-neutral-400">לחצו על האייקון לשינוי</p>
+          </div>
+        </div>
         <Input
           label="שם מלא"
           value={form.full_name}
@@ -301,6 +346,7 @@ export default function ProfilePage() {
   const { toast } = useToast();
   const router = useRouter();
 
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [creatorEditData, setCreatorEditData] = useState<CreatorEditForm>({
     full_name: "",
     bio: "",
@@ -309,6 +355,7 @@ export default function ProfilePage() {
     tiktok_handle: "",
     instagram_handle: "",
     date_of_birth: "",
+    avatar_url: "",
   });
 
   const [brandEditData, setBrandEditData] = useState<BrandEditForm>({
@@ -355,6 +402,7 @@ export default function ProfilePage() {
               avgRating: 0,
             },
           });
+          setAvatarUrl(userData.avatar_url || null);
           setCreatorEditData({
             full_name: userData.full_name,
             bio: creatorData?.bio || "",
@@ -363,6 +411,7 @@ export default function ProfilePage() {
             tiktok_handle: creatorData?.tiktok_handle || "",
             instagram_handle: creatorData?.instagram_handle || "",
             date_of_birth: creatorData?.date_of_birth || "",
+            avatar_url: userData.avatar_url || "",
           });
           setUserType("creator");
         } else if (userData.type === "brand") {
@@ -468,6 +517,7 @@ export default function ProfilePage() {
               }
             : prev
         );
+        if (data.avatar_url) setAvatarUrl(data.avatar_url);
         setCreatorEditData(data);
         toast("הפרופיל עודכן בהצלחה!", "success");
         setEditOpen(false);
@@ -624,7 +674,7 @@ export default function ProfilePage() {
       <div className="bg-gradient-to-b from-pink-100 to-background px-4 pt-8 pb-4">
         <div className="max-w-2xl mx-auto">
           <div className="flex items-start gap-4">
-            <Avatar name={displayProfile.name} size="xl" />
+            <Avatar src={avatarUrl} name={displayProfile.name} size="xl" />
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <h1 className="text-xl font-bold">{displayProfile.name}</h1>

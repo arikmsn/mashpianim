@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { motion } from "framer-motion";
 import { Avatar, Badge, useToast } from "@/components/ui";
 import { useAuth } from "@/hooks/use-auth";
+import { createClient } from "@/lib/supabase/client";
 
 interface Conversation {
   id: string;
@@ -59,61 +60,129 @@ function MessagesContent() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const fetchConversationsRef = useRef<() => void>(() => {});
 
-  useEffect(() => {
+  const fetchConversations = useCallback(async () => {
+    if (authLoading) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     const activeStatuses = new Set(["approved", "shipped", "delivered", "filming", "uploaded", "in_review", "revision_requested"]);
-
-    async function fetchConversations() {
-      if (authLoading) return;
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const res = await fetch("/api/connections");
-        if (res.ok) {
-          const data = await res.json();
-          if (data.connections && data.connections.length > 0) {
-            const active = data.connections.filter(
-              (c: Record<string, unknown>) => activeStatuses.has(c.status as string)
-            );
-            const mapped: Conversation[] = active.map(
-              (c: Record<string, unknown>) => {
-                const bp = c.brand_profiles as Record<string, unknown> | null;
-                const cp = c.creator_profiles as Record<string, unknown> | null;
-                const prod = c.products as Record<string, unknown> | null;
-                const brandName = (bp?.shop_name as string) || "";
-                const creatorUser = cp?.users as Record<string, unknown> | null;
-                const creatorName = (creatorUser?.full_name as string) || "";
-                return {
-                  id: c.id as string,
-                  name: brandName || creatorName || "",
-                  lastMessage: (c.last_message as string) || "התחילו שיחה...",
-                  time: c.created_at ? formatTime(c.created_at as string) : "",
-                  unread: (c.unread_count as number) || 0,
-                  product: (prod?.name as string) || null,
-                };
-              }
-            );
-            if (mapped.length > 0) {
-              setConversations(mapped);
+    try {
+      const res = await fetch("/api/connections");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.connections && data.connections.length > 0) {
+          const active = data.connections.filter(
+            (c: Record<string, unknown>) => activeStatuses.has(c.status as string)
+          );
+          const mapped: Conversation[] = active.map(
+            (c: Record<string, unknown>) => {
+              const bp = c.brand_profiles as Record<string, unknown> | null;
+              const cp = c.creator_profiles as Record<string, unknown> | null;
+              const prod = c.products as Record<string, unknown> | null;
+              const brandName = (bp?.shop_name as string) || "";
+              const creatorUser = cp?.users as Record<string, unknown> | null;
+              const creatorName = (creatorUser?.full_name as string) || "";
+              return {
+                id: c.id as string,
+                name: brandName || creatorName || "",
+                lastMessage: (c.last_message as string) || "התחילו שיחה...",
+                time: c.created_at ? formatTime(c.created_at as string) : "",
+                unread: (c.unread_count as number) || 0,
+                product: (prod?.name as string) || null,
+              };
             }
+          );
+          if (mapped.length > 0) {
+            setConversations(mapped);
           }
         }
-      } catch {
-        // API unavailable
-      } finally {
-        setLoading(false);
       }
+    } catch {
+      // API unavailable
+    } finally {
+      setLoading(false);
     }
-    fetchConversations();
   }, [user, authLoading]);
+
+  fetchConversationsRef.current = fetchConversations;
+
+  useEffect(() => {
+    fetchConversations();
+  }, [fetchConversations]);
 
   useEffect(() => {
     if (selectedId) {
       fetchMessages(selectedId);
     }
   }, [selectedId]);
+
+  // Realtime subscription for new messages
+  useEffect(() => {
+    if (!selectedId) return;
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`messages:${selectedId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `connection_id=eq.${selectedId}`,
+        },
+        (payload) => {
+          const newMsg = payload.new as Record<string, unknown>;
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === newMsg.id)) return prev;
+            return [
+              ...prev,
+              {
+                id: newMsg.id as string,
+                text: newMsg.text as string,
+                senderId: newMsg.sender_id as string,
+                isSystem: (newMsg.is_system as boolean) || false,
+                createdAt: newMsg.created_at as string,
+              },
+            ];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedId]);
+
+  // Realtime subscription for conversations list (new connections or status changes)
+  useEffect(() => {
+    if (!user) return;
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel("connections-updates")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "connections",
+        },
+        () => {
+          // Refetch conversations on any connection change
+          fetchConversationsRef.current();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

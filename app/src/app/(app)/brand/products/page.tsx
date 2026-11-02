@@ -28,7 +28,6 @@ const categories = ["ביוטי", "אופנה", "טכנולוגיה", "בית ו
 
 const shippingLabels: Record<string, string> = {
   free: "משלוח חינם",
-  paid: "משלוח בתשלום",
   pickup: "איסוף עצמי",
 };
 
@@ -488,7 +487,6 @@ export default function BrandProductsPage() {
                 className="w-full px-4 py-2.5 rounded-xl bg-neutral-50 border border-neutral-200 text-sm outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-500/10"
               >
                 <option value="free">משלוח חינם</option>
-                <option value="paid">משלוח בתשלום</option>
                 <option value="pickup">איסוף עצמי</option>
               </select>
             </div>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Card, Badge, Button, Modal, Avatar, Input, Textarea, useToast } from "@/components/ui";
+import { createClient } from "@/lib/supabase/client";
 
 interface Connection {
   id: string;
@@ -79,6 +80,25 @@ export default function BrandConnectionsPage() {
 
   useEffect(() => {
     fetchConnections();
+  }, []);
+
+  // Realtime: refresh connections on any change
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel("brand-connections")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "connections" },
+        () => {
+          fetchConnections();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   async function fetchConnections() {

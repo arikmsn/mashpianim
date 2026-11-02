@@ -47,7 +47,13 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "חיבור לא נמצא" }, { status: 404 });
   }
 
-  return NextResponse.json({ connection: data });
+  const { data: messages } = await admin
+    .from("messages")
+    .select("*")
+    .eq("connection_id", id)
+    .order("created_at", { ascending: true });
+
+  return NextResponse.json({ connection: data, messages: messages || [] });
 }
 
 // State machine: which transitions are valid and who can trigger them
@@ -164,6 +170,15 @@ export async function PUT(request: NextRequest, context: RouteContext) {
           .eq("id", (connection as any).brand_id);
         updates.credit_deducted = true;
       }
+
+      // Auto-create welcome system message
+      await admin.from("messages").insert({
+        connection_id: id,
+        sender_id: (dbUser as any).id,
+        text: "הבקשה אושרה! אפשר להתחיל לתקשר דרך הצ׳אט 🎉",
+        is_system: true,
+      } as any);
+
       break;
     }
 
