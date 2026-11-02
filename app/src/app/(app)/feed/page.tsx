@@ -9,6 +9,7 @@ import { ProfileModal } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { useNotifications } from "@/hooks/use-notifications";
 import { createClient } from "@/lib/supabase/client";
+import { swrFetch, fetchJson } from "@/lib/client-cache";
 
 const allFeedCategories = [
   "אופנה",
@@ -112,6 +113,8 @@ function ProductCard({
           <img
             src={product.image}
             alt={product.name}
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover"
           />
         </div>
@@ -200,63 +203,48 @@ export default function FeedPage() {
   const router = useRouter();
 
   useEffect(() => {
-    async function fetchUserCategories() {
-      try {
-        const res = await fetch("/api/profile");
-        if (res.ok) {
-          const data = await res.json();
-          if (data.user?.type === "brand") {
-            router.replace("/brand");
-            return;
-          }
-          const profile = data.profile || {};
-          const userCats: string[] = profile.categories || (profile.category ? [profile.category] : []);
-          if (userCats.length > 0) {
-            setCategories(buildCategoryList(userCats));
-          }
+    swrFetch<{ user?: { type?: string }; profile?: { categories?: string[]; category?: string } }>(
+      "/api/profile",
+      (data) => {
+        if (data.user?.type === "brand") {
+          router.replace("/brand");
+          return;
         }
-      } catch {
-        // Use default order
+        const profile = data.profile || {};
+        const userCats: string[] = profile.categories || (profile.category ? [profile.category] : []);
+        if (userCats.length > 0) {
+          setCategories(buildCategoryList(userCats));
+        }
       }
-    }
-    fetchUserCategories();
+    );
   }, [router]);
 
-  useEffect(() => {
-    async function fetchProducts() {
-      try {
-        const res = await fetch("/api/products?status=active");
-        if (res.ok) {
-          const data = await res.json();
-          if (data.products && data.products.length > 0) {
-            setProducts(
-              data.products.map((p: Record<string, unknown>) => ({
-                id: p.id as string,
-                name: p.name as string,
-                brand: (p.brand_name as string) || (p.shop_name as string) || "",
-                brandAvatar: (p.logo_url as string) || null,
-                brandUserId: (p.brand_user_id as string) || null,
-                image: toDirectImageUrl((p.image_url as string) || null),
-                category: (p.category as string) || "",
-                categories: Array.isArray(p.categories) ? (p.categories as string[]) : [],
-                value: Number(p.price) || 0,
-                description: (p.description as string) || "",
-                requirements: (p.requirements as string) || "סרטון UGC",
-                deadline: (p.film_deadline_days as number) || 10,
-                applicants: (p.applicants_count as number) || 0,
-                maxCreators: (p.max_creators as number) || 3,
-              }))
-            );
-          }
-        }
-      } catch {
-        // API unavailable
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchProducts();
+  const applyProducts = useCallback((data: { products?: Record<string, unknown>[] }) => {
+    if (!data.products) return;
+    setProducts(
+      data.products.map((p) => ({
+        id: p.id as string,
+        name: p.name as string,
+        brand: (p.brand_name as string) || (p.shop_name as string) || "",
+        brandAvatar: (p.logo_url as string) || null,
+        brandUserId: (p.brand_user_id as string) || null,
+        image: toDirectImageUrl((p.image_url as string) || null),
+        category: (p.category as string) || "",
+        categories: Array.isArray(p.categories) ? (p.categories as string[]) : [],
+        value: Number(p.price) || 0,
+        description: (p.description as string) || "",
+        requirements: (p.requirements as string) || "סרטון UGC",
+        deadline: (p.film_deadline_days as number) || 10,
+        applicants: (p.applicants_count as number) || 0,
+        maxCreators: (p.max_creators as number) || 3,
+      }))
+    );
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    swrFetch("/api/products?status=active", applyProducts).finally(() => setLoading(false));
+  }, [applyProducts]);
 
   // Realtime: refresh feed when products change
   useEffect(() => {
@@ -266,35 +254,10 @@ export default function FeedPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "products" },
-        async () => {
-          try {
-            const res = await fetch("/api/products?status=active");
-            if (res.ok) {
-              const data = await res.json();
-              if (data.products) {
-                setProducts(
-                  data.products.map((p: Record<string, unknown>) => ({
-                    id: p.id as string,
-                    name: p.name as string,
-                    brand: (p.brand_name as string) || (p.shop_name as string) || "",
-                    brandAvatar: (p.logo_url as string) || null,
-                    brandUserId: (p.brand_user_id as string) || null,
-                    image: toDirectImageUrl((p.image_url as string) || null),
-                    category: (p.category as string) || "",
-                categories: Array.isArray(p.categories) ? (p.categories as string[]) : [],
-                    value: Number(p.price) || 0,
-                    description: (p.description as string) || "",
-                    requirements: (p.requirements as string) || "סרטון UGC",
-                    deadline: (p.film_deadline_days as number) || 10,
-                    applicants: (p.applicants_count as number) || 0,
-                    maxCreators: (p.max_creators as number) || 3,
-                  }))
-                );
-              }
-            }
-          } catch {
-            // ignore
-          }
+        () => {
+          fetchJson<{ products?: Record<string, unknown>[] }>("/api/products?status=active").then((data) => {
+            if (data) applyProducts(data);
+          });
         }
       )
       .subscribe();
@@ -302,7 +265,7 @@ export default function FeedPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [applyProducts]);
 
   useEffect(() => {
     if (activeCategory !== null || loading) return;

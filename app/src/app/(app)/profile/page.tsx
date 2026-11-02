@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Avatar, Badge, Button, Card, Modal, Input, Textarea, useToast } from "@/components/ui";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
+import { swrFetch } from "@/lib/client-cache";
 
 interface PortfolioVideo {
   id: string;
@@ -564,18 +565,10 @@ export default function ProfilePage() {
         return;
       }
 
-      try {
-        const res = await fetch("/api/profile");
-        if (!res.ok) {
-          setLoading(false);
-          return;
-        }
-        const { user: userData, profile: profileData } = await res.json();
-
-        if (!userData) {
-          setLoading(false);
-          return;
-        }
+      const applyProfile = (payload: { user?: any; profile?: any }) => {
+        const userData = payload.user;
+        const profileData = payload.profile;
+        if (!userData) return;
 
         if (userData.type === "creator" || userData.type === "admin") {
           const creatorData = profileData as any;
@@ -632,8 +625,11 @@ export default function ProfilePage() {
           });
           setUserType("brand");
         }
-      } catch {
-        // API unavailable
+        setLoading(false);
+      };
+
+      try {
+        await swrFetch("/api/profile", applyProfile);
       } finally {
         setLoading(false);
       }
@@ -643,10 +639,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (userType === "creator") {
-      fetch("/api/videos?portfolio=me")
-        .then((res) => res.ok ? res.json() : { videos: [] })
-        .then((data) => setPortfolioVideos(data.videos || []))
-        .catch(() => {});
+      swrFetch<{ videos?: PortfolioVideo[] }>("/api/videos?portfolio=me", (data) => setPortfolioVideos(data.videos || []));
     }
   }, [userType]);
 
@@ -805,7 +798,7 @@ export default function ProfilePage() {
         <div className="bg-gradient-to-b from-pink-100 to-background px-4 pt-8 pb-4">
           <div className="max-w-2xl mx-auto">
             <div className="flex items-start gap-4">
-              <Avatar src={brandEditData.logo_url} name={brandProfile.shopName} size="xl" />
+              <Avatar src={brandEditData.logo_url} name={brandProfile.shopName} size="xl" expandable />
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <h1 className="text-xl font-bold">{brandProfile.shopName}</h1>
@@ -901,7 +894,7 @@ export default function ProfilePage() {
       <div className="bg-gradient-to-b from-pink-100 to-background px-4 pt-8 pb-4">
         <div className="max-w-2xl mx-auto">
           <div className="flex items-start gap-4">
-            <Avatar src={avatarUrl} name={displayProfile.name} size="xl" />
+            <Avatar src={avatarUrl} name={displayProfile.name} size="xl" expandable />
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <h1 className="text-xl font-bold">{displayProfile.name}</h1>

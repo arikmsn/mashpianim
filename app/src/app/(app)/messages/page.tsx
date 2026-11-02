@@ -8,6 +8,7 @@ import { Avatar, Badge, useToast } from "@/components/ui";
 import { ProfileModal } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
+import { swrFetch, emitUnreadChanged } from "@/lib/client-cache";
 
 interface Conversation {
   id: string;
@@ -73,49 +74,59 @@ function MessagesContent() {
       return;
     }
     const activeStatuses = new Set(["approved", "shipped", "delivered", "filming", "uploaded", "in_review", "revision_requested"]);
+    const apply = (data: { connections?: Record<string, unknown>[] }) => {
+      if (!data.connections) return;
+      const active = data.connections.filter((c) => activeStatuses.has(c.status as string));
+      const mapped: Conversation[] = active.map((c) => {
+        const bp = c.brand_profiles as Record<string, unknown> | null;
+        const cp = c.creator_profiles as Record<string, unknown> | null;
+        const prod = c.products as Record<string, unknown> | null;
+        const brandName = (bp?.shop_name as string) || "";
+        const brandUser = bp?.users as Record<string, unknown> | null;
+        const brandAvatar = (bp?.logo_url as string) || (brandUser?.avatar_url as string) || null;
+        const creatorUser = cp?.users as Record<string, unknown> | null;
+        const creatorName = (creatorUser?.full_name as string) || "";
+        const creatorAvatar = (creatorUser?.avatar_url as string) || null;
+        const showBrand = !!brandName;
+        const lastAt = (c.last_message_at as string) || (c.created_at as string) || "";
+        return {
+          id: c.id as string,
+          name: showBrand ? brandName : creatorName || "",
+          avatar: showBrand ? brandAvatar : creatorAvatar,
+          otherUserId: ((showBrand ? bp?.user_id : cp?.user_id) as string) || null,
+          lastMessage: (c.last_message as string) || "התחילו שיחה...",
+          time: lastAt ? formatTime(lastAt) : "",
+          unread: (c.unread_count as number) || 0,
+          product: (prod?.name as string) || null,
+        };
+      });
+      setConversations(mapped);
+      setLoading(false);
+    };
     try {
-      const res = await fetch("/api/connections");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.connections && data.connections.length > 0) {
-          const active = data.connections.filter(
-            (c: Record<string, unknown>) => activeStatuses.has(c.status as string)
-          );
-          const mapped: Conversation[] = active.map(
-            (c: Record<string, unknown>) => {
-              const bp = c.brand_profiles as Record<string, unknown> | null;
-              const cp = c.creator_profiles as Record<string, unknown> | null;
-              const prod = c.products as Record<string, unknown> | null;
-              const brandName = (bp?.shop_name as string) || "";
-              const brandUser = bp?.users as Record<string, unknown> | null;
-              const brandAvatar = (bp?.logo_url as string) || (brandUser?.avatar_url as string) || null;
-              const creatorUser = cp?.users as Record<string, unknown> | null;
-              const creatorName = (creatorUser?.full_name as string) || "";
-              const creatorAvatar = (creatorUser?.avatar_url as string) || null;
-              const showBrand = !!brandName;
-              return {
-                id: c.id as string,
-                name: showBrand ? brandName : creatorName || "",
-                avatar: showBrand ? brandAvatar : creatorAvatar,
-                otherUserId: ((showBrand ? bp?.user_id : cp?.user_id) as string) || null,
-                lastMessage: (c.last_message as string) || "התחילו שיחה...",
-                time: c.created_at ? formatTime(c.created_at as string) : "",
-                unread: (c.unread_count as number) || 0,
-                product: (prod?.name as string) || null,
-              };
-            }
-          );
-          if (mapped.length > 0) {
-            setConversations(mapped);
-          }
-        }
-      }
-    } catch {
-      // API unavailable
+      await swrFetch("/api/connections", apply);
     } finally {
       setLoading(false);
     }
   }, [user, authLoading]);
+
+  function openConversation(conv: Conversation) {
+    if (conv.unread > 0) {
+      setConversations((prev) => prev.map((c) => (c.id === conv.id ? { ...c, unread: 0 } : c)));
+      emitUnreadChanged(-conv.unread);
+    }
+    setSelectedId(conv.id);
+  }
+
+  function markRead(connectionId: string) {
+    fetch("/api/messages/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ connection_id: connectionId }),
+    })
+      .then(() => emitUnreadChanged())
+      .catch(() => {});
+  }
 
   fetchConversationsRef.current = fetchConversations;
 
@@ -159,12 +170,11 @@ function MessagesContent() {
               },
             ];
           });
+          setConversations((prev) =>
+            prev.map((c) => (c.id === selectedId ? { ...c, lastMessage: newMsg.text as string, time: "עכשיו" } : c))
+          );
           // Mark as read since conversation is open
-          fetch("/api/messages/read", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ connection_id: selectedId }),
-          }).catch(() => {});
+          markRead(selectedId);
         }
       )
       .subscribe();
@@ -174,7 +184,7 @@ function MessagesContent() {
     };
   }, [selectedId]);
 
-  // Realtime subscription for conversations list (new connections or status changes)
+  // Realtime subscription for conversations list (new connections, status changes, new messages anywhere)
   useEffect(() => {
     if (!user) return;
 
@@ -189,7 +199,17 @@ function MessagesContent() {
           table: "connections",
         },
         () => {
-          // Refetch conversations on any connection change
+          fetchConversationsRef.current();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+        },
+        () => {
           fetchConversationsRef.current();
         }
       )
@@ -219,12 +239,7 @@ function MessagesContent() {
               createdAt: m.created_at as string,
             }))
           );
-          // Mark as read
-          fetch("/api/messages/read", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ connection_id: connectionId }),
-          }).catch(() => {});
+          markRead(connectionId);
           return;
         }
       }
@@ -264,6 +279,14 @@ function MessagesContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: msgText }),
       });
+      if (res.ok) {
+        setConversations((prev) => {
+          const idx = prev.findIndex((c) => c.id === selectedId);
+          if (idx < 0) return prev;
+          const updated = { ...prev[idx], lastMessage: msgText, time: "עכשיו" };
+          return [updated, ...prev.filter((_, i) => i !== idx)];
+        });
+      }
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         if (res.status === 400 && data?.error) {
@@ -312,7 +335,7 @@ function MessagesContent() {
             <motion.button
               key={conv.id}
               className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-pink-50/50 transition-colors border-b border-neutral-50 text-right"
-              onClick={() => setSelectedId(conv.id)}
+              onClick={() => openConversation(conv)}
               whileTap={{ scale: 0.98 }}
             >
               <div className="relative">
@@ -358,8 +381,12 @@ function MessagesContent() {
         <div className="fixed inset-0 z-50 bg-white flex flex-col">
           <header className="flex items-center gap-3 px-4 py-3 border-b border-neutral-100">
             <button
-              onClick={() => setSelectedId(null)}
+              onClick={() => {
+                setSelectedId(null);
+                fetchConversationsRef.current();
+              }}
               className="p-2 -mr-2 rounded-lg hover:bg-neutral-100"
+              aria-label="חזרה"
             >
               <svg
                 width="20"

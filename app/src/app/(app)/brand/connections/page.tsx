@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Card, Badge, Button, Modal, Avatar, Input, Textarea, useToast } from "@/components/ui";
 import { PublicProfileContent } from "@/components/features";
 import { createClient } from "@/lib/supabase/client";
+import { swrFetch } from "@/lib/client-cache";
 
 interface Connection {
   id: string;
@@ -106,41 +107,32 @@ export default function BrandConnectionsPage() {
   }, []);
 
   async function fetchConnections() {
-    try {
-      const res = await fetch("/api/connections");
-      if (res.ok) {
-        const data = await res.json();
-        const conns = data.connections || [];
-        if (conns.length > 0) {
-          setConnections(
-            conns.map((c: Record<string, unknown>) => ({
-              id: c.id as string,
-              creatorId: (c as any).creator_profiles?.user_id || null,
-              creatorName: (c as any).creator_profiles?.users?.full_name || (c as any).creator?.full_name || "יוצר/ת",
-              creatorAvatar: (c as any).creator_profiles?.users?.avatar_url || null,
-              productName: (c as any).products?.name || "מוצר",
-              productImage: (c as any).products?.image_url || null,
-              productType: ((c as any).products?.product_type as "physical" | "digital") || (c.delivery_type as "physical" | "digital") || "physical",
-              status: c.status as string,
-              createdAt: c.created_at as string,
-              approvedAt: (c.approved_at as string) || null,
-              shippedAt: (c.shipped_at as string) || null,
-              deliveredAt: (c.delivered_at as string) || null,
-              completedAt: (c.completed_at as string) || null,
-              trackingNumber: (c.tracking_number as string) || null,
-              trackingUrl: (c.tracking_url as string) || null,
-              digitalAccessValue: (c.digital_access_value as string) || null,
-              revisionCount: (c.revision_count as number) || 0,
-            }))
-          );
-          setLoading(false);
-          return;
-        }
-      }
-    } catch {
-      // API unavailable
-    }
-    setConnections([]);
+    const apply = (data: { connections?: Record<string, unknown>[] }) => {
+      const conns = data.connections || [];
+      setConnections(
+        conns.map((c) => ({
+          id: c.id as string,
+          creatorId: (c as any).creator_profiles?.user_id || null,
+          creatorName: (c as any).creator_profiles?.users?.full_name || (c as any).creator?.full_name || "יוצר/ת",
+          creatorAvatar: (c as any).creator_profiles?.users?.avatar_url || null,
+          productName: (c as any).products?.name || "מוצר",
+          productImage: (c as any).products?.image_url || null,
+          productType: ((c as any).products?.product_type as "physical" | "digital") || (c.delivery_type as "physical" | "digital") || "physical",
+          status: c.status as string,
+          createdAt: c.created_at as string,
+          approvedAt: (c.approved_at as string) || null,
+          shippedAt: (c.shipped_at as string) || null,
+          deliveredAt: (c.delivered_at as string) || null,
+          completedAt: (c.completed_at as string) || null,
+          trackingNumber: (c.tracking_number as string) || null,
+          trackingUrl: (c.tracking_url as string) || null,
+          digitalAccessValue: (c.digital_access_value as string) || null,
+          revisionCount: (c.revision_count as number) || 0,
+        }))
+      );
+      setLoading(false);
+    };
+    await swrFetch("/api/connections", apply);
     setLoading(false);
   }
 
@@ -337,7 +329,7 @@ export default function BrandConnectionsPage() {
                 <PublicProfileContent userId={selectedConnection.creatorId} />
               ) : (
                 <div className="flex items-center gap-3">
-                  <Avatar src={selectedConnection.creatorAvatar} name={selectedConnection.creatorName} size="lg" />
+                  <Avatar src={selectedConnection.creatorAvatar} name={selectedConnection.creatorName} size="lg" expandable />
                   <p className="font-bold text-lg">{selectedConnection.creatorName}</p>
                 </div>
               )}

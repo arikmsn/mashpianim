@@ -80,34 +80,38 @@ export async function GET() {
   const userId = (dbUser as any).id;
   const readColumn = userType === "brand" ? "brand_read_at" : "creator_read_at";
 
-  // Enrich with unread count and last message
-  const enriched = await Promise.all(
-    (data || []).map(async (conn: any) => {
-      const readAt = conn[readColumn] || "1970-01-01T00:00:00Z";
+  // Enrich with unread count and last message — one query for all connections
+  const connIds = (data || []).map((c: any) => c.id);
+  const byConn = new Map<string, { last: any | null; unread: number }>();
+  if (connIds.length > 0) {
+    const { data: msgs } = await admin
+      .from("messages")
+      .select("connection_id, sender_id, text, created_at")
+      .in("connection_id", connIds)
+      .order("created_at", { ascending: false })
+      .limit(3000);
+    const readAtByConn = new Map<string, number>(
+      (data || []).map((c: any) => [c.id, new Date(c[readColumn] || "1970-01-01T00:00:00Z").getTime()])
+    );
+    for (const m of (msgs || []) as any[]) {
+      const entry = byConn.get(m.connection_id) || { last: null, unread: 0 };
+      if (!entry.last) entry.last = m;
+      if (m.sender_id !== userId && new Date(m.created_at).getTime() > (readAtByConn.get(m.connection_id) || 0)) {
+        entry.unread++;
+      }
+      byConn.set(m.connection_id, entry);
+    }
+  }
 
-      const { count } = await admin
-        .from("messages")
-        .select("id", { count: "exact", head: true })
-        .eq("connection_id", conn.id)
-        .neq("sender_id", userId)
-        .gt("created_at", readAt);
-
-      const { data: lastMsg } = await admin
-        .from("messages")
-        .select("text, created_at")
-        .eq("connection_id", conn.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      return {
-        ...conn,
-        unread_count: count || 0,
-        last_message: lastMsg?.text || null,
-        last_message_at: lastMsg?.created_at || conn.created_at,
-      };
-    })
-  );
+  const enriched = (data || []).map((conn: any) => {
+    const entry = byConn.get(conn.id);
+    return {
+      ...conn,
+      unread_count: entry?.unread || 0,
+      last_message: entry?.last?.text || null,
+      last_message_at: entry?.last?.created_at || conn.created_at,
+    };
+  });
 
   // Sort by last message time (most recent first)
   enriched.sort((a: any, b: any) =>

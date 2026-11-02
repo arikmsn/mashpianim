@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Badge, Avatar, Card, Button, useToast } from "@/components/ui";
 import { ProfileModal } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
+import { swrFetch, fetchJson } from "@/lib/client-cache";
 
 type TabType = "active" | "pending" | "completed";
 
@@ -39,6 +40,30 @@ interface Connection {
   trackingNumber: string | null;
   digitalAccessValue: string | null;
   revisionNotes: string | null;
+}
+
+type ConnectionsPayload = { connections?: Record<string, unknown>[] };
+
+function mapConnection(c: Record<string, unknown>): Connection {
+  const deadline = c.film_deadline as string | null;
+  let daysLeft: number | null = null;
+  if (deadline) {
+    const diff = new Date(deadline).getTime() - Date.now();
+    daysLeft = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  }
+  return {
+    id: c.id as string,
+    product: (c as any).products?.name || (c.product_name as string) || "",
+    brand: (c as any).brand_profiles?.shop_name || (c.brand_name as string) || "",
+    brandAvatar: (c as any).brand_profiles?.logo_url || (c as any).brand_profiles?.users?.avatar_url || null,
+    brandUserId: (c as any).brand_profiles?.user_id || null,
+    status: (c.status as string) || "pending",
+    daysLeft,
+    deliveryType: ((c as any).delivery_type as "physical" | "digital") || "physical",
+    trackingNumber: (c.tracking_number as string) || null,
+    digitalAccessValue: (c.digital_access_value as string) || null,
+    revisionNotes: (c.revision_notes as string) || null,
+  };
 }
 
 function ConnectionSkeleton() {
@@ -77,46 +102,15 @@ export default function ConnectionsPage() {
   const { toast } = useToast();
   const router = useRouter();
 
-  useEffect(() => {
-    async function fetchConnections() {
-      try {
-        const res = await fetch("/api/connections");
-        if (res.ok) {
-          const data = await res.json();
-          if (data.connections && data.connections.length > 0) {
-            setConnections(
-              data.connections.map((c: Record<string, unknown>) => {
-                const deadline = c.film_deadline as string | null;
-                let daysLeft: number | null = null;
-                if (deadline) {
-                  const diff = new Date(deadline).getTime() - Date.now();
-                  daysLeft = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-                }
-                return {
-                  id: c.id as string,
-                  product: (c as any).products?.name || (c.product_name as string) || "",
-                  brand: (c as any).brand_profiles?.shop_name || (c.brand_name as string) || "",
-                  brandAvatar: (c as any).brand_profiles?.logo_url || (c as any).brand_profiles?.users?.avatar_url || null,
-                  brandUserId: (c as any).brand_profiles?.user_id || null,
-                  status: (c.status as string) || "pending",
-                  daysLeft,
-                  deliveryType: ((c as any).delivery_type as "physical" | "digital") || "physical",
-                  trackingNumber: (c.tracking_number as string) || null,
-                  digitalAccessValue: (c.digital_access_value as string) || null,
-                  revisionNotes: (c.revision_notes as string) || null,
-                };
-              })
-            );
-          }
-        }
-      } catch {
-        // API unavailable
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchConnections();
+  const applyConnections = useCallback((data: ConnectionsPayload) => {
+    if (!data.connections) return;
+    setConnections(data.connections.map(mapConnection));
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    swrFetch("/api/connections", applyConnections).finally(() => setLoading(false));
+  }, [applyConnections]);
 
   // Realtime: refresh connections when status changes
   useEffect(() => {
@@ -126,40 +120,10 @@ export default function ConnectionsPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "connections" },
-        async () => {
-          try {
-            const res = await fetch("/api/connections");
-            if (res.ok) {
-              const data = await res.json();
-              if (data.connections) {
-                setConnections(
-                  data.connections.map((c: Record<string, unknown>) => {
-                    const deadline = c.film_deadline as string | null;
-                    let daysLeft: number | null = null;
-                    if (deadline) {
-                      const diff = new Date(deadline).getTime() - Date.now();
-                      daysLeft = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-                    }
-                    return {
-                      id: c.id as string,
-                      product: (c as any).products?.name || (c.product_name as string) || "",
-                      brand: (c as any).brand_profiles?.shop_name || (c.brand_name as string) || "",
-                      brandAvatar: (c as any).brand_profiles?.logo_url || (c as any).brand_profiles?.users?.avatar_url || null,
-                      brandUserId: (c as any).brand_profiles?.user_id || null,
-                      status: (c.status as string) || "pending",
-                      daysLeft,
-                      deliveryType: ((c as any).delivery_type as "physical" | "digital") || "physical",
-                      trackingNumber: (c.tracking_number as string) || null,
-                      digitalAccessValue: (c.digital_access_value as string) || null,
-                      revisionNotes: (c.revision_notes as string) || null,
-                    };
-                  })
-                );
-              }
-            }
-          } catch {
-            // ignore
-          }
+        () => {
+          fetchJson<ConnectionsPayload>("/api/connections").then((data) => {
+            if (data) applyConnections(data);
+          });
         }
       )
       .subscribe();
@@ -167,7 +131,7 @@ export default function ConnectionsPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [applyConnections]);
 
   function handleUploadClick(connectionId: string) {
     uploadConnectionIdRef.current = connectionId;

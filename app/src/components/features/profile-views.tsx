@@ -125,7 +125,7 @@ export function CreatorProfileView({ profile, compact = false }: { profile: Crea
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-start gap-4">
-        <Avatar src={profile.avatar} name={profile.name} size="xl" />
+        <Avatar src={profile.avatar} name={profile.name} size="xl" expandable />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="text-lg font-bold truncate">{profile.name}</h3>
@@ -247,7 +247,7 @@ export function BrandProfileView({ profile, compact = false }: { profile: BrandP
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-4">
-        <Avatar src={profile.avatar} name={profile.name} size="xl" />
+        <Avatar src={profile.avatar} name={profile.name} size="xl" expandable />
         <div className="flex-1 min-w-0">
           <h3 className="text-lg font-bold truncate">{profile.name}</h3>
           <div className="flex items-center gap-2 flex-wrap mt-1">

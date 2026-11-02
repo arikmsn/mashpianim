@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 const sizeMap = {
@@ -13,6 +16,7 @@ interface AvatarProps {
   name?: string;
   size?: keyof typeof sizeMap;
   className?: string;
+  expandable?: boolean;
 }
 
 function getInitials(name: string): string {
@@ -40,18 +44,81 @@ function colorFromName(name: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
-function Avatar({ src, name = "", size = "md", className }: AvatarProps) {
+function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={alt}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute top-4 left-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+        aria-label="סגור"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
+      </button>
+      <img
+        src={src}
+        alt={alt}
+        className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      />
+      {alt && <p className="absolute bottom-6 text-white/80 text-sm">{alt}</p>}
+    </div>
+  );
+}
+
+function Avatar({ src, name = "", size = "md", className, expandable = false }: AvatarProps) {
+  const [open, setOpen] = useState(false);
+
   if (src) {
-    return (
+    const img = (
       <img
         src={src}
         alt={name}
         className={cn(
           "rounded-full object-cover ring-2 ring-white",
           sizeMap[size],
+          expandable && "cursor-zoom-in hover:ring-pink-300 transition-all",
           className
         )}
       />
+    );
+    if (!expandable) return img;
+    return (
+      <>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(true);
+          }}
+          className="rounded-full shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-400"
+          aria-label={`הגדלת תמונה של ${name}`}
+        >
+          {img}
+        </button>
+        {open && <ImageLightbox src={src} alt={name} onClose={() => setOpen(false)} />}
+      </>
     );
   }
 

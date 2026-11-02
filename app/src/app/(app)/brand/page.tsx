@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Card, Badge, Button, useToast } from "@/components/ui";
+import { swrFetch } from "@/lib/client-cache";
 
 interface BrandStats {
   activeProducts: number;
@@ -68,52 +69,38 @@ export default function BrandDashboard() {
   const { toast } = useToast();
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const [productsRes, connectionsRes, profileRes] = await Promise.all([
-          fetch("/api/products?brand=me"),
-          fetch("/api/connections"),
-          fetch("/api/profile"),
-        ]);
+    const applyProfile = (data: { profile?: { total_credits?: number; used_credits?: number } }) => {
+      const profile = data.profile;
+      const remaining = Math.max(0, (profile?.total_credits || 0) - (profile?.used_credits || 0));
+      setStats((prev) => ({ ...prev, creditsRemaining: remaining }));
+    };
+    const applyProducts = (data: { products?: Record<string, unknown>[] }) => {
+      const products = data.products || [];
+      const active = products.filter((p) => p.status === "active").length;
+      setStats((prev) => ({ ...prev, activeProducts: active }));
+    };
+    const applyConnections = (data: { connections?: Record<string, unknown>[] }) => {
+      const conns = data.connections || [];
+      const pending = conns.filter((c) => c.status === "pending").length;
+      const completed = conns.filter((c) => c.status === "completed").length;
+      setStats((prev) => ({ ...prev, pendingConnections: pending, totalVideos: completed }));
+      setConnections(
+        conns.slice(0, 5).map((c) => ({
+          id: c.id as string,
+          creatorName: (c as any).creator_profiles?.users?.full_name || (c.creator_name as string) || "יוצר/ת",
+          productName: (c as any).products?.name || (c.product_name as string) || "מוצר",
+          status: c.status as string,
+          createdAt: c.created_at as string,
+        }))
+      );
+      setLoading(false);
+    };
 
-        if (profileRes.ok) {
-          const { profile } = await profileRes.json();
-          const remaining = Math.max(0, (profile?.total_credits || 0) - (profile?.used_credits || 0));
-          setStats((prev) => ({ ...prev, creditsRemaining: remaining }));
-        }
-
-        if (productsRes.ok) {
-          const prodData = await productsRes.json();
-          const products = prodData.products || [];
-          const active = products.filter((p: Record<string, unknown>) => p.status === "active").length;
-          setStats((prev) => ({ ...prev, activeProducts: active }));
-        }
-
-        if (connectionsRes.ok) {
-          const connData = await connectionsRes.json();
-          const conns = connData.connections || [];
-          if (conns.length > 0) {
-            const pending = conns.filter((c: Record<string, unknown>) => c.status === "pending").length;
-            const completed = conns.filter((c: Record<string, unknown>) => c.status === "completed").length;
-            setStats((prev) => ({ ...prev, pendingConnections: pending, totalVideos: completed }));
-            setConnections(
-              conns.slice(0, 5).map((c: Record<string, unknown>) => ({
-                id: c.id as string,
-                creatorName: (c.creator_name as string) || (c as any).creator?.full_name || "יוצר/ת",
-                productName: (c.product_name as string) || (c as any).products?.name || "מוצר",
-                status: c.status as string,
-                createdAt: c.created_at as string,
-              }))
-            );
-          }
-        }
-      } catch {
-        // API unavailable
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
+    Promise.all([
+      swrFetch("/api/profile", applyProfile),
+      swrFetch("/api/products?brand=me", applyProducts),
+      swrFetch("/api/connections", applyConnections),
+    ]).finally(() => setLoading(false));
   }, []);
 
   if (loading) return <DashboardSkeleton />;

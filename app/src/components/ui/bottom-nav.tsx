@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
+import { readCache, UNREAD_EVENT } from "@/lib/client-cache";
 
 interface NavItem {
   href: string;
@@ -70,7 +71,9 @@ const brandNavItems: NavItem[] = [
 function BottomNav() {
   const pathname = usePathname();
   const { user } = useAuth();
-  const [userType, setUserType] = useState<"creator" | "brand" | "admin" | null>(null);
+  const [userType, setUserType] = useState<"creator" | "brand" | "admin" | null>(
+    () => (readCache<{ user?: { type?: string } }>("/api/profile")?.user?.type as "creator" | "brand" | "admin" | undefined) || null
+  );
   const [unreadMessages, setUnreadMessages] = useState(0);
   const fetchedRef = useRef(false);
 
@@ -129,6 +132,27 @@ function BottomNav() {
       fetchUnread();
     }
   }, [pathname, user, fetchUnread]);
+
+  // Instant badge updates from the messages screen, and a refresh when the app regains focus
+  useEffect(() => {
+    if (!user) return;
+    const onUnreadChanged = (e: Event) => {
+      const delta = (e as CustomEvent<{ delta?: number }>).detail?.delta;
+      if (typeof delta === "number") {
+        setUnreadMessages((prev) => Math.max(0, prev + delta));
+      }
+      fetchUnread();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchUnread();
+    };
+    window.addEventListener(UNREAD_EVENT, onUnreadChanged);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener(UNREAD_EVENT, onUnreadChanged);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [user, fetchUnread]);
 
   const navItems = userType === "brand" ? brandNavItems : creatorNavItems;
 
