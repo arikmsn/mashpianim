@@ -1,0 +1,194 @@
+# Mashpian — Developer Handoff
+
+Last updated: 2026-11-02. Written for whoever (human or AI) picks up development next.
+Read this together with `CLAUDE.md` (conventions) and the product spec doc:
+https://claude.ai/artifact/NGJAQESGe2XRZxzU6VSkRx (Hebrew, living document — journeys, rules, roadmap, open decisions).
+
+---
+
+## 1. What the product is
+
+Israeli UGC marketplace, Hebrew-first, RTL, mobile-first PWA. Brand name "משפיען אונליין / Mashpian", domain https://www.mashpian.online.
+
+- **Creators** (יוצרי תוכן) get free products in exchange for a short vertical UGC video.
+- **Brands** (בעלי עסקים) buy "credits" — 1 credit = 1 video — and upload products.
+- **Matching is Tinder-style and mutual** (decided 2026-11-02):
+  - A brand hearts a creator *for a specific product*; a creator hearts a product.
+  - A heart is a `connections` row with `status='pending'` and `initiated_by` = `'brand'` | `'creator'`.
+  - The other side approving (or hearting the same creator/product) = **match** → 1 credit deducted from the brand, chat opens, two system messages are inserted (match notice + a brief template pre-filled from the product), both sides notified in-app and via WhatsApp.
+  - Only the responder can approve/reject; only the sender can cancel. Unanswered hearts expire after 7 days (cron).
+- **5-video gate:** a creator must have ≥5 portfolio videos to heart or approve. Below that they can still *see* brand interest, but product details are blurred and buttons are locked. Enforced in the API (`lib/match.ts: countPortfolioVideos`) and in the UI.
+- After a match the existing pipeline runs: `approved → shipped → delivered → filming → uploaded → in_review → completed` (with `revision_requested` loop, max 2 revisions), plus `rejected` / `cancelled`.
+- No direct contact info between sides: chat messages pass through `lib/moderation/chat-filter.ts`.
+
+## 2. Tech stack & infrastructure
+
+| Layer | What | Notes |
+| --- | --- | --- |
+| Framework | Next.js 16.4 (App Router), React 19.3, TypeScript 5 | `app/` directory is the Next project root |
+| Styling | Tailwind CSS 4, framer-motion 14 | Instagram-gradient theme (`.ig-gradient-bg`), pink primary |
+| Backend | Next.js route handlers under `app/src/app/api/**` | All DB access through the Supabase **service-role** client; user identity via `@supabase/ssr` cookie session |
+| Database/Auth/Storage/Realtime | Supabase, project id `rhhfzvmiwhmnviznxvlv` | RLS on every table; API routes bypass RLS with the service key and do their own authorization |
+| Messaging | GreenAPI (WhatsApp) via `lib/adapters/greenapi.ts` | OTP login codes, heart/match notifications |
+| Hosting | Vercel project `mashpianim` (team `arikmsns-projects`), **Hobby plan** | Auto-deploys `main`. Hobby = crons once/day, 60 s function limit, non-commercial terms |
+| Cron | `app/vercel.json` → `GET /api/cron/deadlines` daily 06:00 UTC | Route accepts Vercel's `Authorization: Bearer <CRON_SECRET>` or `?secret=` |
+| Repo | https://github.com/arikmsn/mashpianim (private), branch `main` | Commit + push = deploy |
+| Payments | Cardcom adapter stub in `lib/adapters/payments.ts` | **Not connected.** Credits are granted manually by admin |
+| Other accounts | Render (unused), Cloudflare Stream (evaluated, rejected — paid) | |
+
+### Environment variables (Vercel → Production)
+`NEXT_SUPABASE_URL`, `NEXT_SUPABASE_ANON_KEY` (also exposed to the client via `next.config.ts env`), `SUPABASE_SEC_KEY` (service role), `GREEN_API_INSTANCE_ID` / `GREEN_API_TOKEN` (aliases `GREENAPI_INSTANCE_ID` / `GREENAPI_API_TOKEN`), `CRON_SECRET`, `ADMIN_LOGIN_PHONE`, `ADMIN_LOGIN_PASSWORD`, `ADMIN_AUTH_SECRET`. `GOOGLE_CLIENT_ID/SECRET` exist but Google login was removed from the UI on 2026-11-02 (`/auth/callback` route still exists).
+
+### Commands (run inside `app/`)
+```
+npm run dev          # local dev
+npx tsc --noEmit -p .   # must pass before pushing
+npx eslint <files>   # see "lint state" below
+npm run build        # must pass; this is what Vercel runs
+```
+
+## 3. Repository layout (actual, not the one in older docs)
+
+```
+app/src/
+  middleware.ts                 Supabase session refresh (lib/supabase/middleware.ts)
+  app/
+    page.tsx                    marketing landing
+    login/, register/           phone OTP flows (register has creator + brand branches; brand categories are chips)
+    terms/
+    (app)/                      authenticated area; layout.tsx gates on useAuth, template.tsx = 150ms fade
+      feed/                     CREATOR HOME: product feed, hearts, gate banner, brand-hearts strip
+      connections/              creator's connections; pending tab shows hearts with approve/decline/cancel
+      messages/                 chat list + chat view (both roles); product image in header
+      profile/                  own profile (creator & brand variants), portfolio upload, edit modals, logout confirm
+      notifications/
+      brand/                    BRAND HOME: Tinder-style creator gallery (card stack + grid + filters + product picker)
+      brand/products/           product CRUD
+      brand/connections/        brand's connections; modal shows creator's full public profile
+    admin/                      admin dashboard: brands (credits editor, activate/deactivate), creators, moderation, content, settings
+    api/                        see section 5
+    auth/callback/              OAuth callback (unused now)
+  components/
+    ui/                         Button, Input, Textarea, Card, Avatar (expandable → lightbox), Badge, Modal, Toast, BottomNav
+    features/profile-views.tsx  CreatorProfileView, BrandProfileView, PublicProfileContent, ProfileModal, usePublicProfile
+    pwa/                        service-worker registration, install prompt
+  hooks/
+    use-auth.ts                 ONE shared auth store (useSyncExternalStore) — session read from cookie, no per-component network call
+    use-notifications.ts        polls /api/notifications every 30 s
+  lib/
+    match.ts                    performMatch(), countPortfolioVideos(), portfolioGateError(), buildBriefMessage(), notifyHeartSent(), notifyBrandOfHeart()
+    client-cache.ts             swrFetch/fetchJson/readCache (stale-while-revalidate for GET APIs) + UNREAD_EVENT bus
+    video-thumbnail.ts          browser-side poster generation from a video File
+    notifications.ts            createNotification(), logActivity(), notifyConnectionStatusChange()
+    admin-auth.ts               verifyAdmin(), isSupabaseConfigured()
+    moderation/chat-filter.ts   blocks phone/email/links in chat
+    adapters/                   greenapi.ts (live), messaging.ts, payments.ts (Cardcom stub), invoicing.ts (stub)
+    supabase/                   client.ts (browser, memoized), server.ts (cookie-bound), middleware.ts
+docs/                           design-research.md (visual references), this file
+```
+
+## 4. Data model (Supabase, schema `public`)
+
+| Table | Key columns | Notes |
+| --- | --- | --- |
+| `users` | `id`, `auth_user_id` (→ auth.users), `type` enum creator/brand/admin, `full_name`, `phone`, `email`, `avatar_url`, `is_active`, `onboarding_completed` | App code always resolves `users.id` from `auth.getUser().id` via `auth_user_id` |
+| `creator_profiles` | `id`, `user_id`, `bio`, `city`, `categories text[]`, `level` enum creator/creator_plus/on_the_radar, `hearts`, `completed_connections`, `tiktok_handle`, `tiktok_followers`, `instagram_handle`, `instagram_followers`, `intro_video_url`, `date_of_birth` | |
+| `brand_profiles` | `id`, `user_id`, `shop_name`, `logo_url`, `category` (legacy single), `categories text[]` (added 2026-11-02, backfilled), `website_url`, `description`, `total_credits`, `used_credits` | remaining credits = total − used |
+| `products` | `id`, `brand_id` (→ brand_profiles.id), `name`, `description`, `price`, `image_url`, `product_type` physical/digital, `digital_access_*`, `shipping_policy`, `shipping_address`, `source_url`, `status` (active/…/deleted), `expiration_date`, `quantity`, `max_creators` | **No `category` column** — the feed derives category from the brand's categories. `max_creators` exists but is not enforced |
+| `connections` | `id`, `creator_id` (→ creator_profiles.id), `brand_id` (→ brand_profiles.id), `product_id`, `status` enum (see §1), `initiated_by` text creator/brand (added 2026-11-02), `delivery_type`, `credit_deducted`, `revision_count`, `revision_notes`, `rejection_reason`, timestamps `approved_at/shipped_at/delivered_at/filmed_at/completed_at`, deadlines `ship_deadline/deliver_deadline/film_deadline/review_deadline`, `tracking_number/url`, `digital_access_value/expires_at`, `creator_read_at`, `brand_read_at` | Index on (creator_id, product_id) |
+| `videos` | `id`, `creator_id` (→ **users.id**, not creator_profiles), `connection_id` (NULL = portfolio video), `storage_path`, `url` (signed, refreshed on read), `thumbnail_url` (public URL), `title`, `description`, `status` enum pending/approved/revision_requested, `is_downloadable`, `download_count`, `approved_at/by` | Portfolio uploads are saved as `approved` (no moderation step) |
+| `messages` | `id`, `connection_id`, `sender_id` (users.id), `text`, `is_system`, `created_at` | Unread = messages after the reader's `*_read_at` on the connection |
+| `notifications` | `user_id`, `type`, `title`, `body`, `read`, `data jsonb` | |
+| `activity_log` | `actor_id`, `action`, `entity_type`, `entity_id`, `details` | |
+| `otp_codes` | custom WhatsApp OTP flow (not Supabase SMS) | |
+
+**Storage buckets:** `videos` (private; policies `auth_users_upload_videos` + `auth_users_read_own_videos` scoped to `portfolio/{auth.uid()}/`), `images` (private, service role only), `thumbnails` (**public**, authenticated upload to `portfolio/{auth.uid()}/`, 2 MB, images only). Videos are uploaded **directly from the browser** to Supabase Storage (Vercel's 4.5 MB body limit makes server-side upload impossible), then `/api/videos/save-portfolio` records metadata.
+
+Migrations were applied via the Supabase MCP (`apply_migration`); recent ones: `add_video_storage_policies_for_auth_users`, `add_brand_categories_array`, `add_connections_initiated_by`, `add_public_thumbnails_bucket`.
+
+## 5. API routes (all under `app/src/app/api`)
+
+Pattern in every route: `createServerClient()` → `auth.getUser()` for identity; `createClient(url, SUPABASE_SEC_KEY)` for data; look up `users` by `auth_user_id`; authorize by `type` and ownership. Responses are `{ error: "<Hebrew>" }` on failure.
+
+| Route | Methods | Purpose |
+| --- | --- | --- |
+| `auth/send-otp`, `auth/verify-otp` | POST | WhatsApp OTP login/registration (creates Supabase auth user + `users` row) |
+| `auth/register` | POST | completes profile (creator or brand) after OTP |
+| `auth/user-type` | GET | role lookup for routing |
+| `auth/dev-login` | POST | admin/test login by `ADMIN_LOGIN_PHONE`+`ADMIN_LOGIN_PASSWORD`, can impersonate admin/creator/brand test users (hidden: tap the login title 5×) |
+| `profile` | GET, PUT | own user + profile; creator GET includes `portfolio_count` |
+| `profile/upload-avatar` | POST | avatar/logo to `images` bucket, 365-day signed URL |
+| `profiles/[userId]` | GET | **public** profile of a creator (portfolio with signed URLs + thumbnails, socials, stats) or brand (active products, stats). Never returns phone/email |
+| `products` | GET, POST | list (`?status=active`, `?brand=me`, `?brand_id=`) — returns `brand_name`, `brand_user_id`, `categories`, `logo_url`; create |
+| `products/[id]` | GET, PUT, DELETE | |
+| `products/upload-image` | POST | |
+| `creators` | GET | brand/admin only — ranked creator gallery with portfolio count, poster, preview video, relation to this brand, `fit` flag |
+| `connections` | GET, POST | GET: own connections enriched with `unread_count`, `last_message`, `last_message_at` (one messages query for all). POST: send a heart — creator `{product_id}` (gate-checked) or brand `{product_id, creator_user_id}`; auto-matches if the other side already hearted |
+| `connections/[id]` | GET, PUT, POST | GET connection + messages; PUT status transition (state machine in file; pending rules per `initiated_by`; `approved` → `performMatch`); POST chat message (filtered) |
+| `messages/unread`, `messages/read` | GET, POST | badge count; mark connection read |
+| `videos` | GET, POST | GET `?portfolio=me|<userId>` (brands/admins may view others, rejected hidden) or `?connectionId=`; POST = connection video upload **through the server** (still subject to the 4.5 MB limit — see gaps) |
+| `videos/[id]` | PUT/DELETE | approve/reject/delete |
+| `videos/save-portfolio` | POST | records a browser-uploaded portfolio video (`storagePath`, `title`, `thumbnailPath`) |
+| `notifications` | GET, PUT | |
+| `admin/brands` | GET, PUT | list; PUT `{userId, is_active?, total_credits?}` |
+| `admin/creators`, `admin/moderation`, `admin/content`, `admin/settings`, `admin/stats` | | admin screens' data |
+| `cron/deadlines` | GET | expires 7-day hearts; shipping/filming/review deadline warnings & auto-cancel/auto-complete |
+
+## 6. Front-end conventions that matter
+
+- Pages are client components. Data loading uses `swrFetch(url, apply)` from `lib/client-cache.ts`: `apply` runs with the cached response immediately (instant revisit) and again with fresh data. Mutations refetch via `fetchJson`. Supabase Realtime (`postgres_changes`) is used on `connections`, `products`, `messages` to refresh lists.
+- Auth: `useAuth()` is a single shared store; `(app)/layout.tsx` redirects to `/login?redirect=` when there is no session. Role is fetched from `/api/profile` (cached) — BottomNav shows creator or brand tabs accordingly.
+- UI primitives live in `components/ui`; `Avatar` has `expandable` (lightbox); `ProfileModal userId=…` shows any user's public profile anywhere.
+- All user-facing text is Hebrew. JSX text containing `'` must use `&apos;` (eslint `react/no-unescaped-entities`).
+- Lint state: `npx tsc --noEmit` is clean and must stay clean. ESLint has ~15 **pre-existing** errors (`react-hooks` "setState synchronously in effect", "cannot access variable before declared") and widespread `no-explicit-any` — the codebase uses `as any` for Supabase rows. Don't add new errors; don't feel obliged to fix old ones unless touching that code.
+- Unread badge: the messages page emits `emitUnreadChanged(delta)` (window event) and BottomNav listens; it also refetches on visibility change.
+- Video performance: never render `<video>` in lists; use `thumbnail_url` posters (`preload="none"`) and only autoplay the single focused card. Videos without a poster use `src="…#t=0.1"` so Safari paints a frame.
+
+## 7. What was built (chronological, all on `main`)
+
+Earlier work: OTP auth, registration, feed, products, connections pipeline with deadlines, chat with moderation, admin dashboard, PWA, realtime, avatars, admin credit editor, public profiles (`f4999d3`), brand multi-categories and logout confirmation (`5418ed6`), performance pass — shared auth store, SWR cache, N+1 fix, page fade (`c2d5c44`).
+
+2026-11-02 — product pivot to mutual hearts:
+- `9c9a7de` mutual-heart matching: `initiated_by`, `lib/match.ts`, brand discovery gallery (`/brand`), creator hearts on the feed, 5-video gate (UI + server), heart direction in both connection lists, 7-day expiry in cron, product image in chat header, Google login removed, party-ownership check on connection updates (security fix).
+- `5d93dfc` cron auth fix (previous `vercel.json` sent a literal `${CRON_SECRET}`; every run was 401).
+- `9bc40c1` browser-generated posters → public `thumbnails` bucket; gallery grid uses images only.
+
+## 8. What is missing / known gaps (prioritized)
+
+**Product (this week per spec)**
+1. Onboarding "portfolio 0/5" screen in registration — today the gate lives only on the profile/feed banners.
+2. Brief editing by the brand *before* sending a heart — today `buildBriefMessage` posts a template with blank fields at match time.
+3. Ranking signals beyond category/portfolio/completions (city, followers, response time) in `/api/creators` and the feed.
+4. Supabase Pro ($25/mo) before video egress exceeds the free 5 GB/month.
+
+**Product (this month)**
+5. Enforce `products.max_creators` as "number of videos per product" and show it.
+6. Auto-close chat 7 days after video approval (decision pending: after approval vs after upload).
+7. Cardcom payments (adapter stub exists); until then admin grants credits.
+8. Admin moderation of portfolio videos (currently auto-approved; `videos.status` supports it).
+
+**Technical debt / risks**
+9. `POST /api/videos` (connection video upload) still streams the file through the serverless function → fails above ~4.5 MB. Convert to the direct-upload + metadata pattern used for portfolio (`save-portfolio`). This is the most likely user-facing bug right now.
+10. Old portfolio videos have no `thumbnail_url` (only ones uploaded after `9bc40c1` do). A one-off backfill needs ffmpeg (e.g. a Render worker) or re-upload.
+11. Vercel Hobby: cron once/day; move to Pro for `*/15 * * * *` and commercial terms. `CRON_SECRET` must exist in Production (could not be verified via API).
+12. `brand/products/page.tsx` still sends a `category` field that the `products` table does not have (ignored by the API).
+13. `app/src/app/auth/callback/route.ts` and Google env vars are dead code after removing Google login.
+14. No automated tests. Manual testing requires a real WhatsApp OTP, or the hidden admin login (tap the login title 5×) which can impersonate test creator/brand accounts (`api/auth/dev-login`).
+15. Message read-receipts are per connection (`*_read_at`), not per message.
+16. The admin "moderation/content" pages were not reviewed in this round.
+
+## 9. Decisions already made (don't re-litigate)
+
+- Phone OTP only; no Google.
+- Hearts from both sides; credit deducted at match; a brand with 0 credits can still send hearts but the match is blocked with an explanatory error until credits are added.
+- A heart to a creator with <5 videos expires like any other (7 days); no special hold.
+- Creator home stays the product feed; brand home is the creator gallery.
+- Cloudflare Stream rejected for now (paid); browser-side posters instead. Revisit if posters are not enough.
+- Social handles are shown as links on public profiles (treated as public identity, not contact info).
+
+## 10. Working agreement with the owner (Arik)
+
+- Hebrew UI, RTL, mobile first; he tests on his phone after each deploy.
+- Ship in small commits to `main`; each should pass `tsc` and `npm run build`.
+- He wants the app to feel like a native app (fast transitions, instant lists) — keep the SWR + realtime pattern.
+- When a paid service would help, say so with the price and the trade-off; don't add paid dependencies silently.
