@@ -223,7 +223,7 @@ export default function FeedPage() {
   );
 
   const filtered = products.filter((p) => {
-    if (activeCategory !== "הכל" && p.category !== activeCategory) return false;
+    if (activeCategory !== "הכל" && !p.category.startsWith(activeCategory) && p.category !== activeCategory) return false;
     if (
       searchQuery &&
       !p.name.includes(searchQuery) &&
