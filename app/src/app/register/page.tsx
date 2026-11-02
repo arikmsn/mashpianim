@@ -697,6 +697,8 @@ function OTPStep({
       <input
         type="text"
         dir="ltr"
+        inputMode="numeric"
+        autoComplete="one-time-code"
         value={code}
         onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
         placeholder="000000"

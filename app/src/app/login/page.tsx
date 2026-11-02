@@ -243,6 +243,8 @@ function LoginContent() {
               <input
                 type="text"
                 dir="ltr"
+                inputMode="numeric"
+                autoComplete="one-time-code"
                 value={otp}
                 onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
                 placeholder="000000"

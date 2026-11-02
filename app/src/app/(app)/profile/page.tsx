@@ -146,6 +146,7 @@ function CreatorEditModal({
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = "";
     setUploadingAvatar(true);
     try {
       const fd = new FormData();
@@ -293,6 +294,7 @@ function BrandEditModal({
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = "";
     setUploadingLogo(true);
     try {
       const formData = new FormData();
@@ -309,7 +311,6 @@ function BrandEditModal({
       toast("שגיאה בהעלאת הלוגו", "error");
     } finally {
       setUploadingLogo(false);
-      e.target.value = "";
     }
   };
 
@@ -650,7 +651,7 @@ export default function ProfilePage() {
               }
             : prev
         );
-        if (data.avatar_url) setAvatarUrl(data.avatar_url);
+        setAvatarUrl(data.avatar_url || avatarUrl);
         setCreatorEditData(data);
         toast("הפרופיל עודכן בהצלחה!", "success");
         setEditOpen(false);
