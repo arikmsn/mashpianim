@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
   const {
-    name, description, price, image_url, category,
+    name, description, price, image_url,
     shipping_policy, shipping_address, source_url,
     product_type, digital_access_type, digital_access_instructions, digital_access_duration_days,
     expiration_date, quantity,
@@ -145,7 +145,6 @@ export async function POST(request: NextRequest) {
       digital_access_type: product_type === "digital" ? digital_access_type : null,
       digital_access_instructions: product_type === "digital" ? (digital_access_instructions || null) : null,
       digital_access_duration_days: product_type === "digital" ? (digital_access_duration_days || null) : null,
-      category: category || null,
       expiration_date: expiration_date || null,
       quantity: quantity || null,
     } as any)
