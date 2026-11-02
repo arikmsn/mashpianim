@@ -107,8 +107,10 @@ function BottomNav() {
                 : "text-neutral-400 hover:text-neutral-600"
             )}
           >
-            {item.icon}
-            <span className="text-[10px] font-medium">{item.label}</span>
+            <span className={isActive(item.href) ? "[&>svg]:stroke-[2.5]" : ""}>
+              {item.icon}
+            </span>
+            <span className={cn("text-[10px]", isActive(item.href) ? "font-bold" : "font-medium")}>{item.label}</span>
             {item.badge && item.badge > 0 && (
               <span className="absolute -top-0.5 right-1 w-4 h-4 rounded-full ig-gradient-bg text-white text-[9px] flex items-center justify-center font-bold">
                 {item.badge > 9 ? "9+" : item.badge}

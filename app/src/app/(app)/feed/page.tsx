@@ -178,6 +178,10 @@ export default function FeedPage() {
         const res = await fetch("/api/profile");
         if (res.ok) {
           const data = await res.json();
+          if (data.user?.type === "brand") {
+            router.replace("/brand");
+            return;
+          }
           const profile = data.profile || {};
           const userCats: string[] = profile.categories || (profile.category ? [profile.category] : []);
           if (userCats.length > 0) {
@@ -189,7 +193,7 @@ export default function FeedPage() {
       }
     }
     fetchUserCategories();
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     async function fetchProducts() {

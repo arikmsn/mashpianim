@@ -196,7 +196,7 @@ function LoginContent() {
     <main className="min-h-screen flex items-center justify-center px-6" style={{ background: "linear-gradient(135deg, rgba(131,58,180,0.05), rgba(225,48,108,0.05), rgba(247,119,55,0.03))" }}>
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <Image src="/logo.png" alt="משפיען אונליין" width={72} height={72} className="mx-auto rounded-2xl shadow-lg shadow-ig-pink/20 mb-4" />
+          <Image src="/logo.png" alt="משפיען אונליין" width={72} height={72} unoptimized className="mx-auto rounded-2xl shadow-lg shadow-ig-pink/20 mb-4" />
           <h1
             className="text-3xl font-bold mb-2 cursor-default select-none"
             onClick={handleSecretTap}

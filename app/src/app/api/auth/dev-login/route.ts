@@ -51,7 +51,10 @@ export async function POST(request: NextRequest) {
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-    let authUser = existingUsers?.users?.find((u) => u.email === config.email);
+    const pseudoEmail = config.phone.replace("+", "") + "@phone.mashpian.online";
+    let authUser = existingUsers?.users?.find(
+      (u) => u.email === config.email || u.email === pseudoEmail
+    );
 
     if (authUser) {
       await (supabaseAdmin.auth.admin as any).updateUserById(authUser.id, {
@@ -62,8 +65,6 @@ export async function POST(request: NextRequest) {
         await supabaseAdmin.auth.admin.createUser({
           email: config.email,
           password: SHARED_AUTH_PASSWORD,
-          phone: config.phone,
-          phone_confirm: true,
           email_confirm: true,
           user_metadata: { role, dev_account: true },
         });
@@ -154,10 +155,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      email: config.email,
+      email: authUser!.email || config.email,
       authPassword: SHARED_AUTH_PASSWORD,
       role,
-      redirect: role === "admin" ? "/admin" : "/feed",
+      redirect: role === "admin" ? "/admin" : role === "brand" ? "/brand" : "/feed",
     });
   } catch (err) {
     console.error("[dev-login] error:", err);

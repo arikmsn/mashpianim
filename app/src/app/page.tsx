@@ -172,7 +172,7 @@ export default function HomePage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3">
           <div className="flex items-center justify-between glass rounded-2xl px-5 py-3 shadow-lg shadow-black/[0.04] border border-white/60">
             <Link href="/" className="flex items-center gap-2 text-lg font-bold tracking-tight text-neutral-900">
-              <Image src="/logo.png" alt="משפיען אונליין" width={36} height={36} className="rounded-lg" />
+              <Image src="/logo.png" alt="משפיען אונליין" width={36} height={36} unoptimized className="rounded-lg" />
               <span><span className="ig-gradient-text">M</span>ashpian</span>
             </Link>
             <div className="flex items-center gap-2">
@@ -258,7 +258,7 @@ export default function HomePage() {
             <div className="relative rounded-3xl p-[2px] bg-gradient-to-br from-ig-purple via-ig-pink to-ig-orange shadow-2xl shadow-ig-pink/20">
               <div className="bg-white rounded-[22px] p-5">
                 <div className="flex items-center gap-3 mb-4 pb-4 border-b border-neutral-100">
-                  <Image src="/logo.png" alt="משפיען" width={40} height={40} className="rounded-lg shadow-md shadow-ig-pink/30" />
+                  <Image src="/logo.png" alt="משפיען" width={40} height={40} unoptimized className="rounded-lg shadow-md shadow-ig-pink/30" />
                   <div className="flex-1">
                     <div className="text-sm font-semibold text-neutral-900">הפרופיל שלך</div>
                     <div className="text-xs text-neutral-500">רמה &middot; סרטונים &middot; דירוג</div>
@@ -564,7 +564,7 @@ export default function HomePage() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div>
               <div className="flex items-center gap-2">
-                <Image src="/logo.png" alt="משפיען אונליין" width={32} height={32} className="rounded-lg" />
+                <Image src="/logo.png" alt="משפיען אונליין" width={32} height={32} unoptimized className="rounded-lg" />
                 <p className="text-lg font-bold">
                   <span className="ig-gradient-text">M</span>ashpian
                 </p>
