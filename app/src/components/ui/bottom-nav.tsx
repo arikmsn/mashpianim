@@ -68,7 +68,7 @@ const brandNavItems: NavItem[] = [
 function BottomNav() {
   const pathname = usePathname();
   const { user } = useAuth();
-  const [userType, setUserType] = useState<"creator" | "brand" | null>(null);
+  const [userType, setUserType] = useState<"creator" | "brand" | "admin" | null>(null);
   const fetchedRef = useRef(false);
 
   useEffect(() => {
@@ -79,7 +79,7 @@ function BottomNav() {
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {
         if (data?.user?.type) {
-          setUserType(data.user.type as "creator" | "brand");
+          setUserType(data.user.type as "creator" | "brand" | "admin");
         }
       })
       .catch(() => {});

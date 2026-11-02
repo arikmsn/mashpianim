@@ -339,7 +339,7 @@ export default function ProfilePage() {
           return;
         }
 
-        if (userData.type === "creator") {
+        if (userData.type === "creator" || userData.type === "admin") {
           const creatorData = profileData as any;
           setProfile({
             name: userData.full_name,

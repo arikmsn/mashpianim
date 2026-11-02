@@ -103,15 +103,23 @@ export async function POST(request: NextRequest) {
     .eq("auth_user_id", user.id)
     .single();
 
-  if ((dbUser as any)?.type !== "creator") {
+  if ((dbUser as any)?.type !== "creator" && (dbUser as any)?.type !== "admin") {
     return NextResponse.json({ error: "רק יוצרי תוכן יכולים לשלוח בקשות" }, { status: 403 });
   }
 
-  const { data: creatorProfile } = await admin
+  let { data: creatorProfile } = await admin
     .from("creator_profiles")
     .select("id")
     .eq("user_id", (dbUser as any).id)
     .single();
+
+  if (!creatorProfile && (dbUser as any)?.type === "admin") {
+    const { data: newProfile } = await (admin.from("creator_profiles") as any)
+      .insert({ user_id: (dbUser as any).id, categories: ["אופנה"], level: "creator" })
+      .select("id")
+      .single();
+    creatorProfile = newProfile;
+  }
 
   if (!creatorProfile) {
     return NextResponse.json({ error: "לא נמצא פרופיל יוצר" }, { status: 404 });

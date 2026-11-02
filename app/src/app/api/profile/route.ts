@@ -46,12 +46,20 @@ export async function GET() {
     return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 404 });
   }
 
-  if (userData.type === "creator") {
-    const { data: rawProfile } = await admin
+  if (userData.type === "creator" || userData.type === "admin") {
+    let { data: rawProfile } = await admin
       .from("creator_profiles")
       .select("*")
       .eq("user_id", userData.id)
       .single();
+
+    if (!rawProfile && userData.type === "admin") {
+      const { data: newProfile } = await (admin.from("creator_profiles") as any)
+        .insert({ user_id: userData.id, categories: ["אופנה"], level: "creator" })
+        .select("*")
+        .single();
+      rawProfile = newProfile;
+    }
 
     return NextResponse.json({
       user: userData,
@@ -119,7 +127,7 @@ export async function PUT(req: Request) {
   }
 
   if (profileFields && Object.keys(profileFields).length > 0) {
-    if (userData.type === "creator") {
+    if (userData.type === "creator" || userData.type === "admin") {
       const { error } = await admin
         .from("creator_profiles")
         .update(profileFields)
