@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { createClient } from "@/lib/supabase/client";
 
 interface NavItem {
   href: string;
@@ -69,7 +70,20 @@ function BottomNav() {
   const pathname = usePathname();
   const { user } = useAuth();
   const [userType, setUserType] = useState<"creator" | "brand" | "admin" | null>(null);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const fetchedRef = useRef(false);
+
+  const fetchUnread = useCallback(async () => {
+    try {
+      const res = await fetch("/api/messages/unread");
+      if (res.ok) {
+        const data = await res.json();
+        setUnreadMessages(data.count || 0);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   useEffect(() => {
     if (!user || fetchedRef.current) return;
@@ -83,7 +97,37 @@ function BottomNav() {
         }
       })
       .catch(() => {});
-  }, [user]);
+
+    fetchUnread();
+  }, [user, fetchUnread]);
+
+  // Realtime: update badge on new messages
+  useEffect(() => {
+    if (!user) return;
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel("nav-messages")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        () => {
+          fetchUnread();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, fetchUnread]);
+
+  // Also refresh when navigating away from messages (user may have read them)
+  useEffect(() => {
+    if (user && !pathname.startsWith("/messages")) {
+      fetchUnread();
+    }
+  }, [pathname, user, fetchUnread]);
 
   const navItems = userType === "brand" ? brandNavItems : creatorNavItems;
 
@@ -96,31 +140,34 @@ function BottomNav() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/80 backdrop-blur-xl border-t border-neutral-100 pb-[env(safe-area-inset-bottom)]">
       <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
-        {navItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-colors relative",
-              isActive(item.href)
-                ? "text-ig-pink"
-                : "text-neutral-400 hover:text-neutral-600"
-            )}
-          >
-            <span className={isActive(item.href) ? "[&>svg]:stroke-[2.5]" : ""}>
-              {item.icon}
-            </span>
-            <span className={cn("text-[10px]", isActive(item.href) ? "font-bold" : "font-medium")}>{item.label}</span>
-            {item.badge && item.badge > 0 && (
-              <span className="absolute -top-0.5 right-1 w-4 h-4 rounded-full ig-gradient-bg text-white text-[9px] flex items-center justify-center font-bold">
-                {item.badge > 9 ? "9+" : item.badge}
+        {navItems.map((item) => {
+          const badge = item.href === "/messages" ? unreadMessages : (item.badge || 0);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-colors relative min-w-[56px]",
+                isActive(item.href)
+                  ? "text-ig-pink"
+                  : "text-neutral-400 active:text-neutral-600"
+              )}
+            >
+              <span className={isActive(item.href) ? "[&>svg]:stroke-[2.5]" : ""}>
+                {item.icon}
               </span>
-            )}
-            {isActive(item.href) && (
-              <span className="absolute -bottom-1.5 w-5 h-0.5 rounded-full ig-gradient-bg" />
-            )}
-          </Link>
-        ))}
+              <span className={cn("text-[10px]", isActive(item.href) ? "font-bold" : "font-medium")}>{item.label}</span>
+              {badge > 0 && (
+                <span className="absolute -top-0.5 right-0.5 min-w-[18px] h-[18px] rounded-full ig-gradient-bg text-white text-[10px] flex items-center justify-center font-bold px-1">
+                  {badge > 99 ? "99+" : badge}
+                </span>
+              )}
+              {isActive(item.href) && (
+                <span className="absolute -bottom-1.5 w-5 h-0.5 rounded-full ig-gradient-bg" />
+              )}
+            </Link>
+          );
+        })}
       </div>
     </nav>
   );

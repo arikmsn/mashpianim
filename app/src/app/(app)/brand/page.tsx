@@ -34,7 +34,7 @@ const statusLabels: Record<string, { label: string; variant: "pink" | "success" 
 
 function DashboardSkeleton() {
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen bg-background pb-20">
       <div className="bg-gradient-to-b from-pink-100 to-background px-4 pt-8 pb-6">
         <div className="max-w-2xl mx-auto">
           <div className="h-7 bg-neutral-200 rounded-lg w-48 animate-pulse mb-2" />
@@ -119,7 +119,7 @@ export default function BrandDashboard() {
   ];
 
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen bg-background pb-20">
       <div className="bg-gradient-to-b from-pink-100 to-background px-4 pt-8 pb-6">
         <div className="max-w-2xl mx-auto">
           <h1 className="text-2xl font-bold text-neutral-900 mb-1">לוח בקרה</h1>

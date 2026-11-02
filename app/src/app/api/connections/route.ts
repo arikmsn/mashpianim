@@ -77,7 +77,44 @@ export async function GET() {
     return NextResponse.json({ error: "שגיאה בטעינת חיבורים" }, { status: 500 });
   }
 
-  return NextResponse.json({ connections: data || [] });
+  const userId = (dbUser as any).id;
+  const readColumn = userType === "brand" ? "brand_read_at" : "creator_read_at";
+
+  // Enrich with unread count and last message
+  const enriched = await Promise.all(
+    (data || []).map(async (conn: any) => {
+      const readAt = conn[readColumn] || "1970-01-01T00:00:00Z";
+
+      const { count } = await admin
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .eq("connection_id", conn.id)
+        .neq("sender_id", userId)
+        .gt("created_at", readAt);
+
+      const { data: lastMsg } = await admin
+        .from("messages")
+        .select("text, created_at")
+        .eq("connection_id", conn.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      return {
+        ...conn,
+        unread_count: count || 0,
+        last_message: lastMsg?.text || null,
+        last_message_at: lastMsg?.created_at || conn.created_at,
+      };
+    })
+  );
+
+  // Sort by last message time (most recent first)
+  enriched.sort((a: any, b: any) =>
+    new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
+  );
+
+  return NextResponse.json({ connections: enriched });
 }
 
 export async function POST(request: NextRequest) {

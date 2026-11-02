@@ -149,6 +149,12 @@ function MessagesContent() {
               },
             ];
           });
+          // Mark as read since conversation is open
+          fetch("/api/messages/read", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ connection_id: selectedId }),
+          }).catch(() => {});
         }
       )
       .subscribe();
@@ -203,6 +209,12 @@ function MessagesContent() {
               createdAt: m.created_at as string,
             }))
           );
+          // Mark as read
+          fetch("/api/messages/read", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ connection_id: connectionId }),
+          }).catch(() => {});
           return;
         }
       }
@@ -259,7 +271,7 @@ function MessagesContent() {
   const selectedConversation = conversations.find((c) => c.id === selectedId);
 
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen bg-background pb-20">
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-neutral-100">
         <div className="max-w-2xl mx-auto px-4 py-4">
           <h1 className="text-2xl font-bold">הודעות</h1>
@@ -401,7 +413,7 @@ function MessagesContent() {
             <div ref={messagesEndRef} />
           </div>
 
-          <div className="p-4 border-t border-neutral-100">
+          <div className="p-3 border-t border-neutral-100 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
             <div className="flex gap-2">
               <input
                 type="text"
@@ -414,17 +426,17 @@ function MessagesContent() {
                     handleSendMessage();
                   }
                 }}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-neutral-50 border border-neutral-100 text-sm outline-none focus:border-pink-300"
+                className="flex-1 px-4 py-3 rounded-xl bg-neutral-50 border border-neutral-100 text-sm outline-none focus:border-pink-300 focus:ring-1 focus:ring-pink-200"
               />
               <button
                 onClick={handleSendMessage}
                 disabled={!newMessage.trim() || sendingMessage}
-                className="px-4 py-2.5 rounded-xl bg-pink-500 text-white text-sm font-medium disabled:opacity-50 transition-opacity"
+                className="px-5 py-3 rounded-xl bg-pink-500 text-white text-sm font-medium disabled:opacity-50 transition-opacity active:bg-pink-600"
               >
                 שלחו
               </button>
             </div>
-            <p className="text-[10px] text-neutral-400 text-center mt-1.5">שיתוף פרטי קשר אישיים אסור</p>
+            <p className="text-[10px] text-neutral-400 text-center mt-1">שיתוף פרטי קשר אישיים אסור</p>
           </div>
         </div>
       )}
