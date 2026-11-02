@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Badge, Avatar, Card, Button, useToast } from "@/components/ui";
+import { ProfileModal } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 
@@ -31,6 +32,7 @@ interface Connection {
   product: string;
   brand: string;
   brandAvatar: string | null;
+  brandUserId: string | null;
   status: string;
   daysLeft: number | null;
   deliveryType: "physical" | "digital";
@@ -68,6 +70,7 @@ export default function ConnectionsPage() {
   const [loading, setLoading] = useState(true);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [viewBrandId, setViewBrandId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadConnectionIdRef = useRef<string | null>(null);
   const { user } = useAuth();
@@ -94,6 +97,7 @@ export default function ConnectionsPage() {
                   product: (c as any).products?.name || (c.product_name as string) || "",
                   brand: (c as any).brand_profiles?.shop_name || (c.brand_name as string) || "",
                   brandAvatar: (c as any).brand_profiles?.logo_url || (c as any).brand_profiles?.users?.avatar_url || null,
+                  brandUserId: (c as any).brand_profiles?.user_id || null,
                   status: (c.status as string) || "pending",
                   daysLeft,
                   deliveryType: ((c as any).delivery_type as "physical" | "digital") || "physical",
@@ -140,6 +144,8 @@ export default function ConnectionsPage() {
                       id: c.id as string,
                       product: (c as any).products?.name || (c.product_name as string) || "",
                       brand: (c as any).brand_profiles?.shop_name || (c.brand_name as string) || "",
+                      brandAvatar: (c as any).brand_profiles?.logo_url || (c as any).brand_profiles?.users?.avatar_url || null,
+                      brandUserId: (c as any).brand_profiles?.user_id || null,
                       status: (c.status as string) || "pending",
                       daysLeft,
                       deliveryType: ((c as any).delivery_type as "physical" | "digital") || "physical",
@@ -318,12 +324,34 @@ export default function ConnectionsPage() {
                       onClick={() => router.push(`/messages?connection=${conn.id}`)}
                     >
                       <div className="flex items-center gap-4">
-                        <Avatar src={conn.brandAvatar} name={conn.brand} size="lg" />
+                        <span
+                          role="button"
+                          tabIndex={conn.brandUserId ? 0 : -1}
+                          aria-label={`פרופיל ${conn.brand}`}
+                          onClick={(e) => { if (conn.brandUserId) { e.stopPropagation(); setViewBrandId(conn.brandUserId); } }}
+                          onKeyDown={(e) => { if (conn.brandUserId && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.stopPropagation(); setViewBrandId(conn.brandUserId); } }}
+                          className={conn.brandUserId ? "rounded-full hover:ring-2 hover:ring-pink-300 transition-all" : ""}
+                        >
+                          <Avatar src={conn.brandAvatar} name={conn.brand} size="lg" />
+                        </span>
                         <div className="flex-1 min-w-0">
                           <h3 className="font-bold text-neutral-900 truncate">
                             {conn.product}
                           </h3>
-                          <p className="text-sm text-neutral-500">{conn.brand}</p>
+                          <p className="text-sm text-neutral-500">
+                            {conn.brand}
+                            {conn.brandUserId && (
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => { e.stopPropagation(); setViewBrandId(conn.brandUserId); }}
+                                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setViewBrandId(conn.brandUserId); } }}
+                                className="text-xs text-pink-500 mr-2 hover:underline"
+                              >
+                                פרופיל העסק
+                              </span>
+                            )}
+                          </p>
                           <div className="flex items-center gap-2 mt-2">
                             <Badge variant={status.variant} size="sm" dot>
                               {status.label}
@@ -410,6 +438,8 @@ export default function ConnectionsPage() {
           </>
         )}
       </div>
+
+      <ProfileModal userId={viewBrandId} onClose={() => setViewBrandId(null)} title="פרופיל העסק" />
     </main>
   );
 }

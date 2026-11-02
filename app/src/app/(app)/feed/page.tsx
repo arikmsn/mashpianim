@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, Badge, Button, Card, useToast } from "@/components/ui";
+import { ProfileModal } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { useNotifications } from "@/hooks/use-notifications";
 import { createClient } from "@/lib/supabase/client";
@@ -46,6 +47,7 @@ interface Product {
   name: string;
   brand: string;
   brandAvatar: string | null;
+  brandUserId: string | null;
   image: string | null;
   category: string;
   value: number;
@@ -83,10 +85,12 @@ function ProductSkeleton() {
 function ProductCard({
   product,
   onApply,
+  onViewBrand,
   applying,
 }: {
   product: Product;
   onApply: (id: string) => void;
+  onViewBrand: (userId: string) => void;
   applying: string | null;
 }) {
   const placeholderColors = [
@@ -119,12 +123,23 @@ function ProductCard({
       )}
       <div className="p-4">
         <div className="flex items-start justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <Avatar src={product.brandAvatar} name={product.brand} size="sm" />
-            <div>
-              <h3 className="font-bold text-neutral-900">{product.name}</h3>
-              <p className="text-sm text-neutral-500">{product.brand}</p>
-            </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <button
+              type="button"
+              disabled={!product.brandUserId}
+              onClick={() => product.brandUserId && onViewBrand(product.brandUserId)}
+              className="flex items-center gap-2 text-right min-w-0 disabled:cursor-default group"
+              aria-label={`פרופיל ${product.brand}`}
+            >
+              <Avatar src={product.brandAvatar} name={product.brand} size="sm" className="group-enabled:group-hover:ring-pink-300 transition-all" />
+              <div className="min-w-0">
+                <h3 className="font-bold text-neutral-900 truncate">{product.name}</h3>
+                <p className="text-sm text-neutral-500 truncate group-enabled:group-hover:text-pink-500 transition-colors">
+                  {product.brand}
+                  {product.brandUserId && <span className="text-[10px] text-neutral-300 mr-1">· פרופיל</span>}
+                </p>
+              </div>
+            </button>
           </div>
           <Badge variant="pink" size="sm">
             ₪{product.value}
@@ -171,6 +186,7 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState<string | null>(null);
   const [categories, setCategories] = useState<string[]>(["הכל", ...allFeedCategories]);
+  const [viewBrandId, setViewBrandId] = useState<string | null>(null);
   const { user } = useAuth();
   const { toast } = useToast();
   const { unreadCount } = useNotifications();
@@ -212,6 +228,7 @@ export default function FeedPage() {
                 name: p.name as string,
                 brand: (p.brand_name as string) || (p.shop_name as string) || "",
                 brandAvatar: (p.logo_url as string) || null,
+                brandUserId: (p.brand_user_id as string) || null,
                 image: toDirectImageUrl((p.image_url as string) || null),
                 category: (p.category as string) || "",
                 value: Number(p.price) || 0,
@@ -253,6 +270,7 @@ export default function FeedPage() {
                     name: p.name as string,
                     brand: (p.brand_name as string) || (p.shop_name as string) || "",
                     brandAvatar: (p.logo_url as string) || null,
+                    brandUserId: (p.brand_user_id as string) || null,
                     image: toDirectImageUrl((p.image_url as string) || null),
                     category: (p.category as string) || "",
                     value: Number(p.price) || 0,
@@ -432,6 +450,7 @@ export default function FeedPage() {
                   <ProductCard
                     product={product}
                     onApply={handleApply}
+                    onViewBrand={setViewBrandId}
                     applying={applying}
                   />
                 </motion.div>
@@ -446,6 +465,8 @@ export default function FeedPage() {
           </div>
         )}
       </div>
+
+      <ProfileModal userId={viewBrandId} onClose={() => setViewBrandId(null)} title="פרופיל העסק" />
     </main>
   );
 }

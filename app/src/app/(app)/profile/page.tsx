@@ -44,6 +44,8 @@ interface CreatorEditForm {
   city: string;
   tiktok_handle: string;
   instagram_handle: string;
+  tiktok_followers: string;
+  instagram_followers: string;
   date_of_birth: string;
   avatar_url: string;
 }
@@ -247,6 +249,29 @@ function CreatorEditModal({
             dir="ltr"
           />
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            label="עוקבים ב-TikTok"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            value={form.tiktok_followers}
+            onChange={(e) => setForm({ ...form, tiktok_followers: e.target.value })}
+            placeholder="למשל 12000"
+            dir="ltr"
+          />
+          <Input
+            label="עוקבים ב-Instagram"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            value={form.instagram_followers}
+            onChange={(e) => setForm({ ...form, instagram_followers: e.target.value })}
+            placeholder="למשל 8500"
+            dir="ltr"
+          />
+        </div>
+        <p className="text-xs text-neutral-400 -mt-2">העסקים רואים את הפרטים האלה כשהם בוחנים את הבקשה שלכם — כדאי למלא.</p>
         <Input
           label="תאריך לידה"
           type="date"
@@ -467,6 +492,8 @@ export default function ProfilePage() {
     city: "",
     tiktok_handle: "",
     instagram_handle: "",
+    tiktok_followers: "",
+    instagram_followers: "",
     date_of_birth: "",
     avatar_url: "",
   });
@@ -523,6 +550,8 @@ export default function ProfilePage() {
             city: creatorData?.city || "",
             tiktok_handle: creatorData?.tiktok_handle || "",
             instagram_handle: creatorData?.instagram_handle || "",
+            tiktok_followers: creatorData?.tiktok_followers ? String(creatorData.tiktok_followers) : "",
+            instagram_followers: creatorData?.instagram_followers ? String(creatorData.instagram_followers) : "",
             date_of_birth: creatorData?.date_of_birth || "",
             avatar_url: userData.avatar_url || "",
           });
@@ -635,6 +664,8 @@ export default function ProfilePage() {
             city: data.city,
             tiktok_handle: data.tiktok_handle,
             instagram_handle: data.instagram_handle,
+            tiktok_followers: Math.max(0, parseInt(data.tiktok_followers, 10) || 0),
+            instagram_followers: Math.max(0, parseInt(data.instagram_followers, 10) || 0),
             date_of_birth: data.date_of_birth || null,
           },
         }),
@@ -817,7 +848,24 @@ export default function ProfilePage() {
                   {displayProfile.level}
                 </Badge>
               </div>
-              <p className="text-sm text-neutral-500 mb-3">{displayProfile.bio}</p>
+              <p className="text-sm text-neutral-500 mb-2">{displayProfile.bio}</p>
+              {(creatorEditData.city || creatorEditData.tiktok_handle || creatorEditData.instagram_handle) && (
+                <div className="flex items-center gap-3 text-xs text-neutral-500 mb-2 flex-wrap">
+                  {creatorEditData.city && <span>📍 {creatorEditData.city}</span>}
+                  {creatorEditData.tiktok_handle && (
+                    <span dir="ltr">
+                      TT @{creatorEditData.tiktok_handle.replace(/^@/, "")}
+                      {creatorEditData.tiktok_followers && ` · ${Number(creatorEditData.tiktok_followers).toLocaleString("he-IL")}`}
+                    </span>
+                  )}
+                  {creatorEditData.instagram_handle && (
+                    <span dir="ltr">
+                      IG @{creatorEditData.instagram_handle.replace(/^@/, "")}
+                      {creatorEditData.instagram_followers && ` · ${Number(creatorEditData.instagram_followers).toLocaleString("he-IL")}`}
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="flex items-center gap-1 flex-wrap">
                 {displayProfile.categories.map((cat) => (
                   <Badge key={cat} variant="default" size="sm">

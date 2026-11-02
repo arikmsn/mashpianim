@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { Card, Badge, Button, Modal, Avatar, Input, Textarea, useToast } from "@/components/ui";
+import { PublicProfileContent } from "@/components/features";
 import { createClient } from "@/lib/supabase/client";
 
 interface Connection {
@@ -23,13 +25,6 @@ interface Connection {
   trackingUrl: string | null;
   digitalAccessValue: string | null;
   revisionCount: number;
-}
-
-interface PortfolioVideo {
-  id: string;
-  title: string | null;
-  url: string | null;
-  created_at: string;
 }
 
 type TabId = "pending" | "active" | "completed";
@@ -84,28 +79,12 @@ export default function BrandConnectionsPage() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [shipForm, setShipForm] = useState({ trackingNumber: "", trackingUrl: "", digitalAccessValue: "" });
   const [revisionNotes, setRevisionNotes] = useState("");
-  const [portfolioCache, setPortfolioCache] = useState<{ creatorId: string; videos: PortfolioVideo[] } | null>(null);
   const { toast } = useToast();
-
-  const selectedCreatorId = selectedConnection?.creatorId || null;
-  const portfolio = selectedCreatorId && portfolioCache?.creatorId === selectedCreatorId ? portfolioCache.videos : null;
-  const portfolioLoading = !!selectedCreatorId && portfolio === null;
+  const router = useRouter();
 
   useEffect(() => {
     fetchConnections();
   }, []);
-
-  useEffect(() => {
-    if (!selectedCreatorId) return;
-    let cancelled = false;
-    fetch(`/api/videos?portfolio=${encodeURIComponent(selectedCreatorId)}`)
-      .then((res) => (res.ok ? res.json() : { videos: [] }))
-      .catch(() => ({ videos: [] }))
-      .then((data) => {
-        if (!cancelled) setPortfolioCache({ creatorId: selectedCreatorId, videos: data.videos || [] });
-      });
-    return () => { cancelled = true; };
-  }, [selectedCreatorId]);
 
   // Realtime: refresh connections on any change
   useEffect(() => {
@@ -336,17 +315,42 @@ export default function BrandConnectionsPage() {
           const statusInfo = statusLabels[selectedConnection.status] || { label: selectedConnection.status, variant: "default" as const };
           const isDigital = selectedConnection.productType === "digital";
           return (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <Avatar src={selectedConnection.creatorAvatar} name={selectedConnection.creatorName} size="lg" />
-                <div>
-                  <p className="font-bold text-lg">{selectedConnection.creatorName}</p>
-                  <p className="text-sm text-pink-500">{selectedConnection.productName}</p>
-                  <Badge variant={isDigital ? "pink" : "default"} size="sm">
-                    {isDigital ? "📱 דיגיטלי" : "📦 פיזי"}
-                  </Badge>
+            <div className="space-y-4 max-h-[75vh] overflow-y-auto -m-2 p-2">
+              {/* Product being requested */}
+              <div className="flex items-center gap-3 bg-pink-50 rounded-xl p-3">
+                {selectedConnection.productImage ? (
+                  <img src={selectedConnection.productImage} alt={selectedConnection.productName} className="w-12 h-12 rounded-lg object-cover" />
+                ) : (
+                  <div className="w-12 h-12 rounded-lg bg-white flex items-center justify-center text-xl">{isDigital ? "📱" : "📦"}</div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-neutral-500">בקשה למוצר</p>
+                  <p className="font-bold text-sm truncate">{selectedConnection.productName}</p>
                 </div>
+                <Badge variant={isDigital ? "pink" : "default"} size="sm">
+                  {isDigital ? "📱 דיגיטלי" : "📦 פיזי"}
+                </Badge>
               </div>
+
+              {/* Creator's full public profile */}
+              {selectedConnection.creatorId ? (
+                <PublicProfileContent userId={selectedConnection.creatorId} />
+              ) : (
+                <div className="flex items-center gap-3">
+                  <Avatar src={selectedConnection.creatorAvatar} name={selectedConnection.creatorName} size="lg" />
+                  <p className="font-bold text-lg">{selectedConnection.creatorName}</p>
+                </div>
+              )}
+
+              {activeStatuses.includes(selectedConnection.status) && (
+                <Button
+                  variant="secondary"
+                  fullWidth
+                  onClick={() => router.push(`/messages?connection=${selectedConnection.id}`)}
+                >
+                  💬 שליחת הודעה ל{selectedConnection.creatorName}
+                </Button>
+              )}
 
               <div className="bg-neutral-50 rounded-xl p-4 space-y-2">
                 <div className="flex justify-between text-sm">
@@ -391,51 +395,6 @@ export default function BrandConnectionsPage() {
                   <div className="flex justify-between text-sm">
                     <span className="text-neutral-500">בקשות תיקון</span>
                     <span>{selectedConnection.revisionCount}/2</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Creator portfolio */}
-              <div>
-                <p className="text-sm font-medium text-neutral-700 mb-2">
-                  🎬 תיק עבודות של {selectedConnection.creatorName}
-                  {portfolio && portfolio.length > 0 && (
-                    <span className="text-neutral-400 font-normal"> ({portfolio.length})</span>
-                  )}
-                </p>
-                {portfolioLoading || !portfolio ? (
-                  <div className="grid grid-cols-2 gap-2">
-                    {[1, 2].map((i) => (
-                      <div key={i} className="aspect-[9/16] max-h-48 rounded-xl bg-neutral-100 animate-pulse" />
-                    ))}
-                  </div>
-                ) : portfolio.length === 0 ? (
-                  <p className="text-sm text-neutral-400 bg-neutral-50 rounded-xl p-3 text-center">
-                    היוצר/ת עדיין לא העלו סרטונים לתיק העבודות
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2 max-h-[420px] overflow-y-auto">
-                    {portfolio.map((video) => (
-                      <div key={video.id} className="rounded-xl overflow-hidden bg-black">
-                        {video.url ? (
-                          <video
-                            src={video.url}
-                            className="w-full aspect-[9/16] max-h-48 object-cover"
-                            controls
-                            preload="metadata"
-                            controlsList="nodownload"
-                            onContextMenu={(e) => e.preventDefault()}
-                          />
-                        ) : (
-                          <div className="w-full aspect-[9/16] max-h-48 flex items-center justify-center text-neutral-400 text-xs">
-                            לא זמין
-                          </div>
-                        )}
-                        {video.title && (
-                          <p className="text-xs text-white/90 px-2 py-1 truncate">{video.title}</p>
-                        )}
-                      </div>
-                    ))}
                   </div>
                 )}
               </div>

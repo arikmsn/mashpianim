@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { motion } from "framer-motion";
 import { Avatar, Badge, useToast } from "@/components/ui";
+import { ProfileModal } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 
@@ -12,6 +13,7 @@ interface Conversation {
   id: string;
   name: string;
   avatar: string | null;
+  otherUserId: string | null;
   lastMessage: string;
   time: string;
   unread: number;
@@ -58,6 +60,7 @@ function MessagesContent() {
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [viewProfileId, setViewProfileId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -94,6 +97,7 @@ function MessagesContent() {
                 id: c.id as string,
                 name: showBrand ? brandName : creatorName || "",
                 avatar: showBrand ? brandAvatar : creatorAvatar,
+                otherUserId: ((showBrand ? bp?.user_id : cp?.user_id) as string) || null,
                 lastMessage: (c.last_message as string) || "התחילו שיחה...",
                 time: c.created_at ? formatTime(c.created_at as string) : "",
                 unread: (c.unread_count as number) || 0,
@@ -368,14 +372,26 @@ function MessagesContent() {
                 <path d="M9 18l6-6-6-6" />
               </svg>
             </button>
-            <Avatar src={selectedConversation?.avatar} name={selectedConversation?.name || ""} size="sm" />
-            <div>
-              <p className="font-medium text-sm">{selectedConversation?.name}</p>
-              <p className="text-xs text-pink-500">
-                {selectedConversation?.product}
-              </p>
-            </div>
+            <button
+              type="button"
+              className="flex items-center gap-3 flex-1 min-w-0 text-right disabled:cursor-default"
+              disabled={!selectedConversation?.otherUserId}
+              onClick={() => selectedConversation?.otherUserId && setViewProfileId(selectedConversation.otherUserId)}
+              aria-label="צפייה בפרופיל"
+            >
+              <Avatar src={selectedConversation?.avatar} name={selectedConversation?.name || ""} size="sm" />
+              <div className="min-w-0">
+                <p className="font-medium text-sm truncate">
+                  {selectedConversation?.name}
+                  {selectedConversation?.otherUserId && <span className="text-[10px] text-neutral-400 mr-1.5">· פרופיל</span>}
+                </p>
+                <p className="text-xs text-pink-500 truncate">
+                  {selectedConversation?.product}
+                </p>
+              </div>
+            </button>
           </header>
+          <ProfileModal userId={viewProfileId} onClose={() => setViewProfileId(null)} />
 
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
             {messages.length === 0 ? (

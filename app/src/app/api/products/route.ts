@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
   const products = (data || []).map((p: any) => ({
     ...p,
     brand_name: p.brand_profiles?.shop_name || "",
+    brand_user_id: p.brand_profiles?.user_id || null,
     category: p.brand_profiles?.category || "",
     logo_url: p.brand_profiles?.logo_url || null,
   }));

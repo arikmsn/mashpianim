@@ -63,6 +63,7 @@ const brandNavItems: NavItem[] = [
   { href: "/brand", label: "לוח בקרה", icon: dashboardIcon },
   { href: "/brand/products", label: "מוצרים", icon: productsIcon },
   { href: "/brand/connections", label: "חיבורים", icon: connectionsIcon },
+  { href: "/messages", label: "הודעות", icon: messagesIcon },
   { href: "/profile", label: "פרופיל", icon: profileIcon },
 ];
 
