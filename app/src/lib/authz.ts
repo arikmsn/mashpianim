@@ -126,3 +126,101 @@ export function devLoginEnabled(env: DevLoginEnv): boolean {
   if (env.NODE_ENV === "production") return env.ALLOW_DEV_LOGIN === "true";
   return true;
 }
+
+// --- Products -------------------------------------------------------------------------------------
+
+// Fields a brand may change on its own product through PUT /api/products/[id].
+// `category` is deliberately absent: products have no such column (brand categories live on brand_profiles),
+// and writing it made every product edit fail (FUNC-02).
+export const PRODUCT_EDITABLE_FIELDS = [
+  "name",
+  "description",
+  "price",
+  "image_url",
+  "shipping_policy",
+  "shipping_address",
+  "source_url",
+  "status",
+  "product_type",
+  "digital_access_type",
+  "digital_access_instructions",
+  "digital_access_duration_days",
+  "expiration_date",
+  "quantity",
+] as const;
+
+const PRODUCT_NUMERIC_FIELDS = new Set(["price", "quantity", "digital_access_duration_days"]);
+
+// Returns only allowed, present keys. Numeric fields accept numbers or numeric strings (null/"" clears the
+// optional ones, never the price); everything else must be a string or null. Unknown keys and other types
+// are dropped. The database still validates enums and NOT NULL columns.
+export function pickProductUpdates(input: unknown): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (!input || typeof input !== "object" || Array.isArray(input)) return out;
+  for (const key of PRODUCT_EDITABLE_FIELDS) {
+    if (!Object.hasOwn(input, key)) continue;
+    const value = (input as Record<string, unknown>)[key];
+    if (value === undefined) continue;
+    if (PRODUCT_NUMERIC_FIELDS.has(key)) {
+      if (value === null || value === "") {
+        if (key !== "price") out[key] = null;
+        continue;
+      }
+      const n = typeof value === "number" ? value : Number(String(value));
+      if (Number.isFinite(n) && n >= 0) out[key] = key === "price" ? n : Math.floor(n);
+    } else if (value === null || typeof value === "string") {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+// --- Storage paths --------------------------------------------------------------------------------
+// Browser uploads may only land in the caller's own folder, portfolio/<auth uid>/..., which is exactly what
+// the storage INSERT policies allow. The metadata routes use these checks so a row can never point at a
+// file the caller did not upload.
+
+function ownPathRest(path: unknown, authUserId: string): string[] | null {
+  if (typeof path !== "string" || !authUserId) return null;
+  const parts = path.split("/");
+  if (parts.length < 3 || parts[0] !== "portfolio" || parts[1] !== authUserId) return null;
+  if (parts.some((p) => p.length === 0 || p === "." || p === "..")) return null;
+  return parts.slice(2);
+}
+
+// portfolio/<uid>/<file>
+export function isOwnPortfolioPath(path: unknown, authUserId: string): boolean {
+  const rest = ownPathRest(path, authUserId);
+  return !!rest && rest.length === 1;
+}
+
+// portfolio/<uid>/connections/<connectionId>/<file>
+export function isOwnConnectionVideoPath(path: unknown, authUserId: string, connectionId: string): boolean {
+  const rest = ownPathRest(path, authUserId);
+  return !!rest && !!connectionId && rest.length === 3 && rest[0] === "connections" && rest[1] === connectionId;
+}
+
+export function isImagePath(path: unknown): boolean {
+  return typeof path === "string" && /\.(jpe?g|png|webp)$/i.test(path);
+}
+
+// Object path inside the public `thumbnails` bucket, taken from the URL stored on a video row
+export function thumbnailPathFromUrl(url: unknown): string | null {
+  if (typeof url !== "string") return null;
+  const m = url.match(/\/storage\/v1\/object\/public\/thumbnails\/([^?#]+)/);
+  if (!m) return null;
+  try {
+    return decodeURIComponent(m[1]);
+  } catch {
+    return null;
+  }
+}
+
+// --- Connection videos ----------------------------------------------------------------------------
+
+// A creator may upload the deliverable only once the product arrived (or a revision was requested)
+export const CONNECTION_UPLOAD_STATUSES = ["delivered", "filming", "revision_requested"] as const;
+
+export function canUploadConnectionVideo(status: unknown): boolean {
+  return typeof status === "string" && (CONNECTION_UPLOAD_STATUSES as readonly string[]).includes(status);
+}

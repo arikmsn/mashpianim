@@ -202,7 +202,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     case "approved": {
       const result = await performMatch(admin, id, (dbUser as any).id);
       if (!result.ok) {
-        return NextResponse.json({ error: result.error }, { status: result.status });
+        return NextResponse.json({ error: result.error, code: result.code }, { status: result.status });
       }
       await logActivity({
         actorId: (dbUser as any).id,

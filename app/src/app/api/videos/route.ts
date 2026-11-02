@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { isConnectionParticipant, canUploadConnectionVideo } from "@/lib/authz";
 
 export const maxDuration = 60;
 
@@ -67,15 +68,16 @@ export async function GET(request: NextRequest) {
   }
 
   if ((dbUser as any).type !== "admin") {
+    // connections.creator_id / brand_id are profile ids — compare through the profiles' user_id (FUNC-01)
     const { data: connection } = await supabase
       .from("connections")
-      .select("creator_id, brand_id")
+      .select("creator_profiles!connections_creator_id_fkey(user_id), brand_profiles!connections_brand_id_fkey(user_id)")
       .eq("id", connectionId)
       .single();
 
-    if (!connection ||
-        ((dbUser as any).id !== (connection as any).creator_id &&
-         (dbUser as any).id !== (connection as any).brand_id)) {
+    const conn = connection as any;
+    const parties = { creatorUserId: conn?.creator_profiles?.user_id, brandUserId: conn?.brand_profiles?.user_id };
+    if (!conn || !isConnectionParticipant(parties, (dbUser as any).id)) {
       return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
     }
   }
@@ -201,15 +203,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, video });
     }
 
-    // Connection-based upload (existing flow)
+    // Connection-based upload through the server. Kept as a small-file fallback: Vercel caps request bodies
+    // at ~4.5 MB, so the app uploads straight to Storage and records metadata via /api/videos/save-connection.
     const { data: connection } = await supabase
       .from("connections")
-      .select("creator_id")
+      .select("status, filmed_at, creator_profiles!connections_creator_id_fkey(user_id)")
       .eq("id", connectionId)
       .single();
 
-    if (!connection || (dbUser as any).id !== (connection as any).creator_id) {
+    const conn = connection as any;
+    if (!conn || conn.creator_profiles?.user_id !== (dbUser as any).id) {
       return NextResponse.json({ error: "אין הרשאה להעלות סרטון לחיבור זה" }, { status: 403 });
+    }
+    if (!canUploadConnectionVideo(conn.status)) {
+      return NextResponse.json({ error: "לא ניתן להעלות סרטון בסטטוס הנוכחי של החיבור" }, { status: 400 });
     }
 
     const ext = file.name.split(".").pop() || "mp4";
@@ -258,7 +265,7 @@ export async function POST(request: NextRequest) {
 
     await supabase
       .from("connections")
-      .update({ status: "uploaded" } as any)
+      .update({ status: "uploaded", filmed_at: conn.filmed_at || new Date().toISOString() } as any)
       .eq("id", connectionId);
 
     return NextResponse.json({ success: true, video });

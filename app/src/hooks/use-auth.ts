@@ -2,6 +2,7 @@
 
 import { useCallback, useSyncExternalStore } from "react";
 import { createClient, isClientConfigured } from "@/lib/supabase/client";
+import { clearCache, syncCacheOwner } from "@/lib/client-cache";
 import type { User } from "@supabase/supabase-js";
 
 interface AuthSnapshot {
@@ -32,9 +33,11 @@ function start() {
 
   const supabase = createClient();
   supabase.auth.getSession().then(({ data: { session } }) => {
+    syncCacheOwner(session?.user?.id ?? null);
     emit({ user: session?.user ?? null, loading: false });
   });
   supabase.auth.onAuthStateChange((_event, session) => {
+    syncCacheOwner(session?.user?.id ?? null);
     emit({ user: session?.user ?? null, loading: false });
   });
 }
@@ -51,9 +54,12 @@ export function useAuth() {
   const state = useSyncExternalStore(subscribe, () => snapshot, () => serverSnapshot);
 
   const signOut = useCallback(async () => {
+    // Drop the previous user's cached API responses before the session goes away
+    clearCache();
     if (isClientConfigured()) {
       await createClient().auth.signOut();
     }
+    syncCacheOwner(null);
     emit({ user: null, loading: false });
   }, []);
 

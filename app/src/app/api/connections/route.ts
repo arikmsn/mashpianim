@@ -242,7 +242,7 @@ export async function POST(request: NextRequest) {
     if (ex.status === "pending" && (ex.initiated_by || "creator") !== initiatedBy) {
       const result = await performMatch(admin, ex.id, me.id);
       if (!result.ok) {
-        return NextResponse.json({ error: result.error }, { status: result.status });
+        return NextResponse.json({ error: result.error, code: result.code }, { status: result.status });
       }
       await logActivity({
         actorId: me.id,

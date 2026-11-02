@@ -100,7 +100,7 @@ export async function notifyBrandOfHeart(params: {
   );
 }
 
-type MatchResult = { ok: true } | { ok: false; error: string; status: number };
+type MatchResult = { ok: true } | { ok: false; error: string; status: number; code?: string };
 
 // Turns a pending heart into a match: the credit deduction and the status change happen atomically in the
 // match_connection() database function (row locks, single transaction); this then opens the chat and notifies.
@@ -126,6 +126,18 @@ export async function performMatch(admin: Admin, connectionId: string, actorUser
   const brandUser = brandProfile?.users;
   if (!brandProfile || !creatorUser || !brandUser) {
     return { ok: false, error: "נתוני חיבור חסרים", status: 500 };
+  }
+
+  // A match requires a complete portfolio on the creator's side, whoever approves (CRED-02). Hearts sent
+  // before the gate existed, or by brands to not-yet-ready creators, simply wait until the creator gets to 5.
+  const creatorVideos = await countPortfolioVideos(admin, creatorUser.id);
+  if (creatorVideos < MIN_PORTFOLIO_VIDEOS) {
+    return {
+      ok: false,
+      status: 409,
+      code: "creator_not_ready",
+      error: `ליוצר/ת יש ${creatorVideos}/${MIN_PORTFOLIO_VIDEOS} סרטונים בתיק העבודות. הלב נשמר — המאטץ' ייפתח כשתיק העבודות יושלם.`,
+    };
   }
 
   const { error: matchError } = await admin.rpc("match_connection", { p_connection_id: connectionId });

@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { thumbnailPathFromUrl } from "@/lib/authz";
+import { countPortfolioVideos } from "@/lib/match";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -130,4 +132,66 @@ function extractStoragePath(url: string): string | null {
   // URLs look like: https://<project>.supabase.co/storage/v1/object/public/videos/<path>
   const match = url.match(/\/storage\/v1\/object\/(?:public|sign)\/videos\/(.+)/);
   return match ? match[1] : null;
+}
+
+// DELETE /api/videos/[id] — a creator removes one of their own portfolio videos (admins may remove any video).
+// Deliverables attached to a connection are part of a brand's order and are not deletable here (VID-01).
+export async function DELETE(_request: NextRequest, context: RouteContext) {
+  const { id } = await context.params;
+
+  const userClient = await createServerClient();
+  const { data: { user } } = await userClient.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "לא מחובר" }, { status: 401 });
+  }
+
+  const supabase = getAdminClient();
+  if (!supabase) {
+    return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
+  }
+
+  const { data: dbUser } = await supabase
+    .from("users")
+    .select("id, type")
+    .eq("auth_user_id", user.id)
+    .single();
+  if (!dbUser) {
+    return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 403 });
+  }
+
+  const { data: video } = await supabase
+    .from("videos")
+    .select("id, creator_id, connection_id, storage_path, thumbnail_url")
+    .eq("id", id)
+    .single();
+  if (!video) {
+    return NextResponse.json({ error: "סרטון לא נמצא" }, { status: 404 });
+  }
+
+  const v = video as any;
+  const isAdmin = (dbUser as any).type === "admin";
+  const ownsPortfolioVideo = v.creator_id === (dbUser as any).id && v.connection_id === null;
+  if (!isAdmin && !ownsPortfolioVideo) {
+    return NextResponse.json({ error: "ניתן למחוק רק סרטוני פורטפוליו שלך" }, { status: 403 });
+  }
+
+  // Storage objects first (best effort), then the row
+  if (v.storage_path) {
+    const { error: rmError } = await supabase.storage.from("videos").remove([v.storage_path]);
+    if (rmError) console.error("[videos] storage remove error:", rmError.message);
+  }
+  const thumbPath = thumbnailPathFromUrl(v.thumbnail_url);
+  if (thumbPath) {
+    const { error: rmThumbError } = await supabase.storage.from("thumbnails").remove([thumbPath]);
+    if (rmThumbError) console.error("[videos] thumbnail remove error:", rmThumbError.message);
+  }
+
+  const { error } = await supabase.from("videos").delete().eq("id", id);
+  if (error) {
+    console.error("[videos] delete error:", error);
+    return NextResponse.json({ error: "שגיאה במחיקת הסרטון" }, { status: 500 });
+  }
+
+  const portfolioCount = ownsPortfolioVideo ? await countPortfolioVideos(supabase, (dbUser as any).id) : undefined;
+  return NextResponse.json({ success: true, portfolio_count: portfolioCount });
 }

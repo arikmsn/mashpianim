@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { toPublicProduct } from "@/lib/authz";
+import { toPublicProduct, pickProductUpdates } from "@/lib/authz";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -94,33 +94,22 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
   }
 
-  const body = await request.json();
-  const { name, description, price, image_url, shipping_policy, shipping_address, source_url, status,
-    product_type, digital_access_type, digital_access_instructions, digital_access_duration_days,
-    category, expiration_date, quantity } = body;
-
-  const updates: Record<string, unknown> = {};
-  if (name !== undefined) updates.name = name;
-  if (description !== undefined) updates.description = description;
-  if (price !== undefined) updates.price = price;
-  if (image_url !== undefined) updates.image_url = image_url;
-  if (shipping_policy !== undefined) updates.shipping_policy = shipping_policy;
-  if (shipping_address !== undefined) updates.shipping_address = shipping_address;
-  if (source_url !== undefined) updates.source_url = source_url;
-  if (status !== undefined) updates.status = status;
-  if (product_type !== undefined) updates.product_type = product_type;
-  if (digital_access_type !== undefined) updates.digital_access_type = digital_access_type;
-  if (digital_access_instructions !== undefined) updates.digital_access_instructions = digital_access_instructions;
-  if (digital_access_duration_days !== undefined) updates.digital_access_duration_days = digital_access_duration_days;
-  if (category !== undefined) updates.category = category;
-  if (expiration_date !== undefined) updates.expiration_date = expiration_date;
-  if (quantity !== undefined) updates.quantity = quantity;
+  const body = await request.json().catch(() => null);
+  // Only real product columns, typed; unknown keys (e.g. the UI's `category`) are ignored (FUNC-02)
+  const updates = pickProductUpdates(body);
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: "אין שדות תקינים לעדכון" }, { status: 400 });
+  }
 
   const { error } = await (admin.from("products") as any)
     .update(updates)
     .eq("id", id);
 
   if (error) {
+    // invalid enum value / NOT NULL / CHECK → the caller sent a bad value, not a server fault
+    if (["22P02", "23502", "23514"].includes((error as { code?: string }).code || "")) {
+      return NextResponse.json({ error: "ערך לא תקין באחד השדות" }, { status: 400 });
+    }
     console.error("[products] update error:", error);
     return NextResponse.json({ error: "שגיאה בעדכון" }, { status: 500 });
   }

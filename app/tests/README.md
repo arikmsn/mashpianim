@@ -12,6 +12,10 @@ Runs `tests/**/*.test.ts` with Node's built-in runner (`node --test`, TypeScript
 
 `match-errors.test.ts` covers the mapping of `match_connection()` database errors (`NO_CREDITS`, `CONNECTION_NOT_PENDING`, …) to API responses and the Postgres unique-violation detection used for duplicate hearts.
 
+`uploads-products.test.ts` covers the storage-path ownership checks behind `save-portfolio` / `save-connection` / video delete, the connection statuses that accept a deliverable, and the product update allowlist (no `category` column).
+
+`client-cache.test.ts` covers the per-user ownership of the SWR cache (`syncCacheOwner`): a different user, or a logout, drops the previous user's cached API responses.
+
 ## Security regression checks that need a running stack
 
 These cannot run without Supabase + a session. Run them against a local `npm run dev` (or a preview deployment) with two test users (A, B) signed in on two browsers; use the browser devtools console on the app origin so cookies are sent.
@@ -45,3 +49,16 @@ These hit Supabase directly with the publishable (anon) key, which is what an at
 | 18 | One active heart per creator/product | two simultaneous `POST /api/connections` `{product_id}` as the same creator | one 201, one 409; exactly one non-cancelled row in `connections` for that pair |
 | 19 | Credits are atomic and bounded | brand with `used_credits = total_credits` approves/hearts a pending connection | 400 `לעסק אין סרטונים זמינים כרגע…`; connection stays `pending`, `used_credits` unchanged |
 | 20 | Admin cannot set total below used | `PUT /api/admin/brands` `{userId, total_credits:<less than used>}` as admin | 400 `לא ניתן להגדיר פחות סרטונים ממה שכבר נוצל` |
+
+## Batch 3 checks (FUNC-01, FUNC-02, VID-01, CRED-02, QA-01)
+
+| # | Check | Steps | Expected |
+|---|---|---|---|
+| 21 | Connection video upload works end to end | as the creator of a `delivered` connection: upload a video from the connections page (any size) | toast success; connection shows `הועלה`; the brand opens the connection and sees the video player; `videos` row has `connection_id` set |
+| 22 | Metadata route refuses foreign paths | `POST /api/videos/save-connection` with `storagePath` under another user's folder, another connection id, or a plain `portfolio/<uid>/<file>` | 400 `נתיב קובץ לא תקין` |
+| 23 | Only the creator of the connection, only in the right status | same call as the brand (its own folder never matches the path → 400), as a non-creator with a matching path → 403, or as the creator while the connection is `approved`/`shipped` → 400 | denied in all three cases |
+| 24 | Brand/creator can list connection videos; strangers cannot | `GET /api/videos?connectionId=<id>` as each party and as a third user | 200 / 200 / 403 |
+| 25 | Product edit succeeds and ignores `category` | as the owning brand: `PUT /api/products/<id>` `{name:'x', category:'ביוטי', brand_id:'<other>', price:'120'}` then `GET` | 200; name and price updated; brand unchanged. Body with only unknown keys → 400 |
+| 26 | Portfolio video delete | as the creator: `DELETE /api/videos/<own portfolio video id>` | 200 `{success, portfolio_count}`; row gone; storage object and thumbnail removed. Another creator's video or a connection video → 403 |
+| 27 | Pre-gate hearts can't be matched | brand approves a pending heart from a creator with fewer than 5 portfolio videos (`PUT …/connections/<id>` `{status:'approved'}` or a brand heart on the same product) | 409 `code:'creator_not_ready'`; connection stays `pending`; credits unchanged |
+| 28 | Cache never leaks between users (QA-01) | log in as a brand, open `/brand`, log out, log in as a creator in the same tab | lands on `/feed` (not `/brand`); `sessionStorage` has no `mashpian:cache:*` keys from the brand session; `mashpian:cache-owner` equals the creator's auth uid |

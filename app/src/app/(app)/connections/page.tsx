@@ -8,6 +8,7 @@ import { ProfileModal } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch, fetchJson } from "@/lib/client-cache";
+import { generateVideoThumbnail } from "@/lib/video-thumbnail";
 
 type TabType = "active" | "pending" | "completed";
 
@@ -206,16 +207,47 @@ export default function ConnectionsPage() {
       return;
     }
 
+    if (!user) {
+      toast("יש להתחבר מחדש", "error");
+      return;
+    }
+
     setUploadingId(connectionId);
 
     try {
-      const formData = new FormData();
-      formData.append("video", file);
-      formData.append("connectionId", connectionId);
+      // Upload straight to Storage (the server can't take large bodies), then record the metadata.
+      // The path stays inside this user's own folder, which is all the storage policy allows.
+      const supabase = createClient();
+      const ext = (file.name.split(".").pop() || "mp4").toLowerCase();
+      const stamp = Date.now();
+      const base = `portfolio/${user.id}/connections/${connectionId}/${stamp}`;
+      const storagePath = `${base}.${ext}`;
+      const thumbPath = `${base}.jpg`;
 
-      const res = await fetch("/api/videos", {
+      const [uploadResult, thumbBlob] = await Promise.all([
+        supabase.storage
+          .from("videos")
+          .upload(storagePath, file, { contentType: file.type || "video/mp4", upsert: false }),
+        generateVideoThumbnail(file),
+      ]);
+
+      if (uploadResult.error) {
+        toast("שגיאה בהעלאת הקובץ: " + uploadResult.error.message, "error");
+        return;
+      }
+
+      let thumbnailPath: string | null = null;
+      if (thumbBlob) {
+        const { error: thumbError } = await supabase.storage
+          .from("thumbnails")
+          .upload(thumbPath, thumbBlob, { contentType: "image/jpeg", upsert: true });
+        if (!thumbError) thumbnailPath = thumbPath;
+      }
+
+      const res = await fetch("/api/videos/save-connection", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ connectionId, storagePath, thumbnailPath }),
       });
 
       if (res.ok) {
@@ -226,8 +258,8 @@ export default function ConnectionsPage() {
           )
         );
       } else {
-        const data = await res.json();
-        toast(data.error || "שגיאה בהעלאת הסרטון", "error");
+        const data = await res.json().catch(() => ({}));
+        toast((data as any).error || "שגיאה בהעלאת הסרטון", "error");
       }
     } catch {
       toast("שגיאה בהעלאת הסרטון", "error");

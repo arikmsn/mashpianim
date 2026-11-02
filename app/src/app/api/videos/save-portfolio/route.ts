@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { isOwnPortfolioPath, isImagePath } from "@/lib/authz";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -23,15 +24,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "לא מחובר" }, { status: 401 });
     }
 
-    // Both files must live under this user's own portfolio folder
-    const ownFolder = `portfolio/${user.id}/`;
-    if (typeof storagePath !== "string" || !storagePath.startsWith(ownFolder)) {
+    // Both files must live directly under this user's own portfolio folder (portfolio/<uid>/<file>)
+    if (!isOwnPortfolioPath(storagePath, user.id)) {
       return NextResponse.json({ error: "נתיב קובץ לא תקין" }, { status: 400 });
     }
-    const thumbnailUrl =
-      typeof thumbnailPath === "string" && thumbnailPath.startsWith(ownFolder) && /\.(jpe?g|png|webp)$/i.test(thumbnailPath)
-        ? `${process.env.NEXT_SUPABASE_URL}/storage/v1/object/public/thumbnails/${thumbnailPath}`
-        : null;
+    const hasThumb = isOwnPortfolioPath(thumbnailPath, user.id) && isImagePath(thumbnailPath);
+    const thumbnailUrl = hasThumb
+      ? `${process.env.NEXT_SUPABASE_URL}/storage/v1/object/public/thumbnails/${thumbnailPath}`
+      : null;
 
     const supabase = getSupabaseAdmin();
     if (!supabase) {
@@ -48,9 +48,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "רק יוצרים יכולים להעלות סרטוני פורטפוליו" }, { status: 403 });
     }
 
-    const { data: signedData } = await supabase.storage
+    // Signing also proves the object exists; a missing file is a client error, not a row to keep
+    const { data: signedData, error: signError } = await supabase.storage
       .from("videos")
       .createSignedUrl(storagePath, 86400);
+    if (signError || !signedData?.signedUrl) {
+      return NextResponse.json({ error: "הקובץ לא נמצא באחסון" }, { status: 400 });
+    }
 
     const { data: video, error: insertError } = await supabase
       .from("videos")
@@ -76,6 +80,9 @@ export async function POST(request: NextRequest) {
 
     if (insertError) {
       console.error("[videos] portfolio insert error:", insertError);
+      // Don't leave an orphan object behind when the metadata row could not be written
+      await supabase.storage.from("videos").remove([storagePath]);
+      if (hasThumb) await supabase.storage.from("thumbnails").remove([thumbnailPath]);
       return NextResponse.json({ error: "שגיאה בשמירת הסרטון" }, { status: 500 });
     }
 

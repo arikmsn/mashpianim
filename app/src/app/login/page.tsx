@@ -4,6 +4,7 @@ import { Suspense, useState, useRef, useCallback } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { clearCache } from "@/lib/client-cache";
 import { useToast } from "@/components/ui";
 
 export default function LoginPage() {
@@ -65,6 +66,9 @@ function LoginContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
+      // A new session must never see the previous user's cached responses
+      clearCache();
+
       // Create Supabase session
       if (data.email && data.tempPassword) {
         const { error: sessionError } = await supabase.auth.signInWithPassword({
@@ -97,6 +101,7 @@ function LoginContent() {
     try {
       const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      clearCache();
       toast("התחברתם בהצלחה!", "success");
 
       let targetRedirect = redirect;
@@ -159,6 +164,7 @@ function LoginContent() {
       // The session cookie was set by the server; a full navigation picks it up
       const roleLabel = role === "creator" ? "יוצר תוכן" : "מפרסם";
       toast(`נכנסתם כ${roleLabel}`, "success");
+      clearCache();
       window.location.assign(data.redirect || "/feed");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "שגיאה";

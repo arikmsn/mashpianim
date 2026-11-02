@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
+import { clearCache } from "@/lib/client-cache";
 
 type UserType = "creator" | "brand" | null;
 
@@ -194,6 +195,7 @@ function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { 
       if (!registerRes.ok) throw new Error(registerData.error);
 
       toast("נרשמתם בהצלחה! 🎉", "success");
+      clearCache();
       router.push("/feed");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "שגיאה בהרשמה";
@@ -476,6 +478,7 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
       if (!registerRes.ok) throw new Error(registerData.error);
 
       toast("נרשמתם בהצלחה! 🎉", "success");
+      clearCache();
       router.push("/brand");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "שגיאה בהרשמה";

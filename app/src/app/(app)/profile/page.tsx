@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { Avatar, Badge, Button, Card, Modal, Input, Textarea, useToast } from "@/components/ui";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
-import { swrFetch } from "@/lib/client-cache";
+import { swrFetch, clearCache } from "@/lib/client-cache";
 import { generateVideoThumbnail } from "@/lib/video-thumbnail";
 
 interface PortfolioVideo {
@@ -532,6 +532,8 @@ export default function ProfilePage() {
   const [uploadTitle, setUploadTitle] = useState("");
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PortfolioVideo | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const { user, loading: authLoading, signOut } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
@@ -708,6 +710,29 @@ export default function ProfilePage() {
       toast("שגיאה בהעלאת הסרטון", "error");
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleDeleteVideo = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/videos/${deleteTarget.id}`, { method: "DELETE" });
+      if (res.ok) {
+        setPortfolioVideos((prev) => prev.filter((v) => v.id !== deleteTarget.id));
+        // The portfolio count feeds the 5-video gate elsewhere; don't let stale copies linger
+        clearCache("/api/videos?portfolio=me");
+        clearCache("/api/profile");
+        toast("הסרטון נמחק", "success");
+        setDeleteTarget(null);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast((err as any).error || "שגיאה במחיקת הסרטון", "error");
+      }
+    } catch {
+      toast("שגיאה במחיקת הסרטון", "error");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -1047,9 +1072,20 @@ export default function ProfilePage() {
                           {new Date(video.created_at).toLocaleDateString("he-IL")}
                         </p>
                       </div>
-                      {video.status === "rejected" && (
-                        <Badge variant="danger" size="sm">נדחה</Badge>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {video.status === "rejected" && (
+                          <Badge variant="danger" size="sm">נדחה</Badge>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(video)}
+                          className="text-xs text-neutral-400 hover:text-red-500 px-2 py-1 rounded-lg transition-colors"
+                          aria-label="מחיקת סרטון"
+                          title="מחיקת סרטון"
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </div>
                     {video.url && video.status !== "rejected" && (
                       <video
@@ -1171,6 +1207,32 @@ export default function ProfilePage() {
               העלאה
             </Button>
             <Button variant="ghost" fullWidth onClick={() => { setShowUploadModal(false); setSelectedFile(null); setUploadTitle(""); }}>
+              ביטול
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="מחיקת סרטון"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-neutral-600">
+            למחוק את &quot;{deleteTarget?.title || "סרטון פורטפוליו"}&quot;? הפעולה לא ניתנת לביטול.
+          </p>
+          {portfolioVideos.length <= 5 && (
+            <p className="text-xs text-amber-700 bg-amber-50 rounded-xl p-3">
+              שימו לב: עם פחות מ-5 סרטונים בתיק העבודות לא ניתן לסמן לב או לאשר חיבורים חדשים.
+            </p>
+          )}
+          <div className="flex gap-3">
+            <Button variant="danger" fullWidth loading={deleting} onClick={handleDeleteVideo}>
+              מחיקה
+            </Button>
+            <Button variant="ghost" fullWidth onClick={() => setDeleteTarget(null)}>
               ביטול
             </Button>
           </div>

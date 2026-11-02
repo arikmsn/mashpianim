@@ -46,6 +46,31 @@ export function clearCache(prefix?: string) {
   }
 }
 
+// Which signed-in user the cached responses belong to. When the session's user changes (someone else logs
+// in, logout, expired session) the cache is dropped so one person's data never renders for another (QA-01).
+export const CACHE_OWNER_KEY = "mashpian:cache-owner";
+
+export function shouldResetCache(previousOwner: string | null, nextOwner: string | null): boolean {
+  return previousOwner !== nextOwner;
+}
+
+export function syncCacheOwner(userId: string | null) {
+  let previous: string | null = null;
+  try {
+    previous = sessionStorage.getItem(CACHE_OWNER_KEY);
+  } catch {
+    // storage unavailable
+  }
+  if (!shouldResetCache(previous, userId)) return;
+  clearCache();
+  try {
+    if (userId) sessionStorage.setItem(CACHE_OWNER_KEY, userId);
+    else sessionStorage.removeItem(CACHE_OWNER_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export async function fetchJson<T>(url: string): Promise<T | null> {
   try {
     const res = await fetch(url);

@@ -54,6 +54,16 @@ const statusLabels: Record<string, { label: string; variant: "pink" | "success" 
 const pendingStatuses = ["pending"];
 const activeStatuses = ["approved", "shipped", "delivered", "filming", "uploaded", "in_review", "revision_requested"];
 const completedStatuses = ["completed", "rejected", "cancelled"];
+// Statuses in which a deliverable exists for the brand to watch
+const videoStatuses = ["uploaded", "in_review", "revision_requested", "completed"];
+
+interface ConnectionVideo {
+  id: string;
+  url: string;
+  thumbnail_url?: string | null;
+  status: string;
+  created_at: string;
+}
 
 function ConnectionsSkeleton() {
   return (
@@ -81,12 +91,36 @@ export default function BrandConnectionsPage() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [shipForm, setShipForm] = useState({ trackingNumber: "", trackingUrl: "", digitalAccessValue: "" });
   const [revisionNotes, setRevisionNotes] = useState("");
+  // Deliverable of the connection currently open in the modal (kept with its id so another connection's
+  // videos are never shown while a new fetch is in flight)
+  const [connectionVideos, setConnectionVideos] = useState<{ forId: string; videos: ConnectionVideo[] } | null>(null);
   const { toast } = useToast();
   const router = useRouter();
 
   useEffect(() => {
     fetchConnections();
   }, []);
+
+  // Load the uploaded deliverable when a connection with a video is opened
+  const selectedId = selectedConnection?.id ?? null;
+  const selectedStatus = selectedConnection?.status ?? null;
+  const selectedHasVideo = !!selectedStatus && videoStatuses.includes(selectedStatus);
+  useEffect(() => {
+    if (!selectedId || !selectedHasVideo) return;
+    let cancelled = false;
+    fetch(`/api/videos?connectionId=${selectedId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled) setConnectionVideos({ forId: selectedId, videos: (d?.videos as ConnectionVideo[]) || [] });
+      })
+      .catch(() => {
+        if (!cancelled) setConnectionVideos({ forId: selectedId, videos: [] });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId, selectedHasVideo]);
+  const visibleVideos = selectedHasVideo && connectionVideos?.forId === selectedId ? connectionVideos.videos : [];
 
   // Realtime: refresh connections on any change
   useEffect(() => {
@@ -405,6 +439,25 @@ export default function BrandConnectionsPage() {
                   </div>
                 )}
               </div>
+
+              {/* Uploaded deliverable */}
+              {visibleVideos.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">🎬 הסרטון שהועלה</p>
+                  {visibleVideos.map((v) => (
+                    <video
+                      key={v.id}
+                      src={v.url}
+                      poster={v.thumbnail_url || undefined}
+                      controls
+                      preload={v.thumbnail_url ? "none" : "metadata"}
+                      className="w-full rounded-xl max-h-72 bg-black"
+                      controlsList="nodownload"
+                      onContextMenu={(e) => e.preventDefault()}
+                    />
+                  ))}
+                </div>
+              )}
 
               {/* Shipping / Digital access form */}
               {selectedConnection.status === "approved" && (

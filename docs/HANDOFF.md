@@ -128,7 +128,9 @@ Pattern in every route: `createServerClient()` → `auth.getUser()` for identity
 | `messages/unread`, `messages/read` | GET, POST | badge count; mark connection read |
 | `videos` | GET, POST | GET `?portfolio=me|<userId>` (brands/admins may view others, rejected hidden) or `?connectionId=`; POST = connection video upload **through the server** (still subject to the 4.5 MB limit — see gaps) |
 | `videos/[id]` | PUT/DELETE | approve/reject/delete |
-| `videos/save-portfolio` | POST | records a browser-uploaded portfolio video (`storagePath`, `title`, `thumbnailPath`) |
+| `videos/save-portfolio` | POST | records a browser-uploaded portfolio video (`storagePath`, `title`, `thumbnailPath`); the path must be `portfolio/<auth uid>/<file>` |
+| `videos/save-connection` | POST | records a browser-uploaded deliverable for a connection (`connectionId`, `storagePath` = `portfolio/<auth uid>/connections/<connectionId>/<file>`, `thumbnailPath`) and moves the connection to `uploaded`; creator of that connection only, status must be delivered/filming/revision_requested |
+| `videos/[id]` | DELETE | creator deletes one of their own portfolio videos (storage objects + row); admins may delete any video |
 | `notifications` | GET, PUT | |
 | `admin/brands` | GET, PUT | list; PUT `{userId, is_active?, total_credits?}` |
 | `admin/creators`, `admin/moderation`, `admin/content`, `admin/settings`, `admin/stats` | | admin screens' data |
@@ -168,7 +170,7 @@ Earlier work: OTP auth, registration, feed, products, connections pipeline with 
 8. Admin moderation of portfolio videos (currently auto-approved; `videos.status` supports it).
 
 **Technical debt / risks**
-9. `POST /api/videos` (connection video upload) still streams the file through the serverless function → fails above ~4.5 MB. Convert to the direct-upload + metadata pattern used for portfolio (`save-portfolio`). This is the most likely user-facing bug right now.
+9. ~~`POST /api/videos` (connection video upload) streams the file through the serverless function~~ — fixed 2026-11-03 (Batch 3): the connections page uploads straight to Storage under `portfolio/<uid>/connections/<connectionId>/` and calls `POST /api/videos/save-connection`; the old `POST /api/videos` remains only as a small-file fallback with corrected authorization.
 10. Old portfolio videos have no `thumbnail_url` (only ones uploaded after `9bc40c1` do). A one-off backfill needs ffmpeg (e.g. a Render worker) or re-upload.
 11. Vercel Hobby: cron once/day; move to Pro for `*/15 * * * *` and commercial terms. `CRON_SECRET` must exist in Production (could not be verified via API).
 12. `brand/products/page.tsx` still sends a `category` field that the `products` table does not have (ignored by the API).
