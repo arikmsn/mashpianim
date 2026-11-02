@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/admin-auth";
-import { createNotification, logActivity } from "@/lib/notifications";
+import { logActivity } from "@/lib/notifications";
+import { performMatch, countPortfolioVideos, portfolioGateError, MIN_PORTFOLIO_VIDEOS, notifyHeartSent, notifyBrandOfHeart } from "@/lib/match";
 
 function getAdminClient() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -137,80 +138,134 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 
-  // Get user and their creator profile
   const { data: dbUser } = await admin
     .from("users")
-    .select("id, type")
+    .select("id, type, full_name, phone")
     .eq("auth_user_id", user.id)
     .single();
-
-  if ((dbUser as any)?.type !== "creator" && (dbUser as any)?.type !== "admin") {
-    return NextResponse.json({ error: "רק יוצרי תוכן יכולים לשלוח בקשות" }, { status: 403 });
-  }
-
-  let { data: creatorProfile } = await admin
-    .from("creator_profiles")
-    .select("id")
-    .eq("user_id", (dbUser as any).id)
-    .single();
-
-  if (!creatorProfile && (dbUser as any)?.type === "admin") {
-    const { data: newProfile } = await (admin.from("creator_profiles") as any)
-      .insert({ user_id: (dbUser as any).id, categories: ["אופנה"], level: "creator" })
-      .select("id")
-      .single();
-    creatorProfile = newProfile;
-  }
-
-  if (!creatorProfile) {
-    return NextResponse.json({ error: "לא נמצא פרופיל יוצר" }, { status: 404 });
+  const me = dbUser as any;
+  if (!me) {
+    return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 404 });
   }
 
   const body = await request.json();
-  const { product_id } = body;
-
+  const { product_id, creator_user_id } = body;
   if (!product_id) {
     return NextResponse.json({ error: "מזהה מוצר חסר" }, { status: 400 });
   }
 
-  // Get product and brand info
   const { data: product } = await admin
     .from("products")
-    .select("id, brand_id, status, name, product_type, brand_profiles(total_credits, used_credits, user_id, shop_name, users(id, full_name))")
+    .select("id, brand_id, status, name, product_type, brand_profiles(id, user_id, shop_name, users(id, full_name, phone))")
     .eq("id", product_id)
     .single();
 
   if (!product || (product as any).status !== "active") {
     return NextResponse.json({ error: "מוצר לא זמין" }, { status: 404 });
   }
-
-  // Check brand has available slots
   const brandProfile = (product as any).brand_profiles;
-  const availableSlots = (brandProfile?.total_credits || 0) - (brandProfile?.used_credits || 0);
-  if (availableSlots <= 0) {
-    return NextResponse.json({ error: "לעסק אין פניות זמינות. לא ניתן לשלוח בקשה כרגע." }, { status: 400 });
+  const brandUser = brandProfile?.users;
+
+  // A heart can come from either side
+  let initiatedBy: "creator" | "brand";
+  let creatorProfileId: string;
+  let creatorUserId: string;
+  let creatorName = "";
+  let creatorPhone: string | null = null;
+
+  const actsAsBrand = me.type === "brand" || (me.type === "admin" && creator_user_id);
+  if (actsAsBrand) {
+    if (me.type === "brand" && brandProfile?.user_id !== me.id) {
+      return NextResponse.json({ error: "המוצר לא שייך לעסק שלכם" }, { status: 403 });
+    }
+    if (!creator_user_id) {
+      return NextResponse.json({ error: "מזהה יוצר חסר" }, { status: 400 });
+    }
+    const { data: cp } = await admin
+      .from("creator_profiles")
+      .select("id, user_id, users(id, full_name, phone)")
+      .eq("user_id", creator_user_id)
+      .single();
+    if (!cp) {
+      return NextResponse.json({ error: "יוצר/ת לא נמצא/ה" }, { status: 404 });
+    }
+    initiatedBy = "brand";
+    creatorProfileId = (cp as any).id;
+    creatorUserId = (cp as any).user_id;
+    creatorName = (cp as any).users?.full_name || "";
+    creatorPhone = (cp as any).users?.phone || null;
+  } else if (me.type === "creator" || me.type === "admin") {
+    let { data: creatorProfile } = await admin
+      .from("creator_profiles")
+      .select("id")
+      .eq("user_id", me.id)
+      .single();
+    if (!creatorProfile && me.type === "admin") {
+      const { data: newProfile } = await (admin.from("creator_profiles") as any)
+        .insert({ user_id: me.id, categories: ["אופנה"], level: "creator" })
+        .select("id")
+        .single();
+      creatorProfile = newProfile;
+    }
+    if (!creatorProfile) {
+      return NextResponse.json({ error: "לא נמצא פרופיל יוצר" }, { status: 404 });
+    }
+    if (me.type === "creator") {
+      const count = await countPortfolioVideos(admin, me.id);
+      if (count < MIN_PORTFOLIO_VIDEOS) {
+        return NextResponse.json({ error: portfolioGateError(count), code: "portfolio_gate", count }, { status: 403 });
+      }
+    }
+    initiatedBy = "creator";
+    creatorProfileId = (creatorProfile as any).id;
+    creatorUserId = me.id;
+    creatorName = me.full_name || "";
+    creatorPhone = me.phone || null;
+  } else {
+    return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
   }
 
-  // Check for duplicate active connection
   const { data: existing } = await admin
     .from("connections")
-    .select("id")
-    .eq("creator_id", (creatorProfile as any).id)
+    .select("id, status, initiated_by")
+    .eq("creator_id", creatorProfileId)
     .eq("product_id", product_id)
     .not("status", "in", '("cancelled","rejected","completed")')
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (existing) {
-    return NextResponse.json({ error: "כבר שלחתם בקשה למוצר זה" }, { status: 409 });
+    const ex = existing as any;
+    // The other side already sent a heart on this product → this heart completes the match
+    if (ex.status === "pending" && (ex.initiated_by || "creator") !== initiatedBy) {
+      const result = await performMatch(admin, ex.id, me.id);
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error }, { status: result.status });
+      }
+      await logActivity({
+        actorId: me.id,
+        action: "connection_matched",
+        entityType: "connection",
+        entityId: ex.id,
+        details: { product_id, product_name: (product as any).name, initiatedBy },
+      });
+      return NextResponse.json({ connection: { id: ex.id, status: "approved" }, matched: true });
+    }
+    return NextResponse.json(
+      { error: initiatedBy === "brand" ? "כבר שלחתם לב ליוצר/ת על המוצר הזה" : "כבר סימנת לב למוצר הזה" },
+      { status: 409 }
+    );
   }
 
   const { data: connection, error } = await admin
     .from("connections")
     .insert({
-      creator_id: (creatorProfile as any).id,
+      creator_id: creatorProfileId,
       brand_id: (product as any).brand_id,
       product_id,
       status: "pending",
+      initiated_by: initiatedBy,
       delivery_type: (product as any).product_type || "physical",
     } as any)
     .select()
@@ -218,28 +273,35 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     console.error("[connections] create error:", error);
-    return NextResponse.json({ error: "שגיאה ביצירת בקשה" }, { status: 500 });
+    return NextResponse.json({ error: "שגיאה בשליחת הלב" }, { status: 500 });
   }
 
-  // Notify brand about new connection request
-  const brandUser = brandProfile?.users;
-  if (brandUser) {
-    await createNotification({
-      userId: (brandUser as any).id,
-      type: "new_connection_request",
-      title: "בקשת חיבור חדשה!",
-      body: `יוצר תוכן שלח בקשה למוצר "${(product as any).name}"`,
-      data: { connectionId: (connection as any).id },
+  const brandName = brandProfile?.shop_name || brandUser?.full_name || "העסק";
+  if (initiatedBy === "brand") {
+    await notifyHeartSent({
+      creatorUserId,
+      creatorPhone,
+      brandName,
+      productName: (product as any).name,
+      connectionId: (connection as any).id,
+    });
+  } else if (brandUser) {
+    await notifyBrandOfHeart({
+      brandUserId: brandUser.id,
+      brandPhone: brandUser.phone,
+      creatorName: creatorName || "יוצר/ת",
+      productName: (product as any).name,
+      connectionId: (connection as any).id,
     });
   }
 
   await logActivity({
-    actorId: (dbUser as any).id,
-    action: "connection_created",
+    actorId: me.id,
+    action: "heart_sent",
     entityType: "connection",
     entityId: (connection as any).id,
-    details: { product_id, product_name: (product as any).name },
+    details: { product_id, product_name: (product as any).name, initiatedBy },
   });
 
-  return NextResponse.json({ connection }, { status: 201 });
+  return NextResponse.json({ connection, matched: false }, { status: 201 });
 }

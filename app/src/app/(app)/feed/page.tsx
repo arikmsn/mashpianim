@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Avatar, Badge, Button, Card, useToast } from "@/components/ui";
+import { Avatar, Badge, Button, Card, Modal, useToast } from "@/components/ui";
 import { ProfileModal } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { useNotifications } from "@/hooks/use-notifications";
@@ -61,6 +61,14 @@ interface Product {
 }
 
 
+interface Relation {
+  connectionId: string;
+  status: string;
+  initiatedBy: "creator" | "brand";
+}
+
+const MIN_PORTFOLIO = 5;
+
 function ProductSkeleton() {
   return (
     <div className="bg-white rounded-2xl border border-neutral-100 overflow-hidden">
@@ -86,14 +94,24 @@ function ProductSkeleton() {
 
 function ProductCard({
   product,
+  relation,
+  locked,
   onApply,
+  onApprove,
+  onOpenChat,
   onViewBrand,
   applying,
+  approving,
 }: {
   product: Product;
+  relation: Relation | undefined;
+  locked: boolean;
   onApply: (id: string) => void;
+  onApprove: (connectionId: string) => void;
+  onOpenChat: (connectionId: string) => void;
   onViewBrand: (userId: string) => void;
   applying: string | null;
+  approving: string | null;
 }) {
   const placeholderColors = [
     "from-pink-200 to-pink-300",
@@ -106,8 +124,22 @@ function ProductCard({
   const colorIndex =
     parseInt(product.id.replace(/\D/g, "") || "0") % placeholderColors.length;
 
+  const pendingFromBrand = relation?.status === "pending" && relation.initiatedBy === "brand";
+  const pendingFromMe = relation?.status === "pending" && relation.initiatedBy === "creator";
+  const matched = !!relation && relation.status !== "pending";
+
   return (
-    <Card hover padding="none" className="overflow-hidden">
+    <Card hover padding="none" className="overflow-hidden relative">
+      {pendingFromBrand && (
+        <div className="absolute top-3 right-3 z-10 ig-gradient-bg text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">
+          💗 סימנו אותך
+        </div>
+      )}
+      {matched && (
+        <div className="absolute top-3 right-3 z-10 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">
+          🎉 מאטץ&apos;
+        </div>
+      )}
       {product.image ? (
         <div className="h-48 overflow-hidden">
           <img
@@ -149,9 +181,24 @@ function ProductCard({
             ₪{product.value}
           </Badge>
         </div>
-        <p className="text-sm text-neutral-600 mb-3 line-clamp-2">
-          {product.description}
-        </p>
+        {locked ? (
+          <div className="relative mb-3">
+            <p className="text-sm text-neutral-600 line-clamp-2 blur-sm select-none" aria-hidden="true">
+              {product.description || "פרטי המוצר, הדרישות והבריף יופיעו כאן"}
+            </p>
+            <button
+              type="button"
+              onClick={() => onApply(product.id)}
+              className="absolute inset-0 flex items-center justify-center text-xs font-medium text-neutral-600 bg-white/50 rounded-lg"
+            >
+              🔒 5 סרטונים בתיק פותחים את הפרטים
+            </button>
+          </div>
+        ) : (
+          <p className="text-sm text-neutral-600 mb-3 line-clamp-2">
+            {product.description}
+          </p>
+        )}
         <div className="flex items-center gap-2 mb-3 text-xs text-neutral-400">
           <span>📋 {product.requirements}</span>
         </div>
@@ -160,14 +207,33 @@ function ProductCard({
             <span>👥 {product.applicants}/{product.maxCreators}</span>
             <span>⏱ {product.deadline} ימים</span>
           </div>
-          <Button
-            size="sm"
-            rounded
-            loading={applying === product.id}
-            onClick={() => onApply(product.id)}
-          >
-            שלחו בקשה
-          </Button>
+          {pendingFromBrand && relation ? (
+            <Button
+              size="sm"
+              rounded
+              loading={approving === relation.connectionId}
+              onClick={() => onApprove(relation.connectionId)}
+            >
+              {locked ? "🔒 " : "💗 "}אישור — מאטץ&apos;
+            </Button>
+          ) : pendingFromMe ? (
+            <Button size="sm" rounded variant="secondary" disabled>
+              ❤️ לב נשלח
+            </Button>
+          ) : matched && relation ? (
+            <Button size="sm" rounded variant="secondary" onClick={() => onOpenChat(relation.connectionId)}>
+              💬 לצ&apos;אט
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              rounded
+              loading={applying === product.id}
+              onClick={() => onApply(product.id)}
+            >
+              {locked ? "🔒 " : "❤️ "}מעוניין/ת
+            </Button>
+          )}
         </div>
       </div>
     </Card>
@@ -197,13 +263,18 @@ export default function FeedPage() {
   const [applying, setApplying] = useState<string | null>(null);
   const [categories, setCategories] = useState<string[]>(["הכל", ...allFeedCategories]);
   const [viewBrandId, setViewBrandId] = useState<string | null>(null);
+  const [portfolioCount, setPortfolioCount] = useState<number | null>(null);
+  const [userCategories, setUserCategories] = useState<string[]>([]);
+  const [relations, setRelations] = useState<Record<string, Relation>>({});
+  const [gateOpen, setGateOpen] = useState(false);
+  const [approving, setApproving] = useState<string | null>(null);
   const { user } = useAuth();
   const { toast } = useToast();
   const { unreadCount } = useNotifications();
   const router = useRouter();
 
   useEffect(() => {
-    swrFetch<{ user?: { type?: string }; profile?: { categories?: string[]; category?: string } }>(
+    swrFetch<{ user?: { type?: string }; profile?: { categories?: string[]; category?: string; portfolio_count?: number } }>(
       "/api/profile",
       (data) => {
         if (data.user?.type === "brand") {
@@ -212,8 +283,12 @@ export default function FeedPage() {
         }
         const profile = data.profile || {};
         const userCats: string[] = profile.categories || (profile.category ? [profile.category] : []);
+        setUserCategories(userCats);
         if (userCats.length > 0) {
           setCategories(buildCategoryList(userCats));
+        }
+        if (data.user?.type === "creator") {
+          setPortfolioCount(typeof profile.portfolio_count === "number" ? profile.portfolio_count : 0);
         }
       }
     );
@@ -245,6 +320,33 @@ export default function FeedPage() {
   useEffect(() => {
     swrFetch("/api/products?status=active", applyProducts).finally(() => setLoading(false));
   }, [applyProducts]);
+
+  const applyRelations = useCallback((data: { connections?: Record<string, unknown>[] }) => {
+    const map: Record<string, Relation> = {};
+    for (const c of data.connections || []) {
+      const status = c.status as string;
+      if (["cancelled", "rejected", "completed"].includes(status)) continue;
+      const pid = c.product_id as string;
+      if (!pid || map[pid]) continue;
+      map[pid] = { connectionId: c.id as string, status, initiatedBy: c.initiated_by === "brand" ? "brand" : "creator" };
+    }
+    setRelations(map);
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    swrFetch("/api/connections", applyRelations);
+    const supabase = createClient();
+    const channel = supabase
+      .channel("feed-connections")
+      .on("postgres_changes", { event: "*", schema: "public", table: "connections" }, () => {
+        fetchJson<{ connections?: Record<string, unknown>[] }>("/api/connections").then((d) => d && applyRelations(d));
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, applyRelations]);
 
   // Realtime: refresh feed when products change
   useEffect(() => {
@@ -278,10 +380,16 @@ export default function FeedPage() {
     }
   }, [loading, categories, products, activeCategory]);
 
+  const locked = portfolioCount !== null && portfolioCount < MIN_PORTFOLIO;
+
   const handleApply = useCallback(
     async (productId: string) => {
       if (!user) {
         router.push("/login?redirect=/feed");
+        return;
+      }
+      if (locked) {
+        setGateOpen(true);
         return;
       }
 
@@ -292,27 +400,72 @@ export default function FeedPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ product_id: productId }),
         });
+        const data = await res.json().catch(() => ({}));
 
         if (res.ok) {
-          toast("בקשת החיבור נשלחה בהצלחה!", "success");
+          const connectionId = data.connection?.id as string;
+          if (data.matched) {
+            toast("🎉 יש מאטץ'! הצ'אט נפתח", "success");
+            setRelations((prev) => ({ ...prev, [productId]: { connectionId, status: "approved", initiatedBy: "brand" } }));
+          } else {
+            toast("❤️ הלב נשלח! נעדכן אותך כשהעסק יאשר", "success");
+            setRelations((prev) => ({ ...prev, [productId]: { connectionId, status: "pending", initiatedBy: "creator" } }));
+          }
           setProducts((prev) =>
-            prev.map((p) =>
-              p.id === productId
-                ? { ...p, applicants: p.applicants + 1 }
-                : p
-            )
+            prev.map((p) => (p.id === productId ? { ...p, applicants: p.applicants + 1 } : p))
           );
+        } else if (data.code === "portfolio_gate") {
+          setPortfolioCount(typeof data.count === "number" ? data.count : 0);
+          setGateOpen(true);
         } else {
-          const data = await res.json();
-          toast(data.error || "שגיאה בשליחת הבקשה", "error");
+          toast(data.error || "שגיאה בשליחת הלב", "error");
         }
       } catch {
-        toast("שגיאה בשליחת הבקשה", "error");
+        toast("שגיאה בשליחת הלב", "error");
       } finally {
         setApplying(null);
       }
     },
-    [user, router, toast]
+    [user, router, toast, locked]
+  );
+
+  const handleApprove = useCallback(
+    async (connectionId: string) => {
+      if (locked) {
+        setGateOpen(true);
+        return;
+      }
+      setApproving(connectionId);
+      try {
+        const res = await fetch(`/api/connections/${connectionId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "approved" }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          toast("🎉 יש מאטץ'! הצ'אט נפתח", "success");
+          setRelations((prev) => {
+            const next = { ...prev };
+            for (const pid of Object.keys(next)) {
+              if (next[pid].connectionId === connectionId) next[pid] = { ...next[pid], status: "approved" };
+            }
+            return next;
+          });
+          router.push(`/messages?connection=${connectionId}`);
+        } else if (data.code === "portfolio_gate") {
+          setPortfolioCount(typeof data.count === "number" ? data.count : 0);
+          setGateOpen(true);
+        } else {
+          toast(data.error || "שגיאה באישור", "error");
+        }
+      } catch {
+        toast("שגיאה באישור", "error");
+      } finally {
+        setApproving(null);
+      }
+    },
+    [locked, router, toast]
   );
 
   const effectiveCategory = activeCategory || "הכל";
@@ -327,6 +480,17 @@ export default function FeedPage() {
       return false;
     return true;
   });
+
+  // Products that match the creator's own categories float to the top; brand hearts first of all
+  const matchesUser = (p: Product) => userCategories.some((c) => productMatchesCategory(p, registrationToFeedMap[c] || c));
+  const rank = (p: Product) => {
+    const r = relations[p.id];
+    if (r?.status === "pending" && r.initiatedBy === "brand") return 3;
+    if (r && r.status !== "pending") return 2;
+    return matchesUser(p) ? 1 : 0;
+  };
+  const ordered = [...filtered].sort((a, b) => rank(b) - rank(a));
+  const brandHearts = Object.values(relations).filter((r) => r.status === "pending" && r.initiatedBy === "brand").length;
 
   return (
     <main className="min-h-screen bg-background pb-20">
@@ -399,6 +563,34 @@ export default function FeedPage() {
 
       {/* Product grid */}
       <div className="max-w-2xl mx-auto px-4 py-4">
+        {brandHearts > 0 && (
+          <button
+            type="button"
+            onClick={() => router.push("/connections")}
+            className="w-full text-right ig-gradient-bg text-white rounded-2xl p-3 mb-4 flex items-center gap-3 shadow-md"
+          >
+            <span className="text-2xl">💗</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold">{brandHearts === 1 ? "עסק אחד מתעניין בך!" : `${brandHearts} עסקים מתעניינים בך!`}</p>
+              <p className="text-xs text-white/90">{locked ? "השלימו 5 סרטונים בתיק כדי לאשר" : "אשרו כדי לפתוח צ'אט ולקבל את המוצר"}</p>
+            </div>
+            <span className="text-sm font-medium">לצפייה ›</span>
+          </button>
+        )}
+        {locked && (
+          <button
+            type="button"
+            onClick={() => router.push("/profile")}
+            className="w-full text-right bg-amber-50 border border-amber-200 rounded-2xl p-3 mb-4 flex items-center gap-3"
+          >
+            <span className="text-2xl">🎬</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-amber-800">תיק העבודות: {portfolioCount}/{MIN_PORTFOLIO}</p>
+              <p className="text-xs text-amber-700">העלו עוד {MIN_PORTFOLIO - (portfolioCount || 0)} סרטונים כדי לסמן לב ולפתוח פרטי מוצרים</p>
+            </div>
+            <span className="text-amber-600 text-sm font-medium">להעלאה ›</span>
+          </button>
+        )}
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[1, 2, 3, 4].map((i) => (
@@ -408,7 +600,7 @@ export default function FeedPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <AnimatePresence mode="popLayout">
-              {filtered.map((product) => (
+              {ordered.map((product) => (
                 <motion.div
                   key={product.id}
                   layout
@@ -419,16 +611,21 @@ export default function FeedPage() {
                 >
                   <ProductCard
                     product={product}
+                    relation={relations[product.id]}
+                    locked={locked}
                     onApply={handleApply}
+                    onApprove={handleApprove}
+                    onOpenChat={(id) => router.push(`/messages?connection=${id}`)}
                     onViewBrand={setViewBrandId}
                     applying={applying}
+                    approving={approving}
                   />
                 </motion.div>
               ))}
             </AnimatePresence>
           </div>
         )}
-        {!loading && filtered.length === 0 && (
+        {!loading && ordered.length === 0 && (
           <div className="text-center py-20 text-neutral-400">
             <span className="text-4xl block mb-4">🔍</span>
             <p>לא נמצאו מוצרים בקטגוריה זו</p>
@@ -437,6 +634,22 @@ export default function FeedPage() {
       </div>
 
       <ProfileModal userId={viewBrandId} onClose={() => setViewBrandId(null)} title="פרופיל העסק" />
+
+      <Modal open={gateOpen} onClose={() => setGateOpen(false)} size="sm">
+        <div className="text-center space-y-4">
+          <span className="text-4xl block">🎬</span>
+          <div>
+            <h3 className="text-lg font-bold">עוד {Math.max(0, MIN_PORTFOLIO - (portfolioCount || 0))} סרטונים ואת/ה בפנים</h3>
+            <p className="text-sm text-neutral-500 mt-1">
+              תיק העבודות: {portfolioCount || 0}/{MIN_PORTFOLIO}. עסקים בוחרים יוצרים לפי התיק — {MIN_PORTFOLIO} סרטונים פותחים לבבות, פרטי מוצרים וצ&apos;אט.
+            </p>
+          </div>
+          <div className="h-2 bg-neutral-100 rounded-full overflow-hidden">
+            <div className="h-full bg-pink-500 rounded-full" style={{ width: `${Math.min(100, ((portfolioCount || 0) / MIN_PORTFOLIO) * 100)}%` }} />
+          </div>
+          <Button fullWidth onClick={() => router.push("/profile")}>להעלאת סרטונים</Button>
+        </div>
+      </Modal>
     </main>
   );
 }

@@ -11,6 +11,7 @@ import { swrFetch } from "@/lib/client-cache";
 interface Connection {
   id: string;
   creatorId: string | null;
+  initiatedBy: "creator" | "brand";
   creatorName: string;
   creatorAvatar: string | null;
   productName: string;
@@ -113,6 +114,7 @@ export default function BrandConnectionsPage() {
         conns.map((c) => ({
           id: c.id as string,
           creatorId: (c as any).creator_profiles?.user_id || null,
+          initiatedBy: (c as any).initiated_by === "brand" ? "brand" : "creator",
           creatorName: (c as any).creator_profiles?.users?.full_name || (c as any).creator?.full_name || "יוצר/ת",
           creatorAvatar: (c as any).creator_profiles?.users?.avatar_url || null,
           productName: (c as any).products?.name || "מוצר",
@@ -149,8 +151,12 @@ export default function BrandConnectionsPage() {
         setConnections((prev) =>
           prev.map((c) => (c.id === connectionId ? { ...c, status: newStatus } : c))
         );
-        const label = statusLabels[newStatus]?.label || newStatus;
-        toast(`סטטוס עודכן: ${label}`, "success");
+        if (newStatus === "approved") {
+          toast("🎉 יש מאטץ'! הצ'אט נפתח והבריף נשלח", "success");
+        } else {
+          const label = statusLabels[newStatus]?.label || newStatus;
+          toast(`סטטוס עודכן: ${label}`, "success");
+        }
         setSelectedConnection(null);
         setShipForm({ trackingNumber: "", trackingUrl: "", digitalAccessValue: "" });
         setRevisionNotes("");
@@ -181,8 +187,12 @@ export default function BrandConnectionsPage() {
     const actions: { label: string; status: string; variant: "primary" | "secondary" | "danger"; needsModal?: boolean }[] = [];
     switch (conn.status) {
       case "pending":
-        actions.push({ label: "אישור", status: "approved", variant: "primary" });
-        actions.push({ label: "דחייה", status: "rejected", variant: "danger" });
+        if (conn.initiatedBy === "brand") {
+          actions.push({ label: "ביטול הלב", status: "cancelled", variant: "secondary" });
+        } else {
+          actions.push({ label: "💗 אישור — מאטץ'", status: "approved", variant: "primary" });
+          actions.push({ label: "דחייה", status: "rejected", variant: "danger" });
+        }
         break;
       case "approved":
         actions.push({ label: conn.productType === "digital" ? "שליחת גישה" : "עדכון משלוח", status: "shipped", variant: "primary", needsModal: true });
@@ -242,7 +252,12 @@ export default function BrandConnectionsPage() {
         ) : (
           <div className="space-y-3">
             {filtered.map((conn, i) => {
-              const statusInfo = statusLabels[conn.status] || { label: conn.status, variant: "default" as const };
+              const statusInfo =
+                conn.status === "pending" && conn.initiatedBy === "brand"
+                  ? { label: "💗 הלב נשלח — ממתין ליוצר/ת", variant: "pink" as const }
+                  : conn.status === "pending"
+                    ? { label: "💗 סימן/ה אתכם", variant: "warning" as const }
+                    : statusLabels[conn.status] || { label: conn.status, variant: "default" as const };
               const actions = getActions(conn);
               return (
                 <motion.div
@@ -483,8 +498,22 @@ export default function BrandConnectionsPage() {
                 </div>
               )}
 
+              {selectedConnection.status === "pending" && selectedConnection.initiatedBy === "brand" && (
+                <div className="bg-pink-50 rounded-xl p-4 space-y-3">
+                  <p className="text-sm text-pink-700">💗 שלחתם לב ל{selectedConnection.creatorName}. ברגע שהיוצר/ת יאשר/תאשר ייפתח צ&apos;אט ויירד קרדיט אחד.</p>
+                  <Button
+                    variant="secondary"
+                    fullWidth
+                    loading={updating === selectedConnection.id}
+                    onClick={() => updateStatus(selectedConnection.id, "cancelled")}
+                  >
+                    ביטול הלב
+                  </Button>
+                </div>
+              )}
+
               {/* Basic actions for other statuses */}
-              {selectedConnection.status === "pending" && (
+              {selectedConnection.status === "pending" && selectedConnection.initiatedBy !== "brand" && (
                 <div className="flex gap-3 pt-2">
                   <Button
                     fullWidth

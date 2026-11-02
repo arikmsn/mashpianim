@@ -61,9 +61,15 @@ export async function GET() {
       rawProfile = newProfile;
     }
 
+    const { count: portfolioCount } = await admin
+      .from("videos")
+      .select("id", { count: "exact", head: true })
+      .eq("creator_id", userData.id)
+      .is("connection_id", null);
+
     return NextResponse.json({
       user: userData,
-      profile: rawProfile || {},
+      profile: { ...((rawProfile as any) || {}), portfolio_count: portfolioCount || 0 },
     });
   } else if (userData.type === "brand") {
     const { data: rawProfile } = await admin

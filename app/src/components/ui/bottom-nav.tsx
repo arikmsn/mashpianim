@@ -47,12 +47,6 @@ const productsIcon = (
   </svg>
 );
 
-const dashboardIcon = (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
-  </svg>
-);
-
 const creatorNavItems: NavItem[] = [
   { href: "/feed", label: "גלו", icon: compassIcon },
   { href: "/connections", label: "חיבורים", icon: connectionsIcon },
@@ -61,7 +55,7 @@ const creatorNavItems: NavItem[] = [
 ];
 
 const brandNavItems: NavItem[] = [
-  { href: "/brand", label: "לוח בקרה", icon: dashboardIcon },
+  { href: "/brand", label: "גלו", icon: compassIcon },
   { href: "/brand/products", label: "מוצרים", icon: productsIcon },
   { href: "/brand/connections", label: "חיבורים", icon: connectionsIcon },
   { href: "/messages", label: "הודעות", icon: messagesIcon },

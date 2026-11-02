@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Badge, Avatar, Card, Button, useToast } from "@/components/ui";
+import { Badge, Avatar, Card, Button, Modal, useToast } from "@/components/ui";
 import { ProfileModal } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
@@ -34,6 +34,7 @@ interface Connection {
   brand: string;
   brandAvatar: string | null;
   brandUserId: string | null;
+  initiatedBy: "creator" | "brand";
   status: string;
   daysLeft: number | null;
   deliveryType: "physical" | "digital";
@@ -57,6 +58,7 @@ function mapConnection(c: Record<string, unknown>): Connection {
     brand: (c as any).brand_profiles?.shop_name || (c.brand_name as string) || "",
     brandAvatar: (c as any).brand_profiles?.logo_url || (c as any).brand_profiles?.users?.avatar_url || null,
     brandUserId: (c as any).brand_profiles?.user_id || null,
+    initiatedBy: (c as any).initiated_by === "brand" ? "brand" : "creator",
     status: (c.status as string) || "pending",
     daysLeft,
     deliveryType: ((c as any).delivery_type as "physical" | "digital") || "physical",
@@ -96,6 +98,9 @@ export default function ConnectionsPage() {
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [viewBrandId, setViewBrandId] = useState<string | null>(null);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [portfolioCount, setPortfolioCount] = useState<number | null>(null);
+  const [gateOpen, setGateOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadConnectionIdRef = useRef<string | null>(null);
   const { user } = useAuth();
@@ -111,6 +116,52 @@ export default function ConnectionsPage() {
   useEffect(() => {
     swrFetch("/api/connections", applyConnections).finally(() => setLoading(false));
   }, [applyConnections]);
+
+  useEffect(() => {
+    swrFetch<{ user?: { type?: string }; profile?: { portfolio_count?: number } }>("/api/profile", (data) => {
+      if (data.user?.type === "creator") {
+        setPortfolioCount(typeof data.profile?.portfolio_count === "number" ? data.profile.portfolio_count : 0);
+      }
+    });
+  }, []);
+
+  const locked = portfolioCount !== null && portfolioCount < 5;
+
+  async function respond(connectionId: string, status: "approved" | "rejected" | "cancelled") {
+    if (status === "approved" && locked) {
+      setGateOpen(true);
+      return;
+    }
+    setRespondingId(connectionId);
+    try {
+      const res = await fetch(`/api/connections/${connectionId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setConnections((prev) => prev.map((c) => (c.id === connectionId ? { ...c, status } : c)));
+        if (status === "approved") {
+          toast("🎉 יש מאטץ'! הצ'אט נפתח", "success");
+          router.push(`/messages?connection=${connectionId}`);
+        } else if (status === "rejected") {
+          toast("דחית את הלב. העסק יעודכן.", "info");
+        } else {
+          toast("הלב בוטל", "info");
+        }
+      } else if ((data as any).code === "portfolio_gate") {
+        setPortfolioCount(typeof (data as any).count === "number" ? (data as any).count : 0);
+        setGateOpen(true);
+      } else {
+        toast((data as any).error || "שגיאה בעדכון", "error");
+      }
+    } catch {
+      toast("שגיאה בעדכון", "error");
+    } finally {
+      setRespondingId(null);
+    }
+  }
 
   // Realtime: refresh connections when status changes
   useEffect(() => {
@@ -269,10 +320,15 @@ export default function ConnectionsPage() {
         ) : (
           <>
             {filtered.map((conn) => {
-              const status = statusConfig[conn.status] || {
-                label: conn.status,
-                variant: "default" as const,
-              };
+              const status =
+                conn.status === "pending" && conn.initiatedBy === "brand"
+                  ? { label: "💗 סימנו אותך", variant: "pink" as const }
+                  : conn.status === "pending"
+                    ? { label: "❤️ לב נשלח — ממתין לעסק", variant: "default" as const }
+                    : statusConfig[conn.status] || {
+                        label: conn.status,
+                        variant: "default" as const,
+                      };
               const showUpload = canUploadVideo(conn.status);
               const isUploading = uploadingId === conn.id;
 
@@ -341,6 +397,49 @@ export default function ConnectionsPage() {
                       </div>
                     </button>
 
+                    {conn.status === "pending" && (
+                      <div className="mt-3 pt-3 border-t border-neutral-100">
+                        {conn.initiatedBy === "brand" ? (
+                          <>
+                            <p className="text-sm text-pink-600 font-medium mb-2">
+                              💗 {conn.brand} מתעניינים בך למוצר הזה
+                              {locked ? ` — השלימו ${5 - (portfolioCount || 0)} סרטונים בתיק כדי לאשר` : ""}
+                            </p>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                fullWidth
+                                loading={respondingId === conn.id}
+                                onClick={(e) => { e.stopPropagation(); respond(conn.id, "approved"); }}
+                              >
+                                {locked ? "🔒 " : "💗 "}אישור — מאטץ&apos;
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                fullWidth
+                                loading={respondingId === conn.id}
+                                onClick={(e) => { e.stopPropagation(); respond(conn.id, "rejected"); }}
+                              >
+                                לא תודה
+                              </Button>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-neutral-500">הלב נשלח — ממתינים לתשובת העסק (עד 7 ימים)</p>
+                            <button
+                              type="button"
+                              className="text-xs text-neutral-400 hover:text-red-500"
+                              onClick={(e) => { e.stopPropagation(); respond(conn.id, "cancelled"); }}
+                            >
+                              ביטול
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Delivery confirmation for shipped items */}
                     {canConfirmDelivery(conn.status) && (
                       <div className="mt-3 pt-3 border-t border-neutral-100 space-y-2">
@@ -404,6 +503,22 @@ export default function ConnectionsPage() {
       </div>
 
       <ProfileModal userId={viewBrandId} onClose={() => setViewBrandId(null)} title="פרופיל העסק" />
+
+      <Modal open={gateOpen} onClose={() => setGateOpen(false)} size="sm">
+        <div className="text-center space-y-4">
+          <span className="text-4xl block">🎬</span>
+          <div>
+            <h3 className="text-lg font-bold">עוד {Math.max(0, 5 - (portfolioCount || 0))} סרטונים ואת/ה בפנים</h3>
+            <p className="text-sm text-neutral-500 mt-1">
+              תיק העבודות: {portfolioCount || 0}/5. כדי לאשר מאטץ&apos; ולפתוח צ&apos;אט צריך 5 סרטונים בתיק.
+            </p>
+          </div>
+          <div className="h-2 bg-neutral-100 rounded-full overflow-hidden">
+            <div className="h-full bg-pink-500 rounded-full" style={{ width: `${Math.min(100, ((portfolioCount || 0) / 5) * 100)}%` }} />
+          </div>
+          <Button fullWidth onClick={() => router.push("/profile")}>להעלאת סרטונים</Button>
+        </div>
+      </Modal>
     </main>
   );
 }

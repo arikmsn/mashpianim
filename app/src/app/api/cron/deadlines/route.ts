@@ -25,7 +25,40 @@ export async function GET(request: NextRequest) {
   }
 
   const now = new Date().toISOString();
-  const results = { cancelled: 0, warnings: 0, flagged: 0 };
+  const results = { expired: 0, cancelled: 0, warnings: 0, flagged: 0 };
+
+  // 0. Hearts left unanswered for 7 days expire
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+  const { data: staleHearts } = await supabase
+    .from("connections")
+    .select(`
+      id, initiated_by,
+      products(name),
+      creator_profiles!connections_creator_id_fkey(users(id)),
+      brand_profiles!connections_brand_id_fkey(users(id))
+    `)
+    .eq("status", "pending")
+    .lt("created_at", sevenDaysAgo);
+
+  for (const conn of (staleHearts || []) as any[]) {
+    await supabase.from("connections").update({
+      status: "cancelled",
+      rejection_reason: "expired",
+    } as any).eq("id", conn.id);
+
+    const senderUser = conn.initiated_by === "brand" ? conn.brand_profiles?.users : conn.creator_profiles?.users;
+    if (senderUser) {
+      await createNotification({
+        userId: senderUser.id,
+        type: "heart_expired",
+        title: "הלב פג",
+        body: `הלב למוצר "${conn.products?.name || ""}" לא נענה תוך 7 ימים ובוטל. אפשר לנסות שוב או לבחור מישהו אחר.`,
+        data: { connectionId: conn.id },
+      });
+    }
+    await logActivity({ action: "heart_expired", entityType: "connection", entityId: conn.id });
+    results.expired++;
+  }
 
   // 1. Ship deadline passed (approved but not shipped in 7 days) → warn at 5d, cancel at 14d
   const { data: overdueShipping } = await supabase

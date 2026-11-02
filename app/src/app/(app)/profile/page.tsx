@@ -966,6 +966,23 @@ export default function ProfilePage() {
         </div>
       </div>
 
+      {portfolioVideos.length < 5 && (
+        <div className="max-w-2xl mx-auto px-4 mt-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <p className="text-sm font-bold text-amber-800">🎬 תיק העבודות: {portfolioVideos.length}/5</p>
+              <Button size="sm" onClick={() => setShowUploadModal(true)}>העלאת סרטון</Button>
+            </div>
+            <div className="h-2 bg-amber-100 rounded-full overflow-hidden">
+              <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${Math.min(100, (portfolioVideos.length / 5) * 100)}%` }} />
+            </div>
+            <p className="text-xs text-amber-700 mt-2">
+              כדי לסמן לב למוצרים ולאשר שיתופי פעולה צריך לפחות 5 סרטונים בתיק. עסקים כבר רואים אותך ויכולים לסמן אותך בינתיים.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="max-w-2xl mx-auto px-4">
         <div className="flex gap-1 bg-neutral-50 rounded-xl p-1 mt-4 mb-4">

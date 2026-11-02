@@ -19,6 +19,7 @@ interface Conversation {
   time: string;
   unread: number;
   product: string | null;
+  productImage: string | null;
 }
 
 interface Message {
@@ -98,6 +99,7 @@ function MessagesContent() {
           time: lastAt ? formatTime(lastAt) : "",
           unread: (c.unread_count as number) || 0,
           product: (prod?.name as string) || null,
+          productImage: (prod?.image_url as string) || null,
         };
       });
       setConversations(mapped);
@@ -407,6 +409,13 @@ function MessagesContent() {
               aria-label="צפייה בפרופיל"
             >
               <Avatar src={selectedConversation?.avatar} name={selectedConversation?.name || ""} size="sm" />
+              {selectedConversation?.productImage && (
+                <img
+                  src={selectedConversation.productImage}
+                  alt={selectedConversation.product || ""}
+                  className="w-8 h-8 rounded-lg object-cover -mr-1 ring-2 ring-white"
+                />
+              )}
               <div className="min-w-0">
                 <p className="font-medium text-sm truncate">
                   {selectedConversation?.name}

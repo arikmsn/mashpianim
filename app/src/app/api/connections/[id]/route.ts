@@ -3,7 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/admin-auth";
 import { filterContactInfo } from "@/lib/moderation/chat-filter";
-import { notifyConnectionStatusChange, logActivity } from "@/lib/notifications";
+import { notifyConnectionStatusChange, logActivity, createNotification } from "@/lib/notifications";
+import { performMatch, countPortfolioVideos, portfolioGateError, MIN_PORTFOLIO_VIDEOS } from "@/lib/match";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -58,7 +59,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
 // State machine: which transitions are valid and who can trigger them
 const validTransitions: Record<string, { targets: string[]; allowedRoles: string[] }> = {
-  pending:             { targets: ["approved", "rejected"], allowedRoles: ["brand", "admin"] },
+  // pending = a heart from one side; who may answer/cancel is resolved per connection below
+  pending:             { targets: ["approved", "rejected", "cancelled"], allowedRoles: ["brand", "creator", "admin"] },
   approved:            { targets: ["shipped", "cancelled"], allowedRoles: ["brand", "admin"] },
   shipped:             { targets: ["delivered", "cancelled"], allowedRoles: ["creator", "admin"] },
   delivered:           { targets: ["filming"], allowedRoles: ["creator", "admin"] },
@@ -149,37 +151,48 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   const product = (connection as any).products;
   const brandProfile = product?.brand_profiles;
   const creatorProfile = (connection as any).creator_profiles;
+  const initiatedBy: "creator" | "brand" = (connection as any).initiated_by === "brand" ? "brand" : "creator";
+
+  // The acting user must be a party to this connection
+  if (userType === "brand" && brandProfile?.user_id !== (dbUser as any).id) {
+    return NextResponse.json({ error: "אין הרשאה לחיבור זה" }, { status: 403 });
+  }
+  if (userType === "creator" && creatorProfile?.user_id !== (dbUser as any).id) {
+    return NextResponse.json({ error: "אין הרשאה לחיבור זה" }, { status: 403 });
+  }
+
+  // Hearts: only the other side can answer, only the sender can withdraw
+  if (currentStatus === "pending" && userType !== "admin") {
+    const responder = initiatedBy === "brand" ? "creator" : "brand";
+    if (newStatus === "cancelled" && userType !== initiatedBy) {
+      return NextResponse.json({ error: "רק מי ששלח את הלב יכול לבטל אותו" }, { status: 403 });
+    }
+    if ((newStatus === "approved" || newStatus === "rejected") && userType !== responder) {
+      return NextResponse.json({ error: "ממתינים לתשובת הצד השני" }, { status: 403 });
+    }
+    if (newStatus === "approved" && userType === "creator") {
+      const count = await countPortfolioVideos(admin, (dbUser as any).id);
+      if (count < MIN_PORTFOLIO_VIDEOS) {
+        return NextResponse.json({ error: portfolioGateError(count), code: "portfolio_gate", count }, { status: 403 });
+      }
+    }
+  }
 
   // Status-specific logic
   switch (newStatus) {
     case "approved": {
-      updates.approved_at = now.toISOString();
-      updates.ship_deadline = new Date(now.getTime() + 7 * 86400000).toISOString();
-      updates.delivery_type = product?.product_type || "physical";
-
-      // Deduct slot from brand
-      if (brandProfile && !(connection as any).credit_deducted) {
-        const currentUsed = brandProfile.used_credits || 0;
-        const currentTotal = brandProfile.total_credits || 0;
-        if (currentUsed >= currentTotal) {
-          return NextResponse.json({ error: "אין פניות זמינות" }, { status: 400 });
-        }
-        await admin
-          .from("brand_profiles")
-          .update({ used_credits: currentUsed + 1 } as any)
-          .eq("id", (connection as any).brand_id);
-        updates.credit_deducted = true;
+      const result = await performMatch(admin, id, (dbUser as any).id);
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error }, { status: result.status });
       }
-
-      // Auto-create welcome system message
-      await admin.from("messages").insert({
-        connection_id: id,
-        sender_id: (dbUser as any).id,
-        text: "הבקשה אושרה! אפשר להתחיל לתקשר דרך הצ׳אט 🎉",
-        is_system: true,
-      } as any);
-
-      break;
+      await logActivity({
+        actorId: (dbUser as any).id,
+        action: "connection_matched",
+        entityType: "connection",
+        entityId: id,
+        details: { initiatedBy },
+      });
+      return NextResponse.json({ success: true, status: "approved" });
     }
 
     case "shipped": {
@@ -299,7 +312,24 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   // Send notifications
   const creatorUser = creatorProfile?.users;
   const brandUser = brandProfile?.users;
-  if (creatorUser && brandUser) {
+  if (newStatus === "rejected" && initiatedBy === "brand" && brandUser) {
+    await createNotification({
+      userId: (brandUser as any).id,
+      type: "heart_declined",
+      title: "היוצר/ת דחה/תה את הלב",
+      body: `${(creatorUser as any)?.full_name || "היוצר/ת"} לא מעוניין/ת כרגע ב"${product?.name || "המוצר"}". הקרדיט לא נוצל — אפשר לבחור יוצר/ת אחר/ת.`,
+      data: { connectionId: id },
+    });
+  } else if (newStatus === "cancelled" && currentStatus === "pending" && creatorUser && brandUser) {
+    const target = initiatedBy === "brand" ? creatorUser : brandUser;
+    await createNotification({
+      userId: (target as any).id,
+      type: "heart_withdrawn",
+      title: "לב בוטל",
+      body: `הלב למוצר "${product?.name || ""}" בוטל על ידי הצד השני.`,
+      data: { connectionId: id },
+    });
+  } else if (creatorUser && brandUser) {
     await notifyConnectionStatusChange(newStatus, {
       connectionId: id,
       productName: product?.name || "",
