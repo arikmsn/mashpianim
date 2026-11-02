@@ -10,6 +10,8 @@ Runs `tests/**/*.test.ts` with Node's built-in runner (`node --test`, TypeScript
 
 `authz.test.ts` covers the pure authorization rules used by the API routes: registration role whitelist, profile field allowlists, connection participation, public product projection, dev-login availability.
 
+`match-errors.test.ts` covers the mapping of `match_connection()` database errors (`NO_CREDITS`, `CONNECTION_NOT_PENDING`, …) to API responses and the Postgres unique-violation detection used for duplicate hearts.
+
 ## Security regression checks that need a running stack
 
 These cannot run without Supabase + a session. Run them against a local `npm run dev` (or a preview deployment) with two test users (A, B) signed in on two browsers; use the browser devtools console on the app origin so cookies are sent.
@@ -29,3 +31,17 @@ These cannot run without Supabase + a session. Run them against a local `npm run
 | 11 | Public products hide private fields | as a creator: `GET /api/products?status=active` and `GET /api/products/<id>` | no `shipping_address`, `digital_access_instructions`, `brand_id`, `brand_profiles` in any item |
 | 12 | Brand still sees its own private fields | as the owning brand: `GET /api/products?brand=me` | items include `shipping_address` / `digital_access_instructions` |
 | 13 | user-type is session-scoped | as A: `GET /api/auth/user-type?userId=<B uid>` | 403; without `userId` → own type |
+
+## Database-level checks (Batch 2: migrations 007/008)
+
+These hit Supabase directly with the publishable (anon) key, which is what an attacker who extracts it from the browser would do. `URL` = `NEXT_PUBLIC_SUPABASE_URL`, `ANON` = `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `JWT` = a signed-in user's access token (from the `sb-*-auth-token` cookie, base64 JSON → `access_token`).
+
+| # | Check | Request | Expected |
+|---|---|---|---|
+| 14 | Signed-in user cannot write any table | `PATCH $URL/rest/v1/users?id=eq.<own id>` with `apikey: $ANON`, `Authorization: Bearer $JWT`, body `{"type":"admin"}`; repeat for `connections`, `messages`, `notifications`, `brand_profiles`, `products`, `videos` (INSERT/UPDATE/DELETE) | 403 `42501 permission denied for table …`; rows unchanged |
+| 15 | Anonymous cannot write | `POST $URL/rest/v1/users` with only `apikey: $ANON` | 401 `42501` |
+| 16 | Match function is service-role only | `POST $URL/rest/v1/rpc/match_connection` `{"p_connection_id":"<id>"}` with a user JWT, and with the anon key alone | 403 / 401 `permission denied for function match_connection` |
+| 17 | Reads still scoped (Realtime depends on this) | `GET $URL/rest/v1/connections?select=id,status` with a user JWT; same with anon key only | own rows only; anon gets `[]` |
+| 18 | One active heart per creator/product | two simultaneous `POST /api/connections` `{product_id}` as the same creator | one 201, one 409; exactly one non-cancelled row in `connections` for that pair |
+| 19 | Credits are atomic and bounded | brand with `used_credits = total_credits` approves/hearts a pending connection | 400 `לעסק אין סרטונים זמינים כרגע…`; connection stays `pending`, `used_credits` unchanged |
+| 20 | Admin cannot set total below used | `PUT /api/admin/brands` `{userId, total_credits:<less than used>}` as admin | 400 `לא ניתן להגדיר פחות סרטונים ממה שכבר נוצל` |

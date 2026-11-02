@@ -4,6 +4,7 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/admin-auth";
 import { logActivity } from "@/lib/notifications";
 import { performMatch, countPortfolioVideos, portfolioGateError, MIN_PORTFOLIO_VIDEOS, notifyHeartSent, notifyBrandOfHeart } from "@/lib/match";
+import { isUniqueViolation } from "@/lib/match-errors";
 
 function getAdminClient() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -272,6 +273,10 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) {
+    // The partial unique index guarantees one active connection per creator/product even under concurrency
+    if (isUniqueViolation(error)) {
+      return NextResponse.json({ error: "כבר קיים לב פעיל על המוצר הזה" }, { status: 409 });
+    }
     console.error("[connections] create error:", error);
     return NextResponse.json({ error: "שגיאה בשליחת הלב" }, { status: 500 });
   }

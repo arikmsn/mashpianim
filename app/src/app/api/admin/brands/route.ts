@@ -79,6 +79,10 @@ export async function PUT(request: NextRequest) {
       .eq("user_id", userId);
 
     if (error) {
+      // brand_profiles_credits_check: total can't drop below the credits already used
+      if ((error as { code?: string }).code === "23514") {
+        return NextResponse.json({ error: "לא ניתן להגדיר פחות סרטונים ממה שכבר נוצל" }, { status: 400 });
+      }
       console.error("[admin/brands] credits update error:", error);
       return NextResponse.json({ error: "שגיאה בעדכון סרטונים" }, { status: 500 });
     }

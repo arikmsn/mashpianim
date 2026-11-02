@@ -28,7 +28,7 @@ Israeli UGC marketplace, Hebrew-first, RTL, mobile-first PWA. Brand name "משפ
 | Framework | Next.js 16.4 (App Router), React 19.3, TypeScript 5 | `app/` directory is the Next project root |
 | Styling | Tailwind CSS 4, framer-motion 14 | Instagram-gradient theme (`.ig-gradient-bg`), pink primary |
 | Backend | Next.js route handlers under `app/src/app/api/**` | All DB access through the Supabase **service-role** client; user identity via `@supabase/ssr` cookie session |
-| Database/Auth/Storage/Realtime | Supabase, project id `rhhfzvmiwhmnviznxvlv` | RLS on every table; API routes bypass RLS with the service key and do their own authorization |
+| Database/Auth/Storage/Realtime | Supabase, project id `rhhfzvmiwhmnviznxvlv` | RLS on every table; API routes bypass RLS with the service key and do their own authorization. Since migration `007_rls_hardening` the client roles (`anon`/`authenticated`) hold **SELECT only** (no write policies, write privileges revoked) — SELECT is kept for Realtime and a few session-client reads. Matching runs through the `match_connection()` SECURITY DEFINER function (service_role only), which deducts the credit and flips the status atomically |
 | Messaging | GreenAPI (WhatsApp) via `lib/adapters/greenapi.ts` | OTP login codes, heart/match notifications |
 | Hosting | Vercel project `mashpianim` (team `arikmsns-projects`), **Hobby plan** | Auto-deploys `main`. Hobby = crons once/day, 60 s function limit, non-commercial terms |
 | Cron | `app/vercel.json` → `GET /api/cron/deadlines` daily 06:00 UTC | Route accepts Vercel's `Authorization: Bearer <CRON_SECRET>` or `?secret=` |
@@ -104,7 +104,7 @@ docs/                           design-research.md (visual references), this fil
 
 **Storage buckets:** `videos` (private; policies `auth_users_upload_videos` + `auth_users_read_own_videos` scoped to `portfolio/{auth.uid()}/`), `images` (private, service role only), `thumbnails` (**public**, authenticated upload to `portfolio/{auth.uid()}/`, 2 MB, images only). Videos are uploaded **directly from the browser** to Supabase Storage (Vercel's 4.5 MB body limit makes server-side upload impossible), then `/api/videos/save-portfolio` records metadata.
 
-Migrations were applied via the Supabase MCP (`apply_migration`); recent ones: `add_video_storage_policies_for_auth_users`, `add_brand_categories_array`, `add_connections_initiated_by`, `add_public_thumbnails_bucket`.
+Migrations were applied via the Supabase MCP (`apply_migration`); recent ones: `add_video_storage_policies_for_auth_users`, `add_brand_categories_array`, `add_connections_initiated_by`, `add_public_thumbnails_bucket`, `rls_hardening` + `revoke_maintain_from_client_roles` (2026-11-02, saved in the repo as `app/supabase/migrations/007_rls_hardening.sql` and `008_revoke_maintain.sql`). 007 removed every write policy for the client roles, revoked their INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER (008: MAINTAIN) table privileges, added `UNIQUE(users.auth_user_id)`, `UNIQUE(users.phone)`, a partial unique index `connections(creator_id, product_id)` over non-closed statuses, a `brand_profiles` credits CHECK (`0 ≤ used ≤ total`), and the `match_connection(uuid)` function. Database-level regression checks are listed in `app/tests/README.md`.
 
 ## 5. API routes (all under `app/src/app/api`)
 

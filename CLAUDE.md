@@ -39,6 +39,7 @@ docs/                        # HANDOFF.md, design-research.md
 - Never render `<video>` in lists — use `thumbnail_url` posters; autoplay only the focused card
 - Adapter pattern for external services (payments, messaging, invoicing)
 - RLS on every Supabase table; API routes check role + ownership explicitly
+- Client roles (anon/authenticated) are **read-only** at the database level (migration 007): never write to tables from the browser or with the session client — go through an API route (service role). Matching uses the `match_connection()` DB function
 - Content moderation on chat (`lib/moderation/chat-filter.ts`); no direct contact info sharing
 - Use `as any` for Supabase rows (existing style); keep `tsc` clean; don't add new ESLint errors (some pre-existing ones remain)
 

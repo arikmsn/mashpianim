@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createNotification } from "@/lib/notifications";
 import { getGreenAPI } from "@/lib/adapters/greenapi";
+import { mapMatchError } from "@/lib/match-errors";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Admin = SupabaseClient<any, any, any, any, any>;
@@ -101,14 +102,15 @@ export async function notifyBrandOfHeart(params: {
 
 type MatchResult = { ok: true } | { ok: false; error: string; status: number };
 
-// Turns a pending heart into a match: deducts one credit, opens the chat with the brief, notifies both sides.
+// Turns a pending heart into a match: the credit deduction and the status change happen atomically in the
+// match_connection() database function (row locks, single transaction); this then opens the chat and notifies.
 export async function performMatch(admin: Admin, connectionId: string, actorUserId: string): Promise<MatchResult> {
   const { data: raw } = await admin
     .from("connections")
     .select(`
       id, status, brand_id, creator_id, credit_deducted, initiated_by,
       products(name, price, description, product_type,
-        brand_profiles(id, user_id, shop_name, total_credits, used_credits, users(id, full_name, phone))),
+        brand_profiles(id, user_id, shop_name, users(id, full_name, phone))),
       creator_profiles!connections_creator_id_fkey(user_id, users(id, full_name, phone))
     `)
     .eq("id", connectionId)
@@ -126,37 +128,11 @@ export async function performMatch(admin: Admin, connectionId: string, actorUser
     return { ok: false, error: "נתוני חיבור חסרים", status: 500 };
   }
 
-  if (!conn.credit_deducted) {
-    const used = brandProfile.used_credits || 0;
-    const total = brandProfile.total_credits || 0;
-    if (used >= total) {
-      return {
-        ok: false,
-        error: "לעסק אין סרטונים זמינים כרגע. המאטץ' יישמר וייפתח ברגע שיתווספו סרטונים.",
-        status: 400,
-      };
-    }
-    await admin
-      .from("brand_profiles")
-      .update({ used_credits: used + 1 } as any)
-      .eq("id", conn.brand_id);
-  }
-
-  const now = new Date();
-  const { error } = await admin
-    .from("connections")
-    .update({
-      status: "approved",
-      approved_at: now.toISOString(),
-      ship_deadline: new Date(now.getTime() + 7 * 86400000).toISOString(),
-      delivery_type: product?.product_type || "physical",
-      credit_deducted: true,
-    } as any)
-    .eq("id", connectionId);
-
-  if (error) {
-    console.error("[match] update error:", error);
-    return { ok: false, error: "שגיאה ביצירת המאטץ'", status: 500 };
+  const { error: matchError } = await admin.rpc("match_connection", { p_connection_id: connectionId });
+  if (matchError) {
+    const mapped = mapMatchError(matchError.message);
+    if (mapped.status === 500) console.error("[match] match_connection error:", matchError.message);
+    return { ok: false, ...mapped };
   }
 
   const brandName = brandProfile.shop_name || brandUser.full_name || "העסק";
