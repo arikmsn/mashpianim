@@ -7,12 +7,14 @@ import { Avatar, Badge, Button, Card, Modal, Input, Textarea, useToast } from "@
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch } from "@/lib/client-cache";
+import { generateVideoThumbnail } from "@/lib/video-thumbnail";
 
 interface PortfolioVideo {
   id: string;
   title: string | null;
   description: string | null;
   url: string;
+  thumbnail_url?: string | null;
   status: string;
   created_at: string;
 }
@@ -652,19 +654,33 @@ export default function ProfilePage() {
     try {
       const supabase = createClient();
       const ext = selectedFile.name.split(".").pop() || "mp4";
-      const fileName = `portfolio/${user!.id}/${Date.now()}.${ext}`;
+      const stamp = Date.now();
+      const fileName = `portfolio/${user!.id}/${stamp}.${ext}`;
+      const thumbPath = `portfolio/${user!.id}/${stamp}.jpg`;
 
-      const { error: uploadError } = await supabase.storage
-        .from("videos")
-        .upload(fileName, selectedFile, {
-          contentType: selectedFile.type || "video/mp4",
-          upsert: false,
-        });
+      // Upload the video and grab a poster frame in the browser at the same time
+      const [uploadResult, thumbBlob] = await Promise.all([
+        supabase.storage
+          .from("videos")
+          .upload(fileName, selectedFile, {
+            contentType: selectedFile.type || "video/mp4",
+            upsert: false,
+          }),
+        generateVideoThumbnail(selectedFile),
+      ]);
 
-      if (uploadError) {
-        console.error("Storage upload error:", uploadError);
-        toast("שגיאה בהעלאת הקובץ: " + uploadError.message, "error");
+      if (uploadResult.error) {
+        console.error("Storage upload error:", uploadResult.error);
+        toast("שגיאה בהעלאת הקובץ: " + uploadResult.error.message, "error");
         return;
+      }
+
+      let thumbnailPath: string | null = null;
+      if (thumbBlob) {
+        const { error: thumbError } = await supabase.storage
+          .from("thumbnails")
+          .upload(thumbPath, thumbBlob, { contentType: "image/jpeg", upsert: true });
+        if (!thumbError) thumbnailPath = thumbPath;
       }
 
       const res = await fetch("/api/videos/save-portfolio", {
@@ -673,6 +689,7 @@ export default function ProfilePage() {
         body: JSON.stringify({
           storagePath: fileName,
           title: uploadTitle.trim() || null,
+          thumbnailPath,
         }),
       });
 
@@ -1036,10 +1053,11 @@ export default function ProfilePage() {
                     </div>
                     {video.url && video.status !== "rejected" && (
                       <video
-                        src={video.url}
+                        src={video.thumbnail_url ? video.url : `${video.url}#t=0.1`}
+                        poster={video.thumbnail_url || undefined}
                         className="mt-2 w-full rounded-lg max-h-48 object-cover"
                         controls
-                        preload="metadata"
+                        preload={video.thumbnail_url ? "none" : "metadata"}
                         controlsList="nodownload"
                         onContextMenu={(e) => e.preventDefault()}
                       />

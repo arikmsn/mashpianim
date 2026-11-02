@@ -11,7 +11,7 @@ function getSupabaseAdmin() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { storagePath, title } = await request.json();
+    const { storagePath, title, thumbnailPath } = await request.json();
 
     if (!storagePath) {
       return NextResponse.json({ error: "חסר נתיב קובץ" }, { status: 400 });
@@ -22,6 +22,16 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: "לא מחובר" }, { status: 401 });
     }
+
+    // Both files must live under this user's own portfolio folder
+    const ownFolder = `portfolio/${user.id}/`;
+    if (typeof storagePath !== "string" || !storagePath.startsWith(ownFolder)) {
+      return NextResponse.json({ error: "נתיב קובץ לא תקין" }, { status: 400 });
+    }
+    const thumbnailUrl =
+      typeof thumbnailPath === "string" && thumbnailPath.startsWith(ownFolder) && /\.(jpe?g|png|webp)$/i.test(thumbnailPath)
+        ? `${process.env.NEXT_SUPABASE_URL}/storage/v1/object/public/thumbnails/${thumbnailPath}`
+        : null;
 
     const supabase = getSupabaseAdmin();
     if (!supabase) {
@@ -51,7 +61,7 @@ export async function POST(request: NextRequest) {
         storage_path: storagePath,
         title: title || null,
         description: null,
-        thumbnail_url: null,
+        thumbnail_url: thumbnailUrl,
         duration_seconds: null,
         status: "approved",
         approved_at: new Date().toISOString(),

@@ -22,6 +22,7 @@ interface CreatorCard {
   portfolioCount: number;
   portfolioReady: boolean;
   previewVideo: string | null;
+  previewPoster: string | null;
   previewTitle: string | null;
   relation: { connectionId: string; status: string; initiatedBy: "creator" | "brand"; productId: string; productName: string } | null;
   fit: boolean;
@@ -285,11 +286,13 @@ export default function BrandDiscoverPage() {
                 <video
                   key={current.previewVideo}
                   src={current.previewVideo}
+                  poster={current.previewPoster || undefined}
                   className="absolute inset-0 w-full h-full object-cover"
                   autoPlay
                   muted
                   loop
                   playsInline
+                  preload="auto"
                   controlsList="nodownload"
                   onContextMenu={(e) => e.preventDefault()}
                 />
@@ -407,8 +410,10 @@ export default function BrandDiscoverPage() {
                   }}
                   className="relative rounded-2xl overflow-hidden bg-neutral-100 aspect-[3/4] text-right"
                 >
-                  {c.previewVideo ? (
-                    <video src={c.previewVideo} className="absolute inset-0 w-full h-full object-cover" muted playsInline preload="metadata" />
+                  {c.previewPoster ? (
+                    <img src={c.previewPoster} alt="" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
+                  ) : c.previewVideo ? (
+                    <video src={`${c.previewVideo}#t=0.1`} className="absolute inset-0 w-full h-full object-cover" muted playsInline preload="metadata" />
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-pink-100 to-purple-100">
                       <Avatar src={c.avatar} name={c.name} size="lg" />

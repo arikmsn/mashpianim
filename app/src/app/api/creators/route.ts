@@ -50,7 +50,7 @@ export async function GET() {
       .limit(300),
     admin
       .from("videos")
-      .select("id, creator_id, storage_path, url, title, created_at")
+      .select("id, creator_id, storage_path, url, title, thumbnail_url, created_at")
       .is("connection_id", null)
       .order("created_at", { ascending: false })
       .limit(3000),
@@ -123,6 +123,7 @@ export async function GET() {
         portfolioCount: port.count,
         portfolioReady: port.count >= MIN_PORTFOLIO_VIDEOS,
         previewVideo,
+        previewPoster: port.first?.thumbnail_url || null,
         previewTitle: port.first?.title || null,
         relation: rel
           ? { connectionId: rel.id, status: rel.status, initiatedBy: rel.initiated_by || "creator", productId: rel.product_id, productName: rel.products?.name || "" }

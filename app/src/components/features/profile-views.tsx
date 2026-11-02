@@ -18,7 +18,7 @@ export interface CreatorPublicProfile {
   instagramFollowers: number;
   introVideo: string | null;
   memberSince: string;
-  portfolio: { id: string; title: string | null; description: string | null; url: string | null; status: string; createdAt: string }[];
+  portfolio: { id: string; title: string | null; description: string | null; url: string | null; thumbnail?: string | null; status: string; createdAt: string }[];
   stats: { completed: number; active: number; portfolioCount: number };
 }
 
@@ -215,10 +215,11 @@ export function CreatorProfileView({ profile, compact = false }: { profile: Crea
               <div key={video.id} className="rounded-xl overflow-hidden bg-black">
                 {video.url ? (
                   <video
-                    src={video.url}
+                    src={video.thumbnail ? video.url : `${video.url}#t=0.1`}
+                    poster={video.thumbnail || undefined}
                     className="w-full aspect-[9/16] max-h-52 object-cover"
                     controls
-                    preload="metadata"
+                    preload={video.thumbnail ? "none" : "metadata"}
                     controlsList="nodownload"
                     onContextMenu={(e) => e.preventDefault()}
                   />
