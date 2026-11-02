@@ -17,7 +17,17 @@ const categories = [
   "אוכל",
   "ספורט",
   "ילדים",
+  "כללי",
 ];
+
+function toDirectImageUrl(url: string | null): string | null {
+  if (!url) return null;
+  const driveMatch = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
+  if (driveMatch) {
+    return `https://drive.google.com/uc?export=view&id=${driveMatch[1]}`;
+  }
+  return url;
+}
 
 interface Product {
   id: string;
@@ -154,7 +164,7 @@ export default function FeedPage() {
                 name: p.name as string,
                 brand: (p.brand_name as string) || (p.shop_name as string) || "",
                 brandAvatar: (p.logo_url as string) || null,
-                image: (p.image_url as string) || null,
+                image: toDirectImageUrl((p.image_url as string) || null),
                 category: (p.category as string) || "",
                 value: Number(p.price) || 0,
                 description: (p.description as string) || "",

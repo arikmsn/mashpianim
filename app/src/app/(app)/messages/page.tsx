@@ -57,25 +57,43 @@ function MessagesContent() {
   const [loading, setLoading] = useState(true);
   const [sendingMessage, setSendingMessage] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
   useEffect(() => {
+    const activeStatuses = new Set(["approved", "shipped", "delivered", "filming", "uploaded", "in_review", "revision_requested"]);
+
     async function fetchConversations() {
+      if (authLoading) return;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
       try {
         const res = await fetch("/api/connections");
         if (res.ok) {
           const data = await res.json();
           if (data.connections && data.connections.length > 0) {
-            const mapped: Conversation[] = data.connections.map(
-              (c: Record<string, unknown>) => ({
-                id: c.id as string,
-                name: (c.brand_name as string) || (c.shop_name as string) || (c.creator_name as string) || "",
-                lastMessage: (c.last_message as string) || "התחילו שיחה...",
-                time: c.updated_at ? formatTime(c.updated_at as string) : "",
-                unread: (c.unread_count as number) || 0,
-                product: (c.product_name as string) || null,
-              })
+            const active = data.connections.filter(
+              (c: Record<string, unknown>) => activeStatuses.has(c.status as string)
+            );
+            const mapped: Conversation[] = active.map(
+              (c: Record<string, unknown>) => {
+                const bp = c.brand_profiles as Record<string, unknown> | null;
+                const cp = c.creator_profiles as Record<string, unknown> | null;
+                const prod = c.products as Record<string, unknown> | null;
+                const brandName = (bp?.shop_name as string) || "";
+                const creatorUser = cp?.users as Record<string, unknown> | null;
+                const creatorName = (creatorUser?.full_name as string) || "";
+                return {
+                  id: c.id as string,
+                  name: brandName || creatorName || "",
+                  lastMessage: (c.last_message as string) || "התחילו שיחה...",
+                  time: c.created_at ? formatTime(c.created_at as string) : "",
+                  unread: (c.unread_count as number) || 0,
+                  product: (prod?.name as string) || null,
+                };
+              }
             );
             if (mapped.length > 0) {
               setConversations(mapped);
@@ -89,7 +107,7 @@ function MessagesContent() {
       }
     }
     fetchConversations();
-  }, []);
+  }, [user, authLoading]);
 
   useEffect(() => {
     if (selectedId) {
@@ -191,6 +209,12 @@ function MessagesContent() {
                 </div>
               </div>
             ))}
+          </div>
+        ) : conversations.length === 0 ? (
+          <div className="text-center py-20 text-neutral-400">
+            <span className="text-4xl block mb-4">💬</span>
+            <p>אין שיחות פעילות</p>
+            <p className="text-sm mt-1">שיחות יופיעו כאן כשתתחילו לעבוד עם מותג או יוצר</p>
           </div>
         ) : (
           conversations.map((conv) => (

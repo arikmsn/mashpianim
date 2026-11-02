@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
 
   let query = admin
     .from("products")
-    .select("*, brand_profiles!inner(shop_name, user_id)")
+    .select("*, brand_profiles!inner(shop_name, user_id, category)")
     .neq("status", "deleted")
     .order("created_at", { ascending: false });
 
@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
   const products = (data || []).map((p: any) => ({
     ...p,
     brand_name: p.brand_profiles?.shop_name || "",
+    category: p.brand_profiles?.category || "",
   }));
 
   return NextResponse.json({ products });

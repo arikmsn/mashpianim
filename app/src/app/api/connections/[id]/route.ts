@@ -346,6 +346,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 404 });
   }
 
+  const { data: conn } = await admin
+    .from("connections")
+    .select("status")
+    .eq("id", id)
+    .single();
+
+  const messagingStatuses = new Set(["approved", "shipped", "delivered", "filming", "uploaded", "in_review", "revision_requested"]);
+  if (!conn || !messagingStatuses.has((conn as any).status)) {
+    return NextResponse.json({ error: "לא ניתן לשלוח הודעות בשלב זה" }, { status: 400 });
+  }
+
   const { data: message, error } = await admin
     .from("messages")
     .insert({

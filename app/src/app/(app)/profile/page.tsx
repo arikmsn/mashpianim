@@ -297,7 +297,7 @@ export default function ProfilePage() {
   const [uploadTitle, setUploadTitle] = useState("");
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const { user, signOut } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -321,6 +321,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     async function fetchProfile() {
+      if (authLoading) return;
       if (!user) {
         setLoading(false);
         return;
@@ -396,7 +397,7 @@ export default function ProfilePage() {
       }
     }
     fetchProfile();
-  }, [user]);
+  }, [user, authLoading]);
 
   useEffect(() => {
     if (userType === "creator") {
