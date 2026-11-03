@@ -1,12 +1,16 @@
-const CACHE_NAME = 'mashpian-v2';
-const STATIC_CACHE = 'mashpian-static-v2';
+// Bump both names whenever a precached asset (icons, offline page) changes: installed apps keep the old
+// files until a new service worker activates and drops the old caches.
+const CACHE_NAME = 'mashpian-v3';
+const STATIC_CACHE = 'mashpian-static-v3';
 const OFFLINE_URL = '/offline.html';
 
 const STATIC_ASSETS = [
   OFFLINE_URL,
   '/icon-192.png',
   '/icon-512.png',
-  '/icon.svg',
+  '/icon-192-maskable.png',
+  '/icon-512-maskable.png',
+  '/apple-icon.png',
 ];
 
 const CACHE_ROUTES = [
@@ -48,11 +52,8 @@ self.addEventListener('fetch', (event) => {
   // Skip cross-origin requests (Supabase, analytics, etc.)
   if (url.origin !== self.location.origin) return;
 
-  // Static assets: cache-first
-  if (
-    url.pathname.startsWith('/_next/static/') ||
-    url.pathname.match(/\.(png|jpg|jpeg|svg|ico|woff2?)$/)
-  ) {
+  // Hashed build output never changes under the same URL: cache-first
+  if (url.pathname.startsWith('/_next/static/')) {
     event.respondWith(
       caches.match(request).then((cached) => {
         if (cached) return cached;
@@ -64,6 +65,25 @@ self.addEventListener('fetch', (event) => {
           return response;
         });
       })
+    );
+    return;
+  }
+
+  // Images, icons and fonts keep their URL when the file is replaced (logo.png, icons): serve the cached
+  // copy at once but refresh it in the background, so a replaced file shows up on the next visit
+  if (url.pathname.match(/\.(png|jpg|jpeg|svg|ico|webp|woff2?)$/)) {
+    event.respondWith(
+      caches.open(STATIC_CACHE).then((cache) =>
+        cache.match(request).then((cached) => {
+          const refresh = fetch(request)
+            .then((response) => {
+              if (response.ok) cache.put(request, response.clone());
+              return response;
+            })
+            .catch(() => cached);
+          return cached || refresh;
+        })
+      )
     );
     return;
   }

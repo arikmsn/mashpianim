@@ -109,6 +109,14 @@ Scripted runs: send Hebrew bodies from a UTF-8 shell (PowerShell `-Encoding utf8
 | 50 | OTP sign-in is server-side (SEC-09) | `POST /api/auth/verify-otp` with a valid code | JSON has `userId`, `userType`, `needsOnboarding` only — no `tempPassword`/`email`; the response sets the `sb-*-auth-token` cookies; `/api/profile` with those cookies is authenticated |
 | 51 | New creator lands on the first upload | finish creator registration | redirected to `/profile?onboarding=1`; the upload modal opens and the URL is cleaned to `/profile` |
 
+## PWA / branding checks
+
+| # | Check | Steps | Expected |
+|---|---|---|---|
+| 52 | Static files bypass the auth middleware | signed out: `curl -I /sw.js`, `/offline.html`, `/manifest.json`, `/apple-icon.png` | all 200 (no 307 to `/login`) |
+| 53 | Icons come from `logo.png` | replace `public/logo.png`, run `python scripts/gen-icons.py`, bump the cache names in `public/sw.js` | all icon files regenerated; after deploy, an installed app shows the new icon once the new worker activates (reopen the app twice) |
+| 54 | No white around the icon | install on Android (circle and squircle launchers) and iOS; open the splash | icon fills its shape with the gradient, artwork not clipped; splash background is brand pink, not white |
+
 ## Release QA run — 2026-11-03 (browser, local production build)
 
 How it was run: `npm run build` then `npm start -- -p 3100` from `app/` with the env passed to the process only (dev-login gate `ADMIN_LOGIN_PHONE`/`ADMIN_LOGIN_PASSWORD` set to local-only values, `NODE_ENV=production`, `ALLOW_DEV_LOGIN=true`), against the live database using only the two QA accounts. The hidden gate opens with 5 taps on the login title; the gate values and `CRON_SECRET` used here are not the production ones.
