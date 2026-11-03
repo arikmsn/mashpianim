@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Avatar, Badge, Button, Card, Modal, Input, Textarea, useToast } from "@/components/ui";
+import { FeedbackModal } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch, clearCache } from "@/lib/client-cache";
@@ -537,6 +538,7 @@ export default function ProfilePage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PortfolioVideo | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const { user, loading: authLoading, signOut } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
@@ -906,6 +908,9 @@ export default function ProfilePage() {
           <Button variant="ghost" fullWidth onClick={() => setEditOpen(true)}>
             ✏️ עריכת פרופיל
           </Button>
+          <Button variant="ghost" fullWidth onClick={() => setFeedbackOpen(true)}>
+            📨 צור קשר / דיווח על תקלה
+          </Button>
           <Button
             variant="ghost"
             fullWidth
@@ -917,6 +922,7 @@ export default function ProfilePage() {
           </Button>
         </div>
 
+        <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
         <BrandEditModal
           open={editOpen}
           onClose={() => setEditOpen(false)}
@@ -1169,6 +1175,9 @@ export default function ProfilePage() {
           <Button variant="ghost" fullWidth onClick={() => setEditOpen(true)}>
             ✏️ עריכת פרופיל
           </Button>
+          <Button variant="ghost" fullWidth onClick={() => setFeedbackOpen(true)}>
+            📨 צור קשר / דיווח על תקלה
+          </Button>
           <Button
             variant="ghost"
             fullWidth
@@ -1181,6 +1190,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
+      <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
       <CreatorEditModal
         open={editOpen}
         onClose={() => setEditOpen(false)}

@@ -12,6 +12,7 @@ const navItems = [
   { href: "/admin/brands", label: "עסקים", icon: "🏪" },
   { href: "/admin/moderation", label: "מודרציה", icon: "🛡️" },
   { href: "/admin/content", label: "תוכן האתר", icon: "✏️" },
+  { href: "/admin/feedback", label: "פניות ותקלות", icon: "📨" },
   { href: "/admin/settings", label: "הגדרות", icon: "⚙️" },
 ];
 

@@ -12,6 +12,8 @@ export const RATE_LIMITS = {
   verifyOtpIp: { limit: 30, windowSeconds: 10 * 60 },
   devLoginIp: { limit: 10, windowSeconds: 15 * 60 },
   registerIp: { limit: 10, windowSeconds: 60 * 60 },
+  // In-app reports (bugs / requests / contact) per signed-in user
+  feedbackUser: { limit: 5, windowSeconds: 60 * 60 },
 } as const satisfies Record<string, RateLimitRule>;
 
 // First hop of x-forwarded-for (set by Vercel), else x-real-ip, else "unknown"

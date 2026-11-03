@@ -13,6 +13,8 @@ export function notificationHref(n: NotificationLike, role: ViewerRole): string 
   const productId = str(n.data?.productId);
 
   if (n.type === "portfolio_video_removed") return "/profile";
+  if (n.type === "feedback_received") return role === "admin" ? "/admin/feedback" : null;
+  if (n.type === "feedback_updated") return "/profile";
 
   if (n.type === "match" || n.type === "new_message") {
     return connectionId ? `/messages?connection=${connectionId}` : "/messages";

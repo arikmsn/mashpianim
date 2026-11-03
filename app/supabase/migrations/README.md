@@ -9,6 +9,7 @@ Files here mirror what was applied to the Supabase project `rhhfzvmiwhmnviznxvlv
 | `009_rate_limits_settings_storage.sql` | Supabase MCP `apply_migration` on 2026-11-03 (`rate_limits_settings_storage`) | Yes |
 | `010_review_flow_moderation_brief.sql` | Supabase MCP `apply_migration` on 2026-11-03 (`review_flow_moderation_brief`) | Yes |
 | `011_max_creators.sql` | Supabase MCP `apply_migration` on 2026-11-03 (`max_creators`) | Yes |
+| `012_feedback.sql` | **Not applied yet** — waits for the owner's approval (new `feedback` table for in-app reports; additive, no existing table touched) | — |
 
 Rules:
 - Never edit an applied file; add a new numbered file.

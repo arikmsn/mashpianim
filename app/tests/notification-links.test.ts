@@ -22,6 +22,12 @@ describe("notification deep links", () => {
     assert.equal(notificationHref({ type: "match", data: null }, "brand"), "/messages");
   });
 
+  test("in-app reports: admins go to the feedback screen, reporters to their profile", () => {
+    assert.equal(notificationHref({ type: "feedback_received", data: { feedbackId: "f" } }, "admin"), "/admin/feedback");
+    assert.equal(notificationHref({ type: "feedback_received", data: { feedbackId: "f" } }, "creator"), null);
+    assert.equal(notificationHref({ type: "feedback_updated", data: { feedbackId: "f" } }, "brand"), "/profile");
+  });
+
   test("portfolio takedown goes to the profile; unknown or data-less rows have no link", () => {
     assert.equal(notificationHref({ type: "portfolio_video_removed", data: { videoId: "v" } }, "creator"), "/profile");
     assert.equal(notificationHref({ type: "system", data: null }, "creator"), null);

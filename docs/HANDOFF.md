@@ -66,7 +66,7 @@ app/src/
       brand/                    BRAND HOME: Tinder-style creator gallery (card stack + grid + filters + product picker)
       brand/products/           product CRUD
       brand/connections/        brand's connections; modal shows creator's full public profile
-    admin/                      admin dashboard: brands (credits editor, activate/deactivate), creators, moderation, content, settings
+    admin/                      admin dashboard: brands (credits editor, activate/deactivate), creators, moderation, content, feedback (in-app reports), settings
     api/                        see section 5
     auth/callback/              OAuth callback (unused now)
   components/
@@ -105,6 +105,7 @@ docs/                           design-research.md (visual references), this fil
 | `notifications` | `user_id`, `type`, `title`, `body`, `read`, `data jsonb` | `data` = `{connectionId, productId?}` for connection events, `{videoId}` for portfolio takedowns; the client resolves the destination from `type` + `data` |
 | `activity_log` | `actor_id`, `action`, `entity_type`, `entity_id`, `details` | |
 | `otp_codes` | custom WhatsApp OTP flow (not Supabase SMS) | |
+| `feedback` (migration 012, **pending approval**) | `user_id` (→ users.id, null on delete), `kind` bug/request/contact, `subject`, `message`, `page`, `user_agent`, `status` new/in_progress/closed, `admin_note`, timestamps | In-app reports; RLS: own rows + admins read, writes via the API only |
 
 **Storage buckets:** `videos` (private; policies `auth_users_upload_videos` + `auth_users_read_own_videos` scoped to `portfolio/{auth.uid()}/`; limit 150 MB, MIME mp4/quicktime/webm/x-m4v/3gpp), `images` (private, service role only; 5 MB, JPEG/PNG/WebP), `thumbnails` (**public**, authenticated upload to `portfolio/{auth.uid()}/`, 2 MB, images only). Videos are uploaded **directly from the browser** to Supabase Storage with a progress bar (`lib/storage-upload.ts`, XHR to the Storage REST endpoint; Vercel's 4.5 MB body limit makes server-side upload impossible), then `/api/videos/save-portfolio` or `/api/videos/save-connection` records metadata. **Plan limit:** the Supabase organization is on the Free plan — 50 MB per file and 1 GB total — so the product cap users see is **50 MB** (`MAX_VIDEO_MB` in `lib/uploads.ts`; the message tells them to shorten the clip or drop to 720p). The bucket already allows 150 MB; after upgrading to Pro and raising the project upload limit in Dashboard → Storage → Settings, set `MAX_VIDEO_MB` to 150 (≈ 2 minutes of 1080p).
 
@@ -142,6 +143,8 @@ Pattern in every route: `createServerClient()` → `auth.getUser()` for identity
 | `admin/creators`, `admin/content`, `admin/stats` | | admin screens' data; the `/admin/*` pages themselves are gated server-side in `admin/layout.tsx` (anonymous → login, non-admin → 404) |
 | `admin/moderation` | GET, PUT | GET: deliverables awaiting the optional admin pass (`videos`), latest 100 portfolio videos with creator names (`portfolioVideos`), flagged chat. PUT `{videoId, action}`: deliverables → `approve` (→ `in_review`), `revision`, `reject`; portfolio videos → `reject` (takedown: `status='rejected'`, creator notified) / `restore` |
 | `admin/settings` | GET, PUT | `site_settings` rows by section: `general`, `credits`, `moderation`, `timelines` (`shipping_days`, `filming_days`, `review_days`, `max_revisions`). `timelines` is live: `lib/settings.ts` feeds the connection state machine and `match_connection()` reads `shipping_days` |
+| `admin/feedback` | GET, PUT | In-app reports (`feedback` table, migration 012). GET `?status=open|new|in_progress|closed|all` with the reporter's name/type/phone + `newCount`; PUT `{id, status?, admin_note?}` — a status change notifies the reporter (`feedback_updated`), audited as `admin_update_feedback` |
+| `feedback` | GET, POST | Signed-in users: GET own reports; POST `{kind: bug|request|contact, subject, message, page?}` (validated in `lib/feedback.ts`, 5 per user per hour) → row + a `feedback_received` notification to every admin (links to `/admin/feedback`) |
 | `cron/deadlines` | GET | expires 7-day hearts; shipping/filming/review deadline warnings (each at most once per 48 h per connection) & auto-cancel/auto-complete; purges expired `otp_codes` and stale `rate_limits` rows |
 
 ## 6. Front-end conventions that matter
