@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from "@/lib/admin-auth";
 import { logActivity } from "@/lib/notifications";
 import { performMatch, countPortfolioVideos, portfolioGateError, MIN_PORTFOLIO_VIDEOS, notifyHeartSent, notifyBrandOfHeart } from "@/lib/match";
 import { isUniqueViolation } from "@/lib/match-errors";
+import { getTimelineSettings } from "@/lib/settings";
 
 function getAdminClient() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -120,7 +121,10 @@ export async function GET() {
     new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
   );
 
-  return NextResponse.json({ connections: enriched });
+  // The UI shows the revision allowance the admin configured
+  const timelines = await getTimelineSettings(admin);
+
+  return NextResponse.json({ connections: enriched, settings: { max_revisions: timelines.max_revisions } });
 }
 
 export async function POST(request: NextRequest) {

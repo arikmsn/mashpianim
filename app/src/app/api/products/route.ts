@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
     name, description, price, image_url,
     shipping_policy, shipping_address, source_url,
     product_type, digital_access_type, digital_access_instructions, digital_access_duration_days,
-    expiration_date, quantity,
+    expiration_date, quantity, brief,
   } = body;
 
   if (!name || !price) {
@@ -177,6 +177,8 @@ export async function POST(request: NextRequest) {
       digital_access_duration_days: product_type === "digital" ? (digital_access_duration_days || null) : null,
       expiration_date: expiration_date || null,
       quantity: quantity || null,
+      // Brand-written brief sent to the creator when a match opens (optional)
+      brief: typeof brief === "string" && brief.trim() ? brief.trim() : null,
     } as any)
     .select()
     .single();

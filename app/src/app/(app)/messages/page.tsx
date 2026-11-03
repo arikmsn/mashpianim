@@ -9,6 +9,7 @@ import { ProfileModal } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch, emitUnreadChanged } from "@/lib/client-cache";
+import { isChatOpen, hasChatHistory } from "@/lib/connection-flow";
 
 interface Conversation {
   id: string;
@@ -20,6 +21,9 @@ interface Conversation {
   unread: number;
   product: string | null;
   productImage: string | null;
+  status: string;
+  // completed / cancelled connections keep their chat, read-only
+  closed: boolean;
 }
 
 interface Message {
@@ -74,10 +78,12 @@ function MessagesContent() {
       setLoading(false);
       return;
     }
-    const activeStatuses = new Set(["approved", "shipped", "delivered", "filming", "uploaded", "in_review", "revision_requested"]);
     const apply = (data: { connections?: Record<string, unknown>[] }) => {
       if (!data.connections) return;
-      const active = data.connections.filter((c) => activeStatuses.has(c.status as string));
+      // Open chats plus closed ones that were matched (their history stays readable)
+      const active = data.connections.filter((c) =>
+        hasChatHistory({ status: c.status, approved_at: (c.approved_at as string | null) ?? null })
+      );
       const mapped: Conversation[] = active.map((c) => {
         const bp = c.brand_profiles as Record<string, unknown> | null;
         const cp = c.creator_profiles as Record<string, unknown> | null;
@@ -100,6 +106,8 @@ function MessagesContent() {
           unread: (c.unread_count as number) || 0,
           product: (prod?.name as string) || null,
           productImage: (prod?.image_url as string) || null,
+          status: (c.status as string) || "",
+          closed: !isChatOpen(c.status),
         };
       });
       setConversations(mapped);
@@ -472,29 +480,37 @@ function MessagesContent() {
           </div>
 
           <div className="p-3 border-t border-neutral-100 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="כתבו הודעה..."
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-                className="flex-1 px-4 py-3 rounded-xl bg-neutral-50 border border-neutral-100 text-sm outline-none focus:border-pink-300 focus:ring-1 focus:ring-pink-200"
-              />
-              <button
-                onClick={handleSendMessage}
-                disabled={!newMessage.trim() || sendingMessage}
-                className="px-5 py-3 rounded-xl bg-pink-500 text-white text-sm font-medium disabled:opacity-50 transition-opacity active:bg-pink-600"
-              >
-                שלחו
-              </button>
-            </div>
-            <p className="text-[10px] text-neutral-400 text-center mt-1">שיתוף פרטי קשר אישיים אסור</p>
+            {selectedConversation?.closed ? (
+              <div className="text-center text-sm text-neutral-500 bg-neutral-50 rounded-xl px-4 py-3">
+                {selectedConversation.status === "completed" ? "✅ החיבור הושלם — הצ'אט סגור לקריאה בלבד" : "החיבור הסתיים — הצ'אט סגור לקריאה בלבד"}
+              </div>
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="כתבו הודעה..."
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                    className="flex-1 px-4 py-3 rounded-xl bg-neutral-50 border border-neutral-100 text-sm outline-none focus:border-pink-300 focus:ring-1 focus:ring-pink-200"
+                  />
+                  <button
+                    onClick={handleSendMessage}
+                    disabled={!newMessage.trim() || sendingMessage}
+                    className="px-5 py-3 rounded-xl bg-pink-500 text-white text-sm font-medium disabled:opacity-50 transition-opacity active:bg-pink-600"
+                  >
+                    שלחו
+                  </button>
+                </div>
+                <p className="text-[10px] text-neutral-400 text-center mt-1">שיתוף פרטי קשר אישיים אסור</p>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -7,6 +7,7 @@ import { notifyConnectionStatusChange, logActivity, createNotification } from "@
 import { performMatch, countPortfolioVideos, portfolioGateError, MIN_PORTFOLIO_VIDEOS } from "@/lib/match";
 import { isConnectionParticipant } from "@/lib/authz";
 import { getTimelineSettings } from "@/lib/settings";
+import { isChatOpen } from "@/lib/connection-flow";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -85,7 +86,8 @@ const validTransitions: Record<string, { targets: string[]; allowedRoles: string
   shipped:             { targets: ["delivered", "cancelled"], allowedRoles: ["creator", "admin"] },
   delivered:           { targets: ["filming"], allowedRoles: ["creator", "admin"] },
   filming:             { targets: ["uploaded"], allowedRoles: ["creator", "admin"] },
-  uploaded:            { targets: ["in_review"], allowedRoles: ["admin"] },
+  // The brand reviews the deliverable as soon as it is uploaded; an admin may still route it via in_review (FLOW-01)
+  uploaded:            { targets: ["in_review", "completed", "revision_requested"], allowedRoles: ["brand", "admin"] },
   in_review:           { targets: ["completed", "revision_requested"], allowedRoles: ["brand", "admin"] },
   revision_requested:  { targets: ["uploaded"], allowedRoles: ["creator", "admin"] },
 };
@@ -265,12 +267,20 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     case "completed": {
       updates.completed_at = now.toISOString();
 
-      // Mark videos as downloadable
+      // The brand's approval is the approval: the deliverables become approved and downloadable
       await admin
         .from("videos")
-        .update({ is_downloadable: true } as any)
+        .update({ status: "approved", approved_at: now.toISOString(), is_downloadable: true } as any)
         .eq("connection_id", id)
-        .eq("status", "approved");
+        .neq("status", "rejected");
+
+      // Close the chat with a visible marker
+      await admin.from("messages").insert({
+        connection_id: id,
+        sender_id: (dbUser as any).id,
+        text: "✅ הסרטון אושר והחיבור הושלם. הצ'אט סגור לקריאה בלבד.",
+        is_system: true,
+      } as any);
 
       // Increment creator's completed connections
       if (creatorProfile) {
@@ -302,6 +312,13 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       }
       updates.revision_notes = revision_notes;
       updates.revision_count = usedRevisions + 1;
+
+      // The uploaded deliverable goes back to the creator with the notes
+      await admin
+        .from("videos")
+        .update({ status: "revision_requested", revision_notes } as any)
+        .eq("connection_id", id)
+        .eq("status", "pending");
       break;
     }
 
@@ -311,6 +328,15 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
 
     case "cancelled": {
+      // A matched connection had a chat — leave a closing marker in it
+      if ((connection as any).approved_at) {
+        await admin.from("messages").insert({
+          connection_id: id,
+          sender_id: (dbUser as any).id,
+          text: "החיבור בוטל. הצ'אט סגור לקריאה בלבד.",
+          is_system: true,
+        } as any);
+      }
       // Refund credit if it was deducted
       if ((connection as any).credit_deducted && brandProfile) {
         const currentUsed = brandProfile.used_credits || 0;
@@ -439,9 +465,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "אין הרשאה לחיבור זה" }, { status: 403 });
   }
 
-  const messagingStatuses = new Set(["approved", "shipped", "delivered", "filming", "uploaded", "in_review", "revision_requested"]);
-  if (!messagingStatuses.has((conn as any).status)) {
-    return NextResponse.json({ error: "לא ניתן לשלוח הודעות בשלב זה" }, { status: 400 });
+  if (!isChatOpen((conn as any).status)) {
+    return NextResponse.json({ error: "הצ'אט סגור — החיבור הסתיים", code: "chat_closed" }, { status: 400 });
   }
 
   // Ordinary chat can never produce a system message; sender is always the session user

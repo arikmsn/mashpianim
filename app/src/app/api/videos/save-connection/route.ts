@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { isOwnConnectionVideoPath, isImagePath, canUploadConnectionVideo } from "@/lib/authz";
 import { notifyConnectionStatusChange, logActivity } from "@/lib/notifications";
+import { getTimelineSettings } from "@/lib/settings";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -106,9 +107,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "שגיאה בשמירת הסרטון" }, { status: 500 });
     }
 
+    // The brand's review clock starts now (auto-approve after review_days, see cron)
+    const timelines = await getTimelineSettings(supabase);
+    const nowMs = Date.now();
     const { error: updateError } = await supabase
       .from("connections")
-      .update({ status: "uploaded", filmed_at: conn.filmed_at || new Date().toISOString() } as any)
+      .update({
+        status: "uploaded",
+        filmed_at: conn.filmed_at || new Date(nowMs).toISOString(),
+        review_deadline: new Date(nowMs + timelines.review_days * 86400000).toISOString(),
+      } as any)
       .eq("id", connectionId);
     if (updateError) {
       console.error("[videos] connection status error:", updateError);

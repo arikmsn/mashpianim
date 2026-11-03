@@ -191,7 +191,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 3. Review deadline passed (in_review for more than 7 days) → auto-approve
+  // 3. Review deadline passed (deliverable uploaded / in_review and not reviewed) → warn, then auto-approve
   const { data: overdueReview } = await supabase
     .from("connections")
     .select(`
@@ -200,7 +200,7 @@ export async function GET(request: NextRequest) {
       creator_profiles!connections_creator_id_fkey(users(id, full_name)),
       brand_profiles!connections_brand_id_fkey(users(id, full_name))
     `)
-    .eq("status", "in_review")
+    .in("status", ["uploaded", "in_review"])
     .lt("review_deadline", now);
 
   for (const conn of (overdueReview || []) as any[]) {
@@ -213,10 +213,19 @@ export async function GET(request: NextRequest) {
         completed_at: now,
       } as any).eq("id", conn.id);
 
-      // Mark videos as downloadable
+      // Silence counts as approval: the deliverables become approved and downloadable
       await supabase.from("videos").update({
+        status: "approved",
+        approved_at: now,
         is_downloadable: true,
-      } as any).eq("connection_id", conn.id).eq("status", "approved");
+      } as any).eq("connection_id", conn.id).neq("status", "rejected");
+
+      await supabase.from("messages").insert({
+        connection_id: conn.id,
+        sender_id: conn.creator_profiles?.users?.id,
+        text: "✅ הסרטון אושר אוטומטית בתום תקופת הבדיקה והחיבור הושלם. הצ'אט סגור לקריאה בלבד.",
+        is_system: true,
+      } as any);
 
       await logActivity({
         action: "auto_complete_review_overdue",

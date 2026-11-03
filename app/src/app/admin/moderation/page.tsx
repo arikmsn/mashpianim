@@ -25,11 +25,22 @@ type ChatFlag = {
   time: string;
   blocked: boolean;
 };
+type PortfolioItem = {
+  id: string;
+  creator: string;
+  title: string;
+  status: string;
+  notes: string | null;
+  thumbnail: string | null;
+  createdAt: string;
+};
 
 export default function AdminModerationPage() {
-  const [tab, setTab] = useState<"videos" | "chat">("videos");
+  const [tab, setTab] = useState<"videos" | "portfolio" | "chat">("videos");
   const [selectedVideo, setSelectedVideo] = useState<ModerationItem | null>(null);
   const [items, setItems] = useState<ModerationItem[]>([]);
+  const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const [chatFlags, setChatFlags] = useState<ChatFlag[]>([]);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<string | null>(null);
@@ -57,6 +68,19 @@ export default function AdminModerationPage() {
               storagePath: (v.storage_path as string) || "",
               status: (v.status as ModerationStatus) || "pending",
               flags: ((v.moderation_flags as string[]) || []),
+              createdAt: (v.created_at as string) || "",
+            }))
+          );
+        }
+        if (data.portfolioVideos) {
+          setPortfolio(
+            data.portfolioVideos.map((v: Record<string, unknown>) => ({
+              id: v.id as string,
+              creator: (v.creator_name as string) || "יוצר/ת",
+              title: (v.title as string) || "סרטון פורטפוליו",
+              status: (v.status as string) || "approved",
+              notes: (v.revision_notes as string) || null,
+              thumbnail: (v.thumbnail_url as string) || null,
               createdAt: (v.created_at as string) || "",
             }))
           );
@@ -124,6 +148,30 @@ export default function AdminModerationPage() {
     }
   }
 
+  // Portfolio takedown / restore (MOD-01)
+  async function handlePortfolioAction(videoId: string, action: "reject" | "restore") {
+    setActing(videoId);
+    try {
+      const res = await fetch("/api/admin/moderation", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoId, action }),
+      });
+      if (res.ok) {
+        const newStatus = action === "reject" ? "rejected" : "approved";
+        setPortfolio((prev) => prev.map((p) => (p.id === videoId ? { ...p, status: newStatus } : p)));
+        toast(action === "reject" ? "הסרטון הוסר מתיק העבודות" : "הסרטון שוחזר", action === "reject" ? "error" : "success");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast((data as any).error || "שגיאה", "error");
+      }
+    } catch {
+      toast("שגיאה בפעולה", "error");
+    } finally {
+      setActing(null);
+    }
+  }
+
   function formatTimeAgo(dateStr: string) {
     if (!dateStr) return "";
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -155,6 +203,14 @@ export default function AdminModerationPage() {
           }`}
         >
           🎬 סרטונים ({pendingCount})
+        </button>
+        <button
+          onClick={() => setTab("portfolio")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            tab === "portfolio" ? "bg-white shadow-sm text-pink-500" : "text-neutral-500"
+          }`}
+        >
+          🗂️ תיקי עבודות ({portfolio.length})
         </button>
         <button
           onClick={() => setTab("chat")}
@@ -275,6 +331,59 @@ export default function AdminModerationPage() {
             </div>
           )}
 
+          {tab === "portfolio" && (
+            <div className="space-y-3">
+              <p className="text-xs text-neutral-500">
+                סרטוני תיק עבודות מתפרסמים מיד. הסרה מסתירה את הסרטון מעסקים ומורידה אותו מספירת 5 הסרטונים; היוצר/ת מקבל/ת התראה.
+              </p>
+              {portfolio.length === 0 ? (
+                <div className="text-center py-12 text-neutral-400">
+                  <span className="text-4xl block mb-3">🗂️</span>
+                  <p className="font-medium">אין סרטוני תיק עבודות</p>
+                </div>
+              ) : (
+                portfolio.map((item) => (
+                  <Card key={item.id} padding="md">
+                    <div className="flex items-center gap-4">
+                      <div className="w-16 h-24 rounded-lg bg-neutral-100 overflow-hidden flex items-center justify-center text-neutral-400 flex-shrink-0">
+                        {item.thumbnail ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={item.thumbnail} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          "🎬"
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{item.title}</p>
+                        <p className="text-xs text-neutral-400">{item.creator} • לפני {formatTimeAgo(item.createdAt)}</p>
+                        {item.status === "rejected" && item.notes && (
+                          <p className="text-xs text-red-500 mt-1">{item.notes}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={item.status === "rejected" ? "danger" : item.status === "approved" ? "success" : "warning"} size="sm">
+                          {item.status === "rejected" ? "הוסר" : item.status === "approved" ? "מוצג" : "ממתין"}
+                        </Badge>
+                        <Button size="sm" variant="secondary" onClick={() => { setPreviewId(item.id); loadVideoUrl(item.id); }}>
+                          צפייה
+                        </Button>
+                        {item.status === "rejected" ? (
+                          <Button size="sm" variant="primary" loading={acting === item.id} onClick={() => handlePortfolioAction(item.id, "restore")}>
+                            שחזור
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="danger" loading={acting === item.id} onClick={() => handlePortfolioAction(item.id, "reject")}>
+                            הסרה
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                ))
+              )}
+            </div>
+          )}
+
           {tab === "chat" && (
             <div className="space-y-3">
               {chatFlags.length === 0 ? (
@@ -314,6 +423,21 @@ export default function AdminModerationPage() {
           )}
         </>
       )}
+
+      <Modal
+        open={!!previewId}
+        onClose={() => { setPreviewId(null); setVideoUrl(null); }}
+        title="צפייה בסרטון תיק עבודות"
+        size="lg"
+      >
+        <div className="aspect-[9/16] max-h-[60vh] bg-neutral-900 rounded-xl overflow-hidden mx-auto w-fit">
+          {videoUrl ? (
+            <video src={videoUrl} controls controlsList="nodownload" onContextMenu={(e) => e.preventDefault()} className="h-full w-auto mx-auto" />
+          ) : (
+            <div className="flex items-center justify-center h-full text-white/50 px-12">טוען סרטון...</div>
+          )}
+        </div>
+      </Modal>
 
       <Modal
         open={!!selectedVideo}

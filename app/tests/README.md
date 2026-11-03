@@ -82,3 +82,19 @@ Note for scripted runs: every dev-login sets a fresh one-time password on the te
 | 37 | Cron housekeeping | `GET /api/cron/deadlines?secret=…` with an expired `otp_codes` row present | 200; `results.purged_otps ≥ 1`; running twice on the same overdue connection sends one warning (`skipped_duplicates` on the second run) |
 | 38 | Settings drive deadlines | set `timelines.max_revisions` to 1 in `/admin/settings`, then request a 2nd revision on an `in_review` connection | 400 `הגעתם למקסימום תיקונים (1)`; `film_deadline` / `review_deadline` follow `filming_days` / `review_days` |
 | 39 | Admin audit | any admin PUT (brands, creators, settings, content) | an `activity_log` row `admin_update_*` with `actor_id` = the admin's users.id |
+
+`connection-flow.test.ts` covers the chat open/closed rules, which statuses the brand may review, and the brief message (template vs. brand text; the brief never appears in public product data).
+
+## Batch 5 checks (FLOW-01, MOD-01, brief, chat close)
+
+Scripted runs: send Hebrew bodies from a UTF-8 shell (PowerShell `-Encoding utf8`, or JSON files) — Git Bash on Windows garbles Hebrew in `curl -d` strings.
+
+| # | Check | Steps | Expected |
+|---|---|---|---|
+| 40 | Brand reviews straight after upload | creator uploads a deliverable (connection `uploaded`); brand opens the connection | review block visible (approve / request revision); `PUT {status:'completed'}` → 200; the connection's videos become `approved` + downloadable; a closing system message appears |
+| 41 | Revision round-trip | brand `PUT {status:'revision_requested', revision_notes}` on `uploaded`; creator re-uploads via `save-connection` | 200; `revision_count` +1; the pending video turns `revision_requested`; re-upload → `uploaded` with a fresh `review_deadline` |
+| 42 | Revision allowance from settings | `/api/connections` payload has `settings.max_revisions`; the brand modal shows `x/N`; exceeding N → 400 | matches `/admin/settings` → לוחות זמנים → תיקונים מותרים |
+| 43 | Chat closes with the connection | after `completed` (or `cancelled` after a match): `POST /api/connections/<id>` `{text}` | 400 `code: chat_closed`; `/messages` still lists the conversation, shows the closing system message and no composer |
+| 44 | Brief at match | brand creates a product with `brief`; creator and brand heart | second system message = header + the brand's brief + format lines, no `(העסק ישלים)`; `GET /api/products/<id>` as a creator has no `brief` |
+| 45 | Portfolio takedown (MOD-01) | admin: `/admin/moderation` → תיקי עבודות → הסרה (`PUT /api/admin/moderation {videoId, action:'reject'}`) | video `status='rejected'`; hidden from brands (`GET /api/videos?portfolio=<creator>`), visible to the creator with a badge; not counted for the 5-video gate (`portfolio_gate` shows the lower count); creator gets a notification; שחזור restores it |
+| 46 | Review deadline auto-approve | an `uploaded` connection whose `review_deadline` passed, then the cron runs | warning once, then after 3 more days `completed` + videos approved + closing system message |

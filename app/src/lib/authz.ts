@@ -147,6 +147,7 @@ export const PRODUCT_EDITABLE_FIELDS = [
   "digital_access_duration_days",
   "expiration_date",
   "quantity",
+  "brief",
 ] as const;
 
 const PRODUCT_NUMERIC_FIELDS = new Set(["price", "quantity", "digital_access_duration_days"]);

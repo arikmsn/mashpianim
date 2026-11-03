@@ -7,6 +7,7 @@ Files here mirror what was applied to the Supabase project `rhhfzvmiwhmnviznxvlv
 | `001` – `006` | By hand in the SQL editor during the initial build (Oct–Nov 2026), before migration tracking was used | No. Treat them as the baseline; the live schema already contains them |
 | `007_rls_hardening.sql`, `008_revoke_maintain.sql` | Supabase MCP `apply_migration` on 2026-11-02 (`rls_hardening`, `revoke_maintain_from_client_roles`) | Yes |
 | `009_rate_limits_settings_storage.sql` | Supabase MCP `apply_migration` on 2026-11-03 (`rate_limits_settings_storage`) | Yes |
+| `010_review_flow_moderation_brief.sql` | Supabase MCP `apply_migration` on 2026-11-03 (`review_flow_moderation_brief`) | Yes |
 
 Rules:
 - Never edit an applied file; add a new numbered file.

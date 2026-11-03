@@ -11,7 +11,7 @@ interface Product {
   price: number;
   imageUrl: string | null;
   status: "active" | "paused";
-  category: string;
+  brief: string;
   shippingPolicy: string;
   sourceUrl: string | null;
   applicantsCount: number;
@@ -23,8 +23,6 @@ interface Product {
   expirationDate: string | null;
   quantity: number | null;
 }
-
-const categories = ["ביוטי", "אופנה", "טכנולוגיה", "בית וגינה", "אוכל", "ספורט", "ילדים", "אחר"];
 
 const shippingLabels: Record<string, string> = {
   free: "משלוח חינם",
@@ -62,7 +60,7 @@ export default function BrandProductsPage() {
     name: "",
     description: "",
     price: "",
-    category: "ביוטי",
+    brief: "",
     imageUrl: "",
     shippingPolicy: "free",
     sourceUrl: "",
@@ -93,7 +91,7 @@ export default function BrandProductsPage() {
               price: Number(p.price) || 0,
               imageUrl: (p.image_url as string) || null,
               status: (p.status as string) || "active",
-              category: (p.category as string) || "",
+              brief: (p.brief as string) || "",
               shippingPolicy: (p.shipping_policy as string) || "free",
               sourceUrl: (p.source_url as string) || null,
               applicantsCount: (p.applicants_count as number) || 0,
@@ -118,7 +116,7 @@ export default function BrandProductsPage() {
   }
 
   function resetForm() {
-    setFormData({ name: "", description: "", price: "", category: "ביוטי", imageUrl: "", shippingPolicy: "free", sourceUrl: "", productType: "physical", digitalAccessType: "", digitalAccessInstructions: "", digitalAccessDurationDays: "", expirationDate: "", quantity: "" });
+    setFormData({ name: "", description: "", price: "", brief: "", imageUrl: "", shippingPolicy: "free", sourceUrl: "", productType: "physical", digitalAccessType: "", digitalAccessInstructions: "", digitalAccessDurationDays: "", expirationDate: "", quantity: "" });
     setImageFile(null);
     setEditingProduct(null);
   }
@@ -133,7 +131,7 @@ export default function BrandProductsPage() {
       name: product.name,
       description: product.description,
       price: String(product.price),
-      category: product.category,
+      brief: product.brief || "",
       imageUrl: product.imageUrl || "",
       shippingPolicy: product.shippingPolicy,
       sourceUrl: product.sourceUrl || "",
@@ -178,7 +176,7 @@ export default function BrandProductsPage() {
         name: formData.name.trim(),
         description: formData.description.trim(),
         price: Number(formData.price),
-        category: formData.category,
+        brief: formData.brief.trim() || null,
         image_url: imageUrl,
         shipping_policy: formData.shippingPolicy,
         source_url: formData.sourceUrl.trim() || null,
@@ -206,7 +204,7 @@ export default function BrandProductsPage() {
                     name: body.name as string,
                     description: body.description as string,
                     price: body.price as number,
-                    category: body.category as string,
+                    brief: (body.brief as string) || "",
                     imageUrl: (body.image_url as string) || null,
                     shippingPolicy: body.shipping_policy as string,
                     sourceUrl: (body.source_url as string) || null,
@@ -240,7 +238,7 @@ export default function BrandProductsPage() {
               price: body.price as number,
               imageUrl: body.image_url as string | null,
               status: "active",
-              category: body.category as string,
+              brief: (body.brief as string) || "",
               shippingPolicy: body.shipping_policy as string,
               sourceUrl: body.source_url as string | null,
               applicantsCount: 0,
@@ -426,28 +424,24 @@ export default function BrandProductsPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1">מחיר (₪) *</label>
-              <Input
-                type="number"
-                placeholder="0"
-                value={formData.price}
-                onChange={(e) => setFormData((p) => ({ ...p, price: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1">קטגוריה</label>
-              <select
-                value={formData.category}
-                onChange={(e) => setFormData((p) => ({ ...p, category: e.target.value }))}
-                className="w-full px-4 py-2.5 rounded-xl bg-neutral-50 border border-neutral-200 text-sm outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-500/10"
-              >
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">בריף ליוצר/ת (אופציונלי)</label>
+            <Textarea
+              placeholder="מה חובה להגיד, למי המוצר מתאים, מה לא להראות... נשלח ליוצר/ת בצ'אט ברגע שנפתח מאטץ'"
+              value={formData.brief}
+              onChange={(e) => setFormData((p) => ({ ...p, brief: e.target.value }))}
+            />
+            <p className="text-xs text-neutral-400 mt-1">בלי בריף נשלחת תבנית למילוי בצ&apos;אט.</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">מחיר (₪) *</label>
+            <Input
+              type="number"
+              placeholder="0"
+              value={formData.price}
+              onChange={(e) => setFormData((p) => ({ ...p, price: e.target.value }))}
+            />
           </div>
 
           <div>

@@ -7,6 +7,7 @@ import { Card, Badge, Button, Modal, Avatar, Input, Textarea, useToast } from "@
 import { PublicProfileContent } from "@/components/features";
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch } from "@/lib/client-cache";
+import { canBrandReview } from "@/lib/connection-flow";
 
 interface Connection {
   id: string;
@@ -94,6 +95,8 @@ export default function BrandConnectionsPage() {
   // Deliverable of the connection currently open in the modal (kept with its id so another connection's
   // videos are never shown while a new fetch is in flight)
   const [connectionVideos, setConnectionVideos] = useState<{ forId: string; videos: ConnectionVideo[] } | null>(null);
+  // Revision allowance configured by the admin (comes with /api/connections)
+  const [maxRevisions, setMaxRevisions] = useState(2);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -142,7 +145,8 @@ export default function BrandConnectionsPage() {
   }, []);
 
   async function fetchConnections() {
-    const apply = (data: { connections?: Record<string, unknown>[] }) => {
+    const apply = (data: { connections?: Record<string, unknown>[]; settings?: { max_revisions?: number } }) => {
+      if (typeof data.settings?.max_revisions === "number") setMaxRevisions(data.settings.max_revisions);
       const conns = data.connections || [];
       setConnections(
         conns.map((c) => ({
@@ -231,6 +235,7 @@ export default function BrandConnectionsPage() {
       case "approved":
         actions.push({ label: conn.productType === "digital" ? "שליחת גישה" : "עדכון משלוח", status: "shipped", variant: "primary", needsModal: true });
         break;
+      case "uploaded":
       case "in_review":
         actions.push({ label: "סקירת סרטון", status: "completed", variant: "primary", needsModal: true });
         break;
@@ -514,8 +519,8 @@ export default function BrandConnectionsPage() {
                 </div>
               )}
 
-              {/* Video review actions */}
-              {selectedConnection.status === "in_review" && (
+              {/* Video review actions — available as soon as the creator uploaded (FLOW-01) */}
+              {canBrandReview(selectedConnection.status) && (
                 <div className="space-y-3">
                   <Button
                     fullWidth
@@ -524,9 +529,9 @@ export default function BrandConnectionsPage() {
                   >
                     אישור סרטון — סיום החיבור
                   </Button>
-                  {selectedConnection.revisionCount < 2 && (
+                  {selectedConnection.revisionCount < maxRevisions && (
                     <div className="bg-amber-50 rounded-xl p-4 space-y-2">
-                      <label className="block text-xs text-amber-700 font-medium">בקשת תיקון ({selectedConnection.revisionCount}/2 נוצלו)</label>
+                      <label className="block text-xs text-amber-700 font-medium">בקשת תיקון ({selectedConnection.revisionCount}/{maxRevisions} נוצלו)</label>
                       <Textarea
                         placeholder="מה צריך לתקן בסרטון..."
                         value={revisionNotes}

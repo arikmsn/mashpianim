@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createNotification } from "@/lib/notifications";
 import { getGreenAPI } from "@/lib/adapters/greenapi";
 import { mapMatchError } from "@/lib/match-errors";
+import { buildBriefMessage as composeBrief } from "@/lib/brief";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Admin = SupabaseClient<any, any, any, any, any>;
@@ -9,12 +10,14 @@ type Admin = SupabaseClient<any, any, any, any, any>;
 export const MIN_PORTFOLIO_VIDEOS = 5;
 export const APP_URL = "https://www.mashpian.online";
 
+// Portfolio videos that count toward the 5-video gate (ones an admin took down don't)
 export async function countPortfolioVideos(admin: Admin, creatorUserId: string): Promise<number> {
   const { count } = await admin
     .from("videos")
     .select("id", { count: "exact", head: true })
     .eq("creator_id", creatorUserId)
-    .is("connection_id", null);
+    .is("connection_id", null)
+    .neq("status", "rejected");
   return count || 0;
 }
 
@@ -23,31 +26,7 @@ export function portfolioGateError(count: number) {
   return `כדי לסמן לב ולאשר שיתופי פעולה צריך ${MIN_PORTFOLIO_VIDEOS} סרטונים בתיק העבודות. יש לך ${count} — העלו עוד ${missing}.`;
 }
 
-export function buildBriefMessage(product: {
-  name: string;
-  price?: number | null;
-  product_type?: string | null;
-  description?: string | null;
-}): string {
-  const kind = product.product_type === "digital" ? "דיגיטלי" : "פיזי";
-  return [
-    `📦 בריף — ${product.name}`,
-    `שווי: ₪${Number(product.price) || 0} · ${kind}`,
-    ``,
-    `מה המוצר: ${product.description?.trim() || "(העסק ישלים)"}`,
-    `למי הוא מתאים: (העסק ישלים)`,
-    ``,
-    `3 דברים שחובה להגיד:`,
-    `1.`,
-    `2.`,
-    `3.`,
-    `מה לא להגיד או להראות: (העסק ישלים)`,
-    ``,
-    `פורמט: וידאו 15–45 שנ' · 9:16 · דיבור למצלמה · כתוביות בעברית`,
-    `יעד להעלאה: עד 10 ימים מקבלת המוצר`,
-    `זכויות שימוש: העסק רשאי להשתמש בסרטון בכל הערוצים שלו`,
-  ].join("\n");
-}
+export { buildBriefMessage } from "@/lib/brief";
 
 async function sendWhatsApp(phone: string | null | undefined, body: string) {
   if (!phone) return;
@@ -109,7 +88,7 @@ export async function performMatch(admin: Admin, connectionId: string, actorUser
     .from("connections")
     .select(`
       id, status, brand_id, creator_id, credit_deducted, initiated_by,
-      products(name, price, description, product_type,
+      products(name, price, description, product_type, brief,
         brand_profiles(id, user_id, shop_name, users(id, full_name, phone))),
       creator_profiles!connections_creator_id_fkey(user_id, users(id, full_name, phone))
     `)
@@ -161,11 +140,12 @@ export async function performMatch(admin: Admin, connectionId: string, actorUser
     {
       connection_id: connectionId,
       sender_id: brandUser.id,
-      text: buildBriefMessage({
+      text: composeBrief({
         name: productName,
         price: product?.price,
         product_type: product?.product_type,
         description: product?.description,
+        brief: product?.brief,
       }),
       is_system: true,
     },
