@@ -30,6 +30,8 @@ function LoginContent() {
   const tapRef = useRef({ count: 0, timer: 0 });
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/feed";
+  // "I'm a creator / a brand" chosen on the landing page rides through the code step into registration
+  const presetType = searchParams.get("type") === "brand" ? "brand" : searchParams.get("type") === "creator" ? "creator" : null;
   const router = useRouter();
   const { toast } = useToast();
 
@@ -120,7 +122,9 @@ function LoginContent() {
       await refreshAuth();
 
       if (data.needsOnboarding) {
-        router.push(`/register?verified=1&userId=${data.userId}&phone=${encodeURIComponent(formattedPhone)}`);
+        router.push(
+          `/register?verified=1&userId=${data.userId}&phone=${encodeURIComponent(formattedPhone)}${presetType ? `&type=${presetType}` : ""}`
+        );
       } else if (Array.isArray(data.roles) && data.roles.length > 1 && !data.role) {
         // The account holds several roles (creator / brand / admin): the session must pick one
         setAvailableRoles(data.roles as AppRole[]);

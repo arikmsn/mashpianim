@@ -27,11 +27,22 @@ interface FeedbackRow {
 const kindIcons: Record<FeedbackKind, string> = { bug: "🐞", request: "💡", contact: "✉️" };
 const statusVariant: Record<FeedbackStatus, "warning" | "info" | "success"> = { new: "warning", in_progress: "info", closed: "success" };
 
+interface FeedbackModalProps {
+  open: boolean;
+  onClose: () => void;
+  // Presets for a specific entry point (e.g. "buy credits" opens a contact request). They apply when the
+  // component mounts — render it with a `key` that changes with the intent.
+  initialKind?: FeedbackKind;
+  initialSubject?: string;
+  intro?: string;
+  title?: string;
+}
+
 // "Contact us / report a problem" for both roles. Sends to POST /api/feedback and lists the user's own reports.
-export function FeedbackModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function FeedbackModal({ open, onClose, initialKind, initialSubject, intro, title }: FeedbackModalProps) {
   const { toast } = useToast();
-  const [kind, setKind] = useState<FeedbackKind>("bug");
-  const [subject, setSubject] = useState("");
+  const [kind, setKind] = useState<FeedbackKind>(initialKind || "bug");
+  const [subject, setSubject] = useState(initialSubject || "");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [mine, setMine] = useState<FeedbackRow[] | null>(null);
@@ -71,8 +82,9 @@ export function FeedbackModal({ open, onClose }: { open: boolean; onClose: () =>
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="צור קשר / דיווח על תקלה" size="md" className="max-h-[90vh] overflow-y-auto">
+    <Modal open={open} onClose={onClose} title={title || "צור קשר / דיווח על תקלה"} size="md" className="max-h-[90vh] overflow-y-auto">
       <div className="space-y-4">
+        {intro && <p className="text-sm text-neutral-600 bg-pink-50 rounded-xl px-3 py-2">{intro}</p>}
         <div className="flex gap-2">
           {FEEDBACK_KINDS.map((k) => (
             <button

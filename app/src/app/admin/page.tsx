@@ -4,8 +4,33 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Card, CardTitle, Badge } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { formatBytes, type CapacityStatus, type CapacityGauge, type PlatformUsage } from "@/lib/capacity";
 
 type StatItem = { label: string; value: string; change: string; trend: string; icon: string };
+type Capacity = CapacityStatus & { usage: PlatformUsage };
+
+const gaugeTone: Record<CapacityGauge["level"], { bar: string; text: string; label: string }> = {
+  ok: { bar: "bg-emerald-500", text: "text-emerald-700", label: "תקין" },
+  warn: { bar: "bg-amber-500", text: "text-amber-700", label: "מתקרב למגבלה" },
+  critical: { bar: "bg-red-500", text: "text-red-700", label: "כמעט מלא" },
+};
+
+function GaugeRow({ title, gauge }: { title: string; gauge: CapacityGauge }) {
+  const tone = gaugeTone[gauge.level];
+  return (
+    <div>
+      <div className="flex items-center justify-between text-sm mb-1">
+        <span className="text-neutral-700">{title}</span>
+        <span className={cn("text-xs font-medium", tone.text)}>
+          {formatBytes(gauge.used)} מתוך {formatBytes(gauge.limit)} · {Math.round(gauge.ratio * 100)}% · {tone.label}
+        </span>
+      </div>
+      <div className="h-2 bg-neutral-100 rounded-full overflow-hidden">
+        <div className={cn("h-full rounded-full transition-all", tone.bar)} style={{ width: `${Math.min(100, Math.round(gauge.ratio * 100))}%` }} />
+      </div>
+    </div>
+  );
+}
 type ActivityItem = { type: string; text: string; time: string };
 type ModerationItem = { id: string; creator: string; product: string; brand: string; uploadedAgo: string };
 
@@ -36,6 +61,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<StatItem[]>([]);
   const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
   const [pendingModeration, setPendingModeration] = useState<ModerationItem[]>([]);
+  const [capacity, setCapacity] = useState<Capacity | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -59,6 +85,7 @@ export default function AdminDashboard() {
         }
         if (data.recentActivity) setRecentActivity(data.recentActivity);
         if (data.pendingModeration) setPendingModeration(data.pendingModeration);
+        setCapacity(data.capacity || null);
       } catch {
         // API unavailable
       } finally {
@@ -112,6 +139,37 @@ export default function AdminDashboard() {
               </motion.div>
             ))}
       </div>
+
+      {/* Supabase capacity: the same numbers the daily cron watches (lib/capacity.ts) */}
+      {!loading && (
+        <Card padding="md" className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <CardTitle>קיבולת Supabase{capacity ? ` (תוכנית ${capacity.planLabel})` : ""}</CardTitle>
+            {capacity && (
+              <Badge variant={capacity.level === "ok" ? "success" : capacity.level === "warn" ? "warning" : "danger"} size="sm" dot>
+                {gaugeTone[capacity.level].label}
+              </Badge>
+            )}
+          </div>
+          {capacity ? (
+            <div className="space-y-4">
+              <GaugeRow title="אחסון קבצים (סרטונים ותמונות)" gauge={capacity.storage} />
+              <GaugeRow title="מסד נתונים" gauge={capacity.db} />
+              {capacity.message && (
+                <p className={cn("text-sm rounded-xl px-3 py-2", capacity.level === "critical" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700")}>
+                  {capacity.message}
+                </p>
+              )}
+              <p className="text-xs text-neutral-400">
+                {capacity.usage.storage_objects ?? 0} קבצים, מתוכם סרטונים {formatBytes(capacity.usage.videos_bytes ?? 0)}. התראה לפעמון נשלחת אוטומטית מ-70%.
+                תעבורה (egress) לא נמדדת כאן — רק בדשבורד של Supabase.
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-neutral-400">המדידה לא זמינה — הפונקציה platform_usage() (מיגרציה 014) עדיין לא הופעלה במסד הנתונים.</p>
+          )}
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 gap-6">
         {/* Recent activity */}

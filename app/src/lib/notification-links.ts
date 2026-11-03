@@ -17,6 +17,7 @@ export function notificationHref(n: NotificationLike, role: ViewerRole, isAdmin 
   const productId = str(n.data?.productId);
 
   if (n.type === "feedback_received") return isAdmin ? "/admin/feedback" : null;
+  if (n.type === "capacity_warning") return isAdmin ? "/admin" : null;
   if (n.type === "feedback_updated") return "/profile";
   if (n.type === "portfolio_video_removed") return "/profile";
 

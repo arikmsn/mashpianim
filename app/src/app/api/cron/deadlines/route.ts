@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { createNotification, createNotificationOnce, logActivity, notifyConnectionStatusChange } from "@/lib/notifications";
+import { createNotification, createNotificationOnce, logActivity, notifyConnectionStatusChange, notificationData } from "@/lib/notifications";
+import { capacityStatus, type PlatformUsage } from "@/lib/capacity";
 
 // A reminder of the same kind for the same connection is sent at most once per this many hours
 const WARNING_DEDUPE_HOURS = 48;
@@ -29,7 +30,10 @@ export async function GET(request: NextRequest) {
   }
 
   const now = new Date().toISOString();
-  const results = { expired: 0, cancelled: 0, warnings: 0, skipped_duplicates: 0, flagged: 0, purged_otps: 0, purged_rate_limits: 0 };
+  const results = {
+    expired: 0, cancelled: 0, warnings: 0, skipped_duplicates: 0, flagged: 0, purged_otps: 0, purged_rate_limits: 0,
+    capacity: "unknown" as string, capacity_alerts: 0,
+  };
 
   // 0. Hearts left unanswered for 7 days expire
   const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
@@ -57,7 +61,7 @@ export async function GET(request: NextRequest) {
         type: "heart_expired",
         title: "הלב פג",
         body: `הלב למוצר "${conn.products?.name || ""}" לא נענה תוך 7 ימים ובוטל. אפשר לנסות שוב או לבחור מישהו אחר.`,
-        data: { connectionId: conn.id },
+        data: notificationData(conn.id, null, conn.initiated_by === "brand" ? "brand" : "creator"),
       });
     }
     await logActivity({ action: "heart_expired", entityType: "connection", entityId: conn.id });
@@ -102,7 +106,7 @@ export async function GET(request: NextRequest) {
           type: "connection_auto_cancelled",
           title: "חיבור בוטל אוטומטית",
           body: `החיבור למוצר "${conn.products?.name}" בוטל כי המוצר לא נשלח בזמן. הפנייה הוחזרה.`,
-          data: { connectionId: conn.id },
+          data: notificationData(conn.id, null, "brand"),
         });
       }
       if (creatorUser) {
@@ -111,7 +115,7 @@ export async function GET(request: NextRequest) {
           type: "connection_auto_cancelled",
           title: "חיבור בוטל",
           body: `החיבור למוצר "${conn.products?.name}" בוטל כי העסק לא שלח את המוצר.`,
-          data: { connectionId: conn.id },
+          data: notificationData(conn.id, null, "creator"),
         });
       }
 
@@ -132,7 +136,7 @@ export async function GET(request: NextRequest) {
           type: "shipping_deadline_warning",
           title: "תזכורת: שלחו את המוצר!",
           body: `עבר מועד השליחה למוצר "${conn.products?.name}". שלחו בהקדם או שהחיבור יבוטל.`,
-          data: { connectionId: conn.id },
+          data: notificationData(conn.id, null, "brand"),
         }, WARNING_DEDUPE_HOURS);
       }
       if (created) results.warnings++; else results.skipped_duplicates++;
@@ -184,7 +188,7 @@ export async function GET(request: NextRequest) {
           type: "filming_deadline_warning",
           title: "תזכורת: העלו סרטון!",
           body: `עבר מועד הצילום למוצר "${conn.products?.name}". העלו סרטון בהקדם.`,
-          data: { connectionId: conn.id },
+          data: notificationData(conn.id, null, "creator"),
         }, WARNING_DEDUPE_HOURS);
       }
       if (created) results.warnings++; else results.skipped_duplicates++;
@@ -256,7 +260,7 @@ export async function GET(request: NextRequest) {
           type: "review_deadline_warning",
           title: "תזכורת: אשרו את הסרטון!",
           body: `מועד הסקירה למוצר "${conn.products?.name}" עבר. אם לא תגיבו, הסרטון יאושר אוטומטית.`,
-          data: { connectionId: conn.id },
+          data: notificationData(conn.id, null, "brand"),
         }, WARNING_DEDUPE_HOURS);
       }
       if (created) results.warnings++; else results.skipped_duplicates++;
@@ -279,6 +283,29 @@ export async function GET(request: NextRequest) {
     .select("key");
   if (limitPurgeError) console.error("[cron] rate_limits purge error:", limitPurgeError.message);
   results.purged_rate_limits = purgedLimits?.length || 0;
+
+  // 5. Capacity watch: once a day, every admin hears when storage or the database nears the Supabase plan
+  // limit (lib/capacity.ts). platform_usage() comes from migration 014; until it exists this step just logs.
+  const { data: usageData, error: usageError } = await supabase.rpc("platform_usage");
+  if (usageError) {
+    console.error("[cron] platform_usage:", usageError.message);
+  } else if (usageData) {
+    const status = capacityStatus(usageData as PlatformUsage);
+    results.capacity = status.level;
+    if (status.level !== "ok" && status.message) {
+      const { data: admins } = await supabase.from("users").select("id").eq("type", "admin").eq("is_active", true);
+      for (const a of (admins || []) as { id: string }[]) {
+        const created = await createNotificationOnce({
+          userId: a.id,
+          type: "capacity_warning",
+          title: status.level === "critical" ? "⚠️ האחסון כמעט מלא" : "האחסון מתקרב למגבלת התוכנית",
+          body: status.message,
+          data: { role: "admin", level: status.level },
+        }, 24);
+        if (created) results.capacity_alerts++;
+      }
+    }
+  }
 
   return NextResponse.json({
     success: true,

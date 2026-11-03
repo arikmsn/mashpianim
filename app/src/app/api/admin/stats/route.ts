@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { verifyAdmin, isSupabaseConfigured } from "@/lib/admin-auth";
+import { capacityStatus, type PlatformUsage } from "@/lib/capacity";
 
 export async function GET() {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({
       stats: { creators_count: 0, brands_count: 0, active_connections: 0, pending_videos: 0, monthly_revenue: 0, credits_sold: 0 },
+      capacity: null,
     });
   }
 
@@ -13,7 +15,7 @@ export async function GET() {
     return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
   }
 
-  const [creatorsRes, brandsRes, connectionsRes, videosRes, transactionsRes, creditsRes] =
+  const [creatorsRes, brandsRes, connectionsRes, videosRes, transactionsRes, creditsRes, usageRes] =
     await Promise.all([
       supabase.from("users").select("id", { count: "exact", head: true }).eq("type", "creator"),
       supabase.from("users").select("id", { count: "exact", head: true }).eq("type", "brand"),
@@ -34,6 +36,8 @@ export async function GET() {
         .from("credits")
         .select("total")
         .gte("purchased_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+      // Storage + database size (migration 014); null until the function exists
+      supabase.rpc("platform_usage"),
     ]);
 
   const monthlyRevenue = (transactionsRes.data || []).reduce(
@@ -45,6 +49,10 @@ export async function GET() {
     0
   );
 
+  if (usageRes.error) console.error("[admin/stats] platform_usage:", usageRes.error.message);
+  const usage = !usageRes.error && usageRes.data ? (usageRes.data as PlatformUsage) : null;
+  const capacity = usage ? { ...capacityStatus(usage), usage } : null;
+
   return NextResponse.json({
     stats: {
       creators_count: creatorsRes.count || 0,
@@ -54,5 +62,6 @@ export async function GET() {
       monthly_revenue: monthlyRevenue,
       credits_sold: creditsSold,
     },
+    capacity,
   });
 }

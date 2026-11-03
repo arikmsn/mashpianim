@@ -5,6 +5,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Card, Badge, Button, Modal, Input, Textarea, FilePicker, useToast } from "@/components/ui";
 import { PRODUCT_CATEGORIES } from "@/lib/categories";
 
+// "3 בדצמבר 2026" for a yyyy-mm-dd value from the date input
+function formatDateHe(value: string): string {
+  const d = new Date(`${value}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString("he-IL", { day: "numeric", month: "long", year: "numeric" });
+}
+
 interface Product {
   id: string;
   name: string;
@@ -624,13 +630,20 @@ export default function BrandProductsPage() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1">תאריך תפוגה</label>
+              <label className="block text-sm font-medium text-neutral-700 mb-1">
+                תאריך תפוגה <span className="text-neutral-400 font-normal">(יום/חודש/שנה)</span>
+              </label>
+              {/* The native picker is labelled by the browser's own language; the chosen date is echoed in Hebrew (QA 17) */}
               <Input
                 type="date"
+                lang="he-IL"
                 value={formData.expirationDate}
                 onChange={(e) => setFormData((p) => ({ ...p, expirationDate: e.target.value }))}
                 dir="ltr"
               />
+              {formData.expirationDate && (
+                <p className="text-xs text-neutral-500 mt-1">יפוג ב-{formatDateHe(formData.expirationDate)}</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-1">כמות במלאי</label>

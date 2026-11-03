@@ -41,6 +41,20 @@ function RegisterContent() {
     }
   }, [isPreVerified, verifiedUserId, initialType, router]);
 
+  // Registration starts with the phone code, not with the form (QA 18): without a verified phone the
+  // login screen takes over and sends new phones back here with verified=1 (the chosen type rides along)
+  useEffect(() => {
+    if (!isPreVerified) router.replace(initialType ? `/login?type=${initialType}` : "/login");
+  }, [isPreVerified, initialType, router]);
+
+  if (!isPreVerified) {
+    return (
+      <main className="min-h-screen flex items-center justify-center text-sm text-neutral-400">
+        מעבירים לאימות הטלפון…
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen flex items-center justify-center px-6 bg-gradient-to-br from-pink-50 to-background py-12">
       <div className="w-full max-w-md">

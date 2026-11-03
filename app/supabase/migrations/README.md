@@ -11,6 +11,7 @@ Files here mirror what was applied to the Supabase project `rhhfzvmiwhmnviznxvlv
 | `011_max_creators.sql` | Supabase MCP `apply_migration` on 2026-11-03 (`max_creators`) | Yes |
 | `012_feedback.sql` | Supabase MCP `apply_migration` on 2026-11-03 (`feedback`), owner-approved — new `feedback` table for in-app reports (additive) | Yes |
 | `013_product_category.sql` | Supabase MCP `apply_migration` on 2026-11-03 (`product_category`), owner-requested (QA item 4) — `products.category` text NOT NULL default 'כללי', backfilled from the brand's first category | Yes |
+| `014_platform_usage.sql` | **Not applied yet** (written 2026-11-03, awaiting owner approval) — `public.platform_usage()` SECURITY DEFINER, service_role only: database + storage size for the admin capacity gauge and the daily cron alert. Additive, no data change | No |
 
 Rules:
 - Never edit an applied file; add a new numbered file.

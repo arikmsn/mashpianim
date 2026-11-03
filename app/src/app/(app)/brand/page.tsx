@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, Badge, Button, Card, Modal, useToast } from "@/components/ui";
-import { ProfileModal } from "@/components/features";
+import { ProfileModal, FeedbackModal } from "@/components/features";
 import { swrFetch, fetchJson } from "@/lib/client-cache";
 import { toDirectImageUrl } from "@/lib/images";
 import { createClient } from "@/lib/supabase/client";
@@ -75,6 +75,8 @@ export default function BrandDiscoverPage() {
   const [pickerFor, setPickerFor] = useState<CreatorCard | null>(null);
   const [pickedProduct, setPickedProduct] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  // "Buy credits" is a contact request until online payment is connected (QA 16)
+  const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [viewProfileId, setViewProfileId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const router = useRouter();
@@ -443,7 +445,7 @@ export default function BrandDiscoverPage() {
         <Card padding="sm" className="mt-6">
           <div className="flex items-center justify-between px-2 py-1">
             <span className="text-sm">🎬 {credits.remaining} מתוך {credits.total} סרטונים נותרים</span>
-            <Button size="sm" variant="secondary" onClick={() => toast("רכישת סרטונים תהיה זמינה בקרוב — בינתיים פנו אלינו", "info")}>
+            <Button size="sm" variant="secondary" onClick={() => setPurchaseOpen(true)}>
               רכישה
             </Button>
           </div>
@@ -479,12 +481,16 @@ export default function BrandDiscoverPage() {
               ))}
             </div>
             {credits.remaining === 0 && (
-              <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
-                אין לכם סרטונים נותרים — הלב יישלח, אבל המאטץ&apos; ייפתח רק אחרי שיתווספו סרטונים.
-              </p>
+              // No credits → no new hearts (the server refuses them too); point at the purchase request instead
+              <div className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg p-2 space-y-2">
+                <p>אין לכם סרטונים נותרים בחבילה, ולכן אי אפשר לשלוח לב חדש — הוא היה נפתח למאטץ&apos; שלא יכול להתחיל.</p>
+                <Button size="sm" variant="secondary" fullWidth onClick={() => { setPickerFor(null); setPurchaseOpen(true); }}>
+                  לרכישת סרטונים
+                </Button>
+              </div>
             )}
             <div className="flex gap-2">
-              <Button fullWidth loading={sending} disabled={!pickedProduct} onClick={sendHeart}>
+              <Button fullWidth loading={sending} disabled={!pickedProduct || credits.remaining === 0} onClick={sendHeart}>
                 ❤️ שליחת לב
               </Button>
               <Button variant="ghost" onClick={() => setPickerFor(null)}>ביטול</Button>
@@ -494,6 +500,15 @@ export default function BrandDiscoverPage() {
       </Modal>
 
       <ProfileModal userId={viewProfileId} onClose={() => setViewProfileId(null)} title="פרופיל היוצר/ת" />
+      <FeedbackModal
+        key="purchase"
+        open={purchaseOpen}
+        onClose={() => setPurchaseOpen(false)}
+        title="רכישת סרטונים"
+        initialKind="contact"
+        initialSubject="רכישת סרטונים (קרדיטים)"
+        intro="תשלום אונליין יתווסף בקרוב. כתבו כמה סרטונים תרצו ונחזור אליכם עם הצעה ואישור הטעינה — בדרך כלל באותו יום."
+      />
     </main>
   );
 }

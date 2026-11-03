@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
 
   const { data: product } = await admin
     .from("products")
-    .select("id, brand_id, status, name, product_type, max_creators, brand_profiles(id, user_id, shop_name, users(id, full_name, phone))")
+    .select("id, brand_id, status, name, product_type, max_creators, brand_profiles(id, user_id, shop_name, total_credits, used_credits, users(id, full_name, phone))")
     .eq("id", product_id)
     .single();
 
@@ -183,6 +183,15 @@ export async function POST(request: NextRequest) {
     }
     if (!creator_user_id) {
       return NextResponse.json({ error: "מזהה יוצר חסר" }, { status: 400 });
+    }
+    // A brand without credits cannot start hearts: the creator would approve into a match that can never
+    // open (QA 16). Approving a creator's heart is still checked atomically in match_connection().
+    const remainingCredits = (Number(brandProfile.total_credits) || 0) - (Number(brandProfile.used_credits) || 0);
+    if (remainingCredits <= 0) {
+      return NextResponse.json(
+        { error: "אין סרטונים נותרים בחבילה — כדי לשלוח לבבות צריך לרכוש סרטונים", code: "no_credits" },
+        { status: 403 }
+      );
     }
     const { data: cp } = await admin
       .from("creator_profiles")

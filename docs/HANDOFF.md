@@ -89,6 +89,7 @@ app/src/
     phone.ts                    normalizeIsraeliMobile(): the only phone format the app accepts (05X / 972 → E.164), used by the login form and send-otp
     categories.ts               PRODUCT_CATEGORIES (the 8 feed categories), REGISTRATION_TO_FEED, resolveProductCategory(): one list behind the feed chips, the product form and the API validation
     chat-time.ts                formatMessageTime() / sameDay() / dayLabel(): bubble times and day separators in the chat (viewer's zone)
+    capacity.ts                 Supabase capacity watch: SUPABASE_PLAN (flip to "pro" after the upgrade), PLAN_LIMITS, capacityStatus() (70 % warn / 90 % critical) — admin gauge + daily cron alert; reads platform_usage() (migration 014)
     connection-flow.ts          lifecycle rules + journey timeline (FLOW_STEPS, flowNextAction, activeDeadlineField) shared by API and pages
     admin-auth.ts               verifyAdmin(), isSupabaseConfigured()
     moderation/chat-filter.ts   blocks phone/email/links in chat
@@ -126,7 +127,7 @@ Pattern in every route: `createServerClient()` → `auth.getUser()` for identity
 | Route | Methods | Purpose |
 | --- | --- | --- |
 | `auth/send-otp`, `auth/verify-otp` | POST | WhatsApp OTP login/registration (creates the Supabase auth user; `verify-otp` signs the user in **server-side** — auth cookies on the response, no password in the JSON — the client then calls `refreshAuth()` and navigates). Rate limited: 3 codes per phone / 10 per IP per 10 min; 10 verifications per phone / 30 per IP per 10 min (429 + `Retry-After`, `code: rate_limited`) |
-| `auth/register` | POST | completes profile (creator or brand) after OTP; 10 per IP per hour |
+| `auth/register` | POST | completes profile (creator or brand) after OTP; 10 per IP per hour. The `/register` page itself only opens with `verified=1&userId=…` (login sends new phones there, `?type=` preselects the form); opened directly it redirects to `/login` |
 | `auth/user-type` | GET, POST, DELETE | GET: onboarding status + the role this session signs in as + every role the account holds; POST `{role}` picks the session role (only roles the account holds; sets the httpOnly `mashpian-role` cookie, returns the role's home); DELETE clears it (logout). `verify-otp` returns `roles`/`role` and sets the cookie itself for single-role accounts; `register` and `dev-login` set it too |
 | `auth/dev-login` | POST | **non-production only** (404 in Vercel production; local/preview production builds need `ALLOW_DEV_LOGIN=true`). Gate = `ADMIN_LOGIN_PHONE`+`ADMIN_LOGIN_PASSWORD`; signs in the synthetic `creator` / `brand` test accounts (flagged `dev_account`) server-side; 10 attempts per IP per 15 min |
 | `profile` | GET, PUT | own user + profile; creator GET includes `portfolio_count` |
@@ -136,7 +137,7 @@ Pattern in every route: `createServerClient()` → `auth.getUser()` for identity
 | `products/[id]` | GET, PUT, DELETE | PUT goes through `pickProductUpdates()` (allowlist; `category` must be a real feed category or it is dropped) |
 | `products/upload-image` | POST | product image to `images` bucket; ≤ 5 MB, type decided by magic bytes |
 | `creators` | GET | brand/admin only — ranked creator gallery with portfolio count, poster, preview video, relation to this brand, `fit` flag |
-| `connections` | GET, POST | GET: own connections enriched with `unread_count`, `last_message`, `last_message_at` (one messages query for all) + `settings.max_revisions`. POST: send a heart — creator `{product_id}` (gate-checked) or brand `{product_id, creator_user_id}`; auto-matches if the other side already hearted (409 `creator_not_ready` while the creator has < 5 portfolio videos) |
+| `connections` | GET, POST | GET: own connections enriched with `unread_count`, `last_message`, `last_message_at` (one messages query for all) + `settings.max_revisions`. POST: send a heart — creator `{product_id}` (gate-checked) or brand `{product_id, creator_user_id}`; auto-matches if the other side already hearted (409 `creator_not_ready` while the creator has < 5 portfolio videos; 403 `no_credits` when a brand with no remaining credits tries to start a heart) |
 | `connections/[id]` | GET, PUT, POST | GET connection + messages; PUT status transition (state machine in file; pending rules per `initiated_by`; `approved` → `performMatch`; `uploaded` → brand `completed` / `revision_requested` or admin `in_review`; `completed` approves the deliverables and posts a closing system message; deadlines/revision allowance from `lib/settings.ts`); POST chat message (contact filter; 400 `chat_closed` once the connection is closed) |
 | `messages/unread`, `messages/read` | GET, POST | badge count; mark connection read |
 | `videos` | GET, POST | GET `?portfolio=me|<userId>` (brands/admins may view others) or `?connectionId=` (the two parties or admin); POST = small-file fallback upload through the server (Vercel 4.5 MB body cap) — the app uploads directly to Storage instead |
@@ -151,7 +152,8 @@ Pattern in every route: `createServerClient()` → `auth.getUser()` for identity
 | `admin/settings` | GET, PUT | `site_settings` rows by section: `general`, `credits`, `moderation`, `timelines` (`shipping_days`, `filming_days`, `review_days`, `max_revisions`). `timelines` is live: `lib/settings.ts` feeds the connection state machine and `match_connection()` reads `shipping_days` |
 | `admin/feedback` | GET, PUT | In-app reports (`feedback` table, migration 012). GET `?status=open|new|in_progress|closed|all` with the reporter's name/type/phone + `newCount`; PUT `{id, status?, admin_note?}` — a status change notifies the reporter (`feedback_updated`), audited as `admin_update_feedback` |
 | `feedback` | GET, POST | Signed-in users: GET own reports; POST `{kind: bug|request|contact, subject, message, page?}` (validated in `lib/feedback.ts`, 5 per user per hour) → row + a `feedback_received` notification to every admin (links to `/admin/feedback`) |
-| `cron/deadlines` | GET | expires 7-day hearts; shipping/filming/review deadline warnings (each at most once per 48 h per connection) & auto-cancel/auto-complete; purges expired `otp_codes` and stale `rate_limits` rows |
+| `cron/deadlines` | GET | expires 7-day hearts; shipping/filming/review deadline warnings (each at most once per 48 h per connection, tagged with the recipient's role) & auto-cancel/auto-complete; purges expired `otp_codes` and stale `rate_limits` rows; capacity watch — `platform_usage()` vs `lib/capacity.ts` limits, one `capacity_warning` notification per admin per day at ≥ 70 % |
+| `admin/stats` | GET | dashboard counters + `capacity` (`capacityStatus()` + raw `usage`, null until migration 014 exists) |
 
 ## 6. Front-end conventions that matter
 

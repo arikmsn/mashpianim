@@ -29,7 +29,8 @@ interface CreatorProfile {
   completedConnections: number;
   categories: string[];
   bio: string;
-  stats: { connections: number; videos: number; avgRating: number };
+  // `videos` = delivered collaboration videos (drives the level milestones); `portfolio` = videos in the portfolio
+  stats: { connections: number; videos: number; portfolio: number };
 }
 
 interface BrandProfile {
@@ -541,6 +542,7 @@ export default function ProfilePage() {
   // Portfolio video open in the player modal (the list shows posters only)
   const [playingVideo, setPlayingVideo] = useState<PortfolioVideo | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [purchaseOpen, setPurchaseOpen] = useState(false);
   // Every role the account holds; more than one → the profile offers switching
   const [accountRoles, setAccountRoles] = useState<AppRole[]>([]);
   const [roleSwitchOpen, setRoleSwitchOpen] = useState(false);
@@ -600,7 +602,7 @@ export default function ProfilePage() {
             stats: {
               connections: creatorData?.completed_connections || 0,
               videos: creatorData?.completed_connections || 0,
-              avgRating: 0,
+              portfolio: creatorData?.portfolio_count || 0,
             },
           });
           setAvatarUrl(userData.avatar_url || null);
@@ -907,9 +909,19 @@ export default function ProfilePage() {
                 <span className="text-sm font-medium">
                   🎬 {brandProfile.totalCredits - brandProfile.usedCredits} סרטונים נותרים
                 </span>
-                <Button size="sm" variant="secondary">רכישת סרטונים</Button>
+                <Button size="sm" variant="secondary" onClick={() => setPurchaseOpen(true)}>רכישת סרטונים</Button>
               </div>
             </Card>
+            {/* Until online payment is connected, buying credits is a contact request handled by the team */}
+            <FeedbackModal
+              key="purchase"
+              open={purchaseOpen}
+              onClose={() => setPurchaseOpen(false)}
+              title="רכישת סרטונים"
+              initialKind="contact"
+              initialSubject="רכישת סרטונים (קרדיטים)"
+              intro="תשלום אונליין יתווסף בקרוב. כתבו כמה סרטונים תרצו ונחזור אליכם עם הצעה ואישור הטעינה — בדרך כלל באותו יום."
+            />
           </div>
         </div>
 
@@ -1017,9 +1029,10 @@ export default function ProfilePage() {
           {/* Stats row */}
           <div className="grid grid-cols-3 gap-4 mt-6">
             {[
-              { value: displayProfile.stats.connections, label: "חיבורים" },
-              { value: displayProfile.stats.videos, label: "סרטונים" },
-              { value: displayProfile.stats.avgRating || "—", label: "דירוג" },
+              // Three real numbers (QA 15): portfolio size, completed collaborations, hearts received
+              { value: displayProfile.stats.portfolio, label: "סרטונים בתיק" },
+              { value: displayProfile.stats.connections, label: "שיתופי פעולה" },
+              { value: displayProfile.hearts, label: "לבבות" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <div className="text-xl font-bold text-neutral-900">{stat.value}</div>

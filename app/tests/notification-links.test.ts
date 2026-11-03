@@ -32,6 +32,9 @@ describe("notification deep links", () => {
     assert.equal(notificationHref({ type: "feedback_received", data: { feedbackId: "f" } }, "creator", true), "/admin/feedback");
     assert.equal(notificationHref({ type: "feedback_received", data: { feedbackId: "f" } }, "creator", false), null);
     assert.equal(notificationHref({ type: "feedback_updated", data: { feedbackId: "f" } }, "brand"), "/profile");
+    // Capacity alerts (daily cron) lead admins to the dashboard gauge and nobody else anywhere
+    assert.equal(notificationHref({ type: "capacity_warning", data: { role: "admin" } }, "creator", true), "/admin");
+    assert.equal(notificationHref({ type: "capacity_warning", data: { role: "admin" } }, "creator", false), null);
   });
 
   test("portfolio takedown goes to the profile; unknown or data-less rows have no link", () => {
