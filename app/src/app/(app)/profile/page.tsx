@@ -1227,7 +1227,7 @@ export default function ProfilePage() {
               }}
               className="w-full text-sm text-neutral-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-pink-50 file:text-pink-500 hover:file:bg-pink-100 transition-all"
             />
-            <p className="text-xs text-neutral-400 mt-1">עד {MAX_VIDEO_MB}MB (כ-2 דקות ב-1080p) · MP4, MOV או WebM</p>
+            <p className="text-xs text-neutral-400 mt-1">עד {MAX_VIDEO_MB}MB · MP4, MOV או WebM</p>
             {selectedFile && (
               <p className="text-xs text-neutral-400 mt-1">
                 {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(1)} MB)

@@ -1,8 +1,13 @@
 // Upload limits and content checks shared by the browser (pre-flight) and the API routes (enforcement).
-// No framework imports so it can be unit-tested. Keep MAX_VIDEO_MB in sync with the `videos` bucket
-// file_size_limit (supabase/migrations/009). The project's Supabase plan caps the effective size.
+// No framework imports so it can be unit-tested.
+//
+// MAX_VIDEO_MB is the limit users see. It must never exceed what Storage actually accepts:
+//   * Supabase Free plan: 50 MB per file (hard cap, regardless of bucket settings)
+//   * Supabase Pro: the project-wide upload limit set in Dashboard → Storage → Settings
+// The `videos` bucket is already configured for 150 MB (migration 009); after upgrading to Pro and raising
+// the project limit, set this to 150 (≈ 2 minutes of 1080p phone video).
 
-export const MAX_VIDEO_MB = 150; // ≈ 2 minutes of 1080p phone video
+export const MAX_VIDEO_MB = 50; // Free plan cap — raise to 150 once the project is on Pro
 export const MAX_VIDEO_BYTES = MAX_VIDEO_MB * 1024 * 1024;
 export const MAX_IMAGE_MB = 5;
 export const MAX_IMAGE_BYTES = MAX_IMAGE_MB * 1024 * 1024;
@@ -27,7 +32,7 @@ export function videoFileProblem(file: { size: number; type: string }): string |
     return "פורמט הסרטון לא נתמך. העלו MP4, MOV או WebM.";
   }
   if (file.size > MAX_VIDEO_BYTES) {
-    return `הסרטון גדול מדי (${formatMb(file.size)}MB). הגודל המקסימלי הוא ${MAX_VIDEO_MB}MB — בערך 2 דקות ב-1080p. קצרו את הסרטון או הורידו את הרזולוציה.`;
+    return `הסרטון גדול מדי (${formatMb(file.size)}MB). הגודל המקסימלי כרגע הוא ${MAX_VIDEO_MB}MB. קצרו את הסרטון או הורידו את הרזולוציה (720p מספיק).`;
   }
   return null;
 }
