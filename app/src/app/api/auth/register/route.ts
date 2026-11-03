@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { getGreenAPI } from "@/lib/adapters/greenapi";
 import { isAllowedRegistrationType } from "@/lib/authz";
+import { checkRateLimit, rateLimitedResponse, clientIp, RATE_LIMITS } from "@/lib/rate-limit";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -21,6 +22,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { userId: requestedUserId, userType } = body;
     const profile: Record<string, any> = body.profile && typeof body.profile === "object" ? body.profile : {};
+
+    // 10 registrations per IP per hour (SEC-07)
+    const limit = await checkRateLimit(supabaseAdmin, "register:ip", clientIp(request.headers), RATE_LIMITS.registerIp);
+    if (!limit.allowed) return rateLimitedResponse(limit);
 
     if (!userType) {
       return NextResponse.json({ error: "פרטים חסרים" }, { status: 400 });

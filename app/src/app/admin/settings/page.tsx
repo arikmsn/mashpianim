@@ -7,32 +7,99 @@ const defaultSettings = {
   general: { platformName: "Mashpian", supportEmail: "support@mashpian.online", supportPhone: "" },
   credits: { single: "100", pack5: "450", pack10: "800", pack20: "1400" },
   moderation: { ocrCheck: true, chatFilter: true, speechDetection: true, contentFilter: true },
-  timelines: { shipDays: "7", filmDays: "10", reviewDays: "7", maxRevisions: "1" },
+  timelines: { shipDays: "7", filmDays: "10", reviewDays: "7", maxRevisions: "2" },
 };
 
 type Settings = typeof defaultSettings;
+type ApiSettings = Record<string, Record<string, unknown>>;
 
-const STORAGE_KEY = "mashpian_settings";
+const str = (v: unknown, fallback: string) => (v === undefined || v === null ? fallback : String(v));
+const bool = (v: unknown, fallback: boolean) =>
+  typeof v === "boolean" ? v : v === "true" ? true : v === "false" ? false : fallback;
+const num = (v: string, fallback: number) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+// Form state ⇄ site_settings rows (keys exactly as stored in the database; `timelines` drives the
+// connection deadlines and the revision limit on the server)
+function fromApi(api: ApiSettings): Settings {
+  const g = api.general || {};
+  const c = api.credits || {};
+  const m = api.moderation || {};
+  const t = api.timelines || {};
+  return {
+    general: {
+      platformName: str(g.platform_name, defaultSettings.general.platformName),
+      supportEmail: str(g.support_email, defaultSettings.general.supportEmail),
+      supportPhone: str(g.support_phone, ""),
+    },
+    credits: {
+      single: str(c.single_price, "100"),
+      pack5: str(c.pack_5_price, "450"),
+      pack10: str(c.pack_10_price, "800"),
+      pack20: str(c.pack_20_price, "1400"),
+    },
+    moderation: {
+      ocrCheck: bool(m.auto_ocr, true),
+      chatFilter: bool(m.chat_filter, true),
+      speechDetection: bool(m.speech_detection, true),
+      contentFilter: bool(m.nsfw_filter, true),
+    },
+    timelines: {
+      shipDays: str(t.shipping_days, "7"),
+      filmDays: str(t.filming_days, "10"),
+      reviewDays: str(t.review_days, "7"),
+      maxRevisions: str(t.max_revisions, "2"),
+    },
+  };
+}
+
+function toApi(s: Settings): ApiSettings {
+  return {
+    general: { platform_name: s.general.platformName, support_email: s.general.supportEmail, support_phone: s.general.supportPhone },
+    credits: {
+      single_price: num(s.credits.single, 100),
+      pack_5_price: num(s.credits.pack5, 450),
+      pack_10_price: num(s.credits.pack10, 800),
+      pack_20_price: num(s.credits.pack20, 1400),
+    },
+    moderation: {
+      auto_ocr: s.moderation.ocrCheck,
+      chat_filter: s.moderation.chatFilter,
+      speech_detection: s.moderation.speechDetection,
+      nsfw_filter: s.moderation.contentFilter,
+    },
+    timelines: {
+      shipping_days: num(s.timelines.shipDays, 7),
+      filming_days: num(s.timelines.filmDays, 10),
+      review_days: num(s.timelines.reviewDays, 7),
+      max_revisions: num(s.timelines.maxRevisions, 2),
+    },
+  };
+}
 
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<Settings>(defaultSettings);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setSettings((prev) => ({
-          general: { ...prev.general, ...parsed.general },
-          credits: { ...prev.credits, ...parsed.credits },
-          moderation: { ...prev.moderation, ...parsed.moderation },
-          timelines: { ...prev.timelines, ...parsed.timelines },
-        }));
-      }
-    } catch {}
+    let cancelled = false;
+    fetch("/api/admin/settings")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d?.settings) setSettings(fromApi(d.settings as ApiSettings));
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function updateGeneral(field: keyof Settings["general"], value: string) {
@@ -55,15 +122,26 @@ export default function AdminSettingsPage() {
     setSaved(false);
   }
 
-  function handleSave() {
+  async function handleSave() {
     setSaving(true);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+      const payload = toApi(settings);
+      for (const section of Object.keys(payload)) {
+        const res = await fetch("/api/admin/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ section, data: payload[section] }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error((err as { error?: string }).error || "שגיאה בשמירה");
+        }
+      }
       setSaved(true);
       toast("ההגדרות נשמרו בהצלחה!", "success");
       setTimeout(() => setSaved(false), 3000);
-    } catch {
-      toast("שגיאה בשמירת ההגדרות", "error");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "שגיאה בשמירת ההגדרות", "error");
     } finally {
       setSaving(false);
     }
@@ -77,7 +155,7 @@ export default function AdminSettingsPage() {
           {saved && (
             <span className="text-sm text-emerald-600 font-medium">נשמר בהצלחה</span>
           )}
-          <Button size="lg" onClick={handleSave} loading={saving}>
+          <Button size="lg" onClick={handleSave} loading={saving || loading}>
             שמירת שינויים
           </Button>
         </div>

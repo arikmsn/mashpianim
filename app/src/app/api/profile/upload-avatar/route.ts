@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { MAX_IMAGE_BYTES, MAX_IMAGE_MB, detectImageType, extensionForImage } from "@/lib/uploads";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -39,18 +40,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "חסר קובץ תמונה" }, { status: 400 });
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      return NextResponse.json({ error: "הקובץ גדול מדי (מקסימום 5MB)" }, { status: 400 });
+    if (file.size > MAX_IMAGE_BYTES) {
+      return NextResponse.json({ error: `הקובץ גדול מדי (מקסימום ${MAX_IMAGE_MB}MB)` }, { status: 400 });
     }
 
-    const ext = file.name.split(".").pop() || "jpg";
-    const fileName = `avatars/${(dbUser as any).id}/${Date.now()}.${ext}`;
-
+    // The file's own bytes decide the type and extension — not the name or the client's content-type (SEC-10)
     const arrayBuffer = await file.arrayBuffer();
+    const mime = detectImageType(new Uint8Array(arrayBuffer.slice(0, 16)));
+    if (!mime) {
+      return NextResponse.json({ error: "הקובץ אינו תמונה תקינה (JPG, PNG או WebP)" }, { status: 400 });
+    }
+    const fileName = `avatars/${(dbUser as any).id}/${Date.now()}.${extensionForImage(mime)}`;
+
     const { error: uploadError } = await supabase.storage
       .from("images")
       .upload(fileName, arrayBuffer, {
-        contentType: file.type || "image/jpeg",
+        contentType: mime,
         upsert: false,
       });
 

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { isConnectionParticipant, canUploadConnectionVideo } from "@/lib/authz";
+import { videoFileProblem } from "@/lib/uploads";
 
 export const maxDuration = 60;
 
@@ -119,6 +120,10 @@ export async function POST(request: NextRequest) {
 
     if (!file) {
       return NextResponse.json({ error: "חסר קובץ וידאו" }, { status: 400 });
+    }
+    const problem = videoFileProblem(file);
+    if (problem) {
+      return NextResponse.json({ error: problem }, { status: 400 });
     }
 
     if (!connectionId && isPortfolio !== "true") {

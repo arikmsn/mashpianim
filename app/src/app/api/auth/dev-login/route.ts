@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { devLoginEnabled, resolveDevRole } from "@/lib/authz";
+import { checkRateLimit, rateLimitedResponse, clientIp, RATE_LIMITS } from "@/lib/rate-limit";
 
 // Test-account login for non-production environments only.
 // It never touches real accounts: only synthetic accounts flagged `dev_account` are created or signed in,
@@ -29,6 +30,12 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Brute-force control (SEC-07): 10 attempts per IP per 15 minutes
+    const limit = await checkRateLimit(supabaseAdmin, "dev-login:ip", clientIp(request.headers), RATE_LIMITS.devLoginIp);
+    if (!limit.allowed) return rateLimitedResponse(limit);
+
     const { phone, password, role } = await request.json();
     const normalizedPhone = String(phone || "").replace(/[-\s]/g, "").replace(/^0/, "+972");
 
@@ -44,8 +51,6 @@ export async function POST(request: NextRequest) {
     if (!config) {
       return NextResponse.json({ error: "תפקיד לא תקין" }, { status: 400 });
     }
-
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers({ perPage: 200 });
     let authUser = existingUsers?.users?.find((u) => u.email === config.email);

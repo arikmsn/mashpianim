@@ -1,14 +1,23 @@
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function verifyAdmin(): Promise<{ isAdmin: boolean; userId: string | null; supabase: any }> {
+export interface AdminCheck {
+  isAdmin: boolean;
+  /** auth user id of the caller (null when signed out) */
+  userId: string | null;
+  /** public.users.id of the caller — the actor id for activity_log */
+  adminId: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any;
+}
+
+export async function verifyAdmin(): Promise<AdminCheck> {
   const supabaseUrl = process.env.NEXT_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_SUPABASE_ANON_KEY;
   const supabaseServiceKey = process.env.SUPABASE_SEC_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    return { isAdmin: false, userId: null, supabase: null };
+    return { isAdmin: false, userId: null, adminId: null, supabase: null };
   }
 
   const supabase = await createClient();
@@ -17,7 +26,7 @@ export async function verifyAdmin(): Promise<{ isAdmin: boolean; userId: string 
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { isAdmin: false, userId: null, supabase };
+    return { isAdmin: false, userId: null, adminId: null, supabase };
   }
 
   // Use service role client to bypass RLS when checking admin status
@@ -25,27 +34,29 @@ export async function verifyAdmin(): Promise<{ isAdmin: boolean; userId: string 
     const adminClient = createSupabaseClient(supabaseUrl, supabaseServiceKey);
     const { data: dbUser } = await adminClient
       .from("users")
-      .select("type")
+      .select("id, type")
       .eq("auth_user_id", user.id)
       .single();
 
     if ((dbUser as any)?.type === "admin") {
       // Return service role client so admin operations bypass RLS too
-      return { isAdmin: true, userId: user.id, supabase: adminClient as any };
+      return { isAdmin: true, userId: user.id, adminId: (dbUser as any).id, supabase: adminClient as any };
     }
-    return { isAdmin: false, userId: user.id, supabase: supabase as any };
+    return { isAdmin: false, userId: user.id, adminId: null, supabase: supabase as any };
   }
 
   // Fallback: try with anon client (may fail if RLS blocks)
   const { data: dbUser } = await supabase
     .from("users")
-    .select("type")
+    .select("id, type")
     .eq("auth_user_id", user.id)
     .single();
 
+  const isAdmin = (dbUser as any)?.type === "admin";
   return {
-    isAdmin: (dbUser as any)?.type === "admin",
+    isAdmin,
     userId: user.id,
+    adminId: isAdmin ? (dbUser as any).id : null,
     supabase,
   };
 }

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { checkRateLimit, rateLimitedResponse, clientIp, RATE_LIMITS } from "@/lib/rate-limit";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -37,6 +38,16 @@ export async function POST(request: NextRequest) {
     }
 
     const phone = formatPhone(rawPhone);
+
+    // Guessing control (SEC-07): 10 verifications per phone and 30 per IP in 10 minutes,
+    // on top of the 5-attempt counter per code
+    const ip = clientIp(request.headers);
+    const [byPhone, byIp] = await Promise.all([
+      checkRateLimit(supabaseAdmin, "verify-otp:phone", phone, RATE_LIMITS.verifyOtpPhone),
+      checkRateLimit(supabaseAdmin, "verify-otp:ip", ip, RATE_LIMITS.verifyOtpIp),
+    ]);
+    if (!byPhone.allowed) return rateLimitedResponse(byPhone);
+    if (!byIp.allowed) return rateLimitedResponse(byIp);
 
     // Look up OTP
     const { data: otpRecord, error: fetchError } = await supabaseAdmin

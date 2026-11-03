@@ -6,6 +6,7 @@ import { filterContactInfo } from "@/lib/moderation/chat-filter";
 import { notifyConnectionStatusChange, logActivity, createNotification } from "@/lib/notifications";
 import { performMatch, countPortfolioVideos, portfolioGateError, MIN_PORTFOLIO_VIDEOS } from "@/lib/match";
 import { isConnectionParticipant } from "@/lib/authz";
+import { getTimelineSettings } from "@/lib/settings";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -197,6 +198,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
   }
 
+  // Deadlines and the revision limit come from the admin settings (FLOW-02)
+  const timelines = await getTimelineSettings(admin);
+
   // Status-specific logic
   switch (newStatus) {
     case "approved": {
@@ -238,7 +242,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     case "delivered": {
       updates.delivered_at = now.toISOString();
       updates.delivery_confirmed_at = now.toISOString();
-      updates.film_deadline = new Date(now.getTime() + 10 * 86400000).toISOString();
+      updates.film_deadline = new Date(now.getTime() + timelines.filming_days * 86400000).toISOString();
       if (delivery_proof_url) updates.delivery_proof_url = delivery_proof_url;
       break;
     }
@@ -254,7 +258,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
 
     case "in_review": {
-      updates.review_deadline = new Date(now.getTime() + 7 * 86400000).toISOString();
+      updates.review_deadline = new Date(now.getTime() + timelines.review_days * 86400000).toISOString();
       break;
     }
 
@@ -289,13 +293,15 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       if (!revision_notes) {
         return NextResponse.json({ error: "חובה לציין מה לתקן" }, { status: 400 });
       }
-      updates.revision_notes = revision_notes;
-      updates.revision_count = ((connection as any).revision_count || 0) + 1;
-
-      // Max 2 revisions
-      if ((connection as any).revision_count >= 2) {
-        return NextResponse.json({ error: "הגעתם למקסימום תיקונים (2). יש לאשר או לבטל." }, { status: 400 });
+      const usedRevisions = (connection as any).revision_count || 0;
+      if (usedRevisions >= timelines.max_revisions) {
+        return NextResponse.json(
+          { error: `הגעתם למקסימום תיקונים (${timelines.max_revisions}). יש לאשר או לבטל.` },
+          { status: 400 }
+        );
       }
+      updates.revision_notes = revision_notes;
+      updates.revision_count = usedRevisions + 1;
       break;
     }
 

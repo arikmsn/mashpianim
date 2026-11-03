@@ -102,9 +102,9 @@ docs/                           design-research.md (visual references), this fil
 | `activity_log` | `actor_id`, `action`, `entity_type`, `entity_id`, `details` | |
 | `otp_codes` | custom WhatsApp OTP flow (not Supabase SMS) | |
 
-**Storage buckets:** `videos` (private; policies `auth_users_upload_videos` + `auth_users_read_own_videos` scoped to `portfolio/{auth.uid()}/`), `images` (private, service role only), `thumbnails` (**public**, authenticated upload to `portfolio/{auth.uid()}/`, 2 MB, images only). Videos are uploaded **directly from the browser** to Supabase Storage (Vercel's 4.5 MB body limit makes server-side upload impossible), then `/api/videos/save-portfolio` records metadata.
+**Storage buckets:** `videos` (private; policies `auth_users_upload_videos` + `auth_users_read_own_videos` scoped to `portfolio/{auth.uid()}/`; limit 150 MB, MIME mp4/quicktime/webm/x-m4v/3gpp), `images` (private, service role only; 5 MB, JPEG/PNG/WebP), `thumbnails` (**public**, authenticated upload to `portfolio/{auth.uid()}/`, 2 MB, images only). Videos are uploaded **directly from the browser** to Supabase Storage with a progress bar (`lib/storage-upload.ts`, XHR to the Storage REST endpoint; Vercel's 4.5 MB body limit makes server-side upload impossible), then `/api/videos/save-portfolio` or `/api/videos/save-connection` records metadata. **Plan limit:** the Supabase organization is on the Free plan — 50 MB per file and 1 GB total; the 150 MB product cap (`MAX_VIDEO_MB` in `lib/uploads.ts`, ≈ 2 minutes of 1080p) only takes effect after upgrading to Pro and raising the project upload limit in Dashboard → Storage → Settings.
 
-Migrations were applied via the Supabase MCP (`apply_migration`); recent ones: `add_video_storage_policies_for_auth_users`, `add_brand_categories_array`, `add_connections_initiated_by`, `add_public_thumbnails_bucket`, `rls_hardening` + `revoke_maintain_from_client_roles` (2026-11-02, saved in the repo as `app/supabase/migrations/007_rls_hardening.sql` and `008_revoke_maintain.sql`). 007 removed every write policy for the client roles, revoked their INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER (008: MAINTAIN) table privileges, added `UNIQUE(users.auth_user_id)`, `UNIQUE(users.phone)`, a partial unique index `connections(creator_id, product_id)` over non-closed statuses, a `brand_profiles` credits CHECK (`0 ≤ used ≤ total`), and the `match_connection(uuid)` function. Database-level regression checks are listed in `app/tests/README.md`.
+Migrations were applied via the Supabase MCP (`apply_migration`); recent ones: `add_video_storage_policies_for_auth_users`, `add_brand_categories_array`, `add_connections_initiated_by`, `add_public_thumbnails_bucket`, `rls_hardening` + `revoke_maintain_from_client_roles` (2026-11-02, saved in the repo as `app/supabase/migrations/007_rls_hardening.sql` and `008_revoke_maintain.sql`), `rate_limits_settings_storage` (2026-11-03, `009_rate_limits_settings_storage.sql`: `rate_limits` table + `rate_limit_hit()`, bucket limits, `match_connection()` reads `shipping_days`). See `app/supabase/migrations/README.md`. 007 removed every write policy for the client roles, revoked their INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER (008: MAINTAIN) table privileges, added `UNIQUE(users.auth_user_id)`, `UNIQUE(users.phone)`, a partial unique index `connections(creator_id, product_id)` over non-closed statuses, a `brand_profiles` credits CHECK (`0 ≤ used ≤ total`), and the `match_connection(uuid)` function. Database-level regression checks are listed in `app/tests/README.md`.
 
 ## 5. API routes (all under `app/src/app/api`)
 
@@ -112,29 +112,30 @@ Pattern in every route: `createServerClient()` → `auth.getUser()` for identity
 
 | Route | Methods | Purpose |
 | --- | --- | --- |
-| `auth/send-otp`, `auth/verify-otp` | POST | WhatsApp OTP login/registration (creates Supabase auth user + `users` row) |
-| `auth/register` | POST | completes profile (creator or brand) after OTP |
+| `auth/send-otp`, `auth/verify-otp` | POST | WhatsApp OTP login/registration (creates Supabase auth user + `users` row). Rate limited: 3 codes per phone / 10 per IP per 10 min; 10 verifications per phone / 30 per IP per 10 min (429 + `Retry-After`, `code: rate_limited`) |
+| `auth/register` | POST | completes profile (creator or brand) after OTP; 10 per IP per hour |
 | `auth/user-type` | GET | role lookup for routing |
-| `auth/dev-login` | POST | admin/test login by `ADMIN_LOGIN_PHONE`+`ADMIN_LOGIN_PASSWORD`, can impersonate admin/creator/brand test users (hidden: tap the login title 5×) |
+| `auth/dev-login` | POST | **non-production only** (404 in Vercel production; local/preview production builds need `ALLOW_DEV_LOGIN=true`). Gate = `ADMIN_LOGIN_PHONE`+`ADMIN_LOGIN_PASSWORD`; signs in the synthetic `creator` / `brand` test accounts (flagged `dev_account`) server-side; 10 attempts per IP per 15 min |
 | `profile` | GET, PUT | own user + profile; creator GET includes `portfolio_count` |
-| `profile/upload-avatar` | POST | avatar/logo to `images` bucket, 365-day signed URL |
+| `profile/upload-avatar` | POST | avatar/logo to `images` bucket, 365-day signed URL; ≤ 5 MB, type decided by magic bytes (JPEG/PNG/WebP) |
 | `profiles/[userId]` | GET | **public** profile of a creator (portfolio with signed URLs + thumbnails, socials, stats) or brand (active products, stats). Never returns phone/email |
 | `products` | GET, POST | list (`?status=active`, `?brand=me`, `?brand_id=`) — returns `brand_name`, `brand_user_id`, `categories`, `logo_url`; create |
 | `products/[id]` | GET, PUT, DELETE | |
-| `products/upload-image` | POST | |
+| `products/upload-image` | POST | product image to `images` bucket; ≤ 5 MB, type decided by magic bytes |
 | `creators` | GET | brand/admin only — ranked creator gallery with portfolio count, poster, preview video, relation to this brand, `fit` flag |
 | `connections` | GET, POST | GET: own connections enriched with `unread_count`, `last_message`, `last_message_at` (one messages query for all). POST: send a heart — creator `{product_id}` (gate-checked) or brand `{product_id, creator_user_id}`; auto-matches if the other side already hearted |
 | `connections/[id]` | GET, PUT, POST | GET connection + messages; PUT status transition (state machine in file; pending rules per `initiated_by`; `approved` → `performMatch`); POST chat message (filtered) |
 | `messages/unread`, `messages/read` | GET, POST | badge count; mark connection read |
-| `videos` | GET, POST | GET `?portfolio=me|<userId>` (brands/admins may view others, rejected hidden) or `?connectionId=`; POST = connection video upload **through the server** (still subject to the 4.5 MB limit — see gaps) |
+| `videos` | GET, POST | GET `?portfolio=me|<userId>` (brands/admins may view others) or `?connectionId=` (the two parties or admin); POST = small-file fallback upload through the server (Vercel 4.5 MB body cap) — the app uploads directly to Storage instead |
 | `videos/[id]` | PUT/DELETE | approve/reject/delete |
 | `videos/save-portfolio` | POST | records a browser-uploaded portfolio video (`storagePath`, `title`, `thumbnailPath`); the path must be `portfolio/<auth uid>/<file>` |
 | `videos/save-connection` | POST | records a browser-uploaded deliverable for a connection (`connectionId`, `storagePath` = `portfolio/<auth uid>/connections/<connectionId>/<file>`, `thumbnailPath`) and moves the connection to `uploaded`; creator of that connection only, status must be delivered/filming/revision_requested |
 | `videos/[id]` | DELETE | creator deletes one of their own portfolio videos (storage objects + row); admins may delete any video |
 | `notifications` | GET, PUT | |
-| `admin/brands` | GET, PUT | list; PUT `{userId, is_active?, total_credits?}` |
-| `admin/creators`, `admin/moderation`, `admin/content`, `admin/settings`, `admin/stats` | | admin screens' data |
-| `cron/deadlines` | GET | expires 7-day hearts; shipping/filming/review deadline warnings & auto-cancel/auto-complete |
+| `admin/brands` | GET, PUT | list; PUT `{userId, is_active?, total_credits?}` (total can't drop below used → 400). Every admin PUT writes an `activity_log` row (`admin_update_*`, actor = admin's users.id) |
+| `admin/creators`, `admin/moderation`, `admin/content`, `admin/stats` | | admin screens' data; the `/admin/*` pages themselves are gated server-side in `admin/layout.tsx` (anonymous → login, non-admin → 404) |
+| `admin/settings` | GET, PUT | `site_settings` rows by section: `general`, `credits`, `moderation`, `timelines` (`shipping_days`, `filming_days`, `review_days`, `max_revisions`). `timelines` is live: `lib/settings.ts` feeds the connection state machine and `match_connection()` reads `shipping_days` |
+| `cron/deadlines` | GET | expires 7-day hearts; shipping/filming/review deadline warnings (each at most once per 48 h per connection) & auto-cancel/auto-complete; purges expired `otp_codes` and stale `rate_limits` rows |
 
 ## 6. Front-end conventions that matter
 

@@ -5,6 +5,7 @@ UGC creator-brand marketplace ("משפיען אונליין", mashpian.online). 
 Hebrew-first (RTL), Instagram-gradient/pink theme, mobile-first PWA.
 Matching is mutual, Tinder-style: a heart from either side is a pending `connections` row; the other side approving = match (credit deducted, chat opens). Creators need 5 portfolio videos to heart/approve.
 
+**Start here: `docs/STATUS.md`** — what is live, what waits for deploy, what is next, changelog. **Update it at the end of every work phase** (time in Asia/Jerusalem, branch/commit, what changed); update `docs/HANDOFF.md` when architecture, data model or API changed.
 **Full developer handoff (data model, API map, gaps, decisions): `docs/HANDOFF.md`.**
 Product spec (Hebrew, living doc): https://claude.ai/artifact/NGJAQESGe2XRZxzU6VSkRx
 
@@ -40,6 +41,8 @@ docs/                        # HANDOFF.md, design-research.md
 - Adapter pattern for external services (payments, messaging, invoicing)
 - RLS on every Supabase table; API routes check role + ownership explicitly
 - Client roles (anon/authenticated) are **read-only** at the database level (migration 007): never write to tables from the browser or with the session client — go through an API route (service role). Matching uses the `match_connection()` DB function
+- Uploads: videos go browser → Storage through `lib/storage-upload.ts` (progress) into `portfolio/<auth uid>/…`, then a `/api/videos/save-*` route records them; limits and MIME lists live in `lib/uploads.ts` (keep `MAX_VIDEO_MB` in sync with the `videos` bucket). Images go through API routes that sniff magic bytes
+- Abuse control: public auth routes call `checkRateLimit()` (`lib/rate-limit.ts`, DB-backed); admin actions call `logActivity()`; deadlines/revision limit come from `getTimelineSettings()` — never hardcode them
 - Content moderation on chat (`lib/moderation/chat-filter.ts`); no direct contact info sharing
 - Use `as any` for Supabase rows (existing style); keep `tsc` clean; don't add new ESLint errors (some pre-existing ones remain)
 

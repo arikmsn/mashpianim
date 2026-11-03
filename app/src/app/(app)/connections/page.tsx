@@ -9,6 +9,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch, fetchJson } from "@/lib/client-cache";
 import { generateVideoThumbnail } from "@/lib/video-thumbnail";
+import { uploadToStorage } from "@/lib/storage-upload";
+import { videoFileProblem, MAX_VIDEO_MB } from "@/lib/uploads";
 
 type TabType = "active" | "pending" | "completed";
 
@@ -97,6 +99,7 @@ export default function ConnectionsPage() {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [viewBrandId, setViewBrandId] = useState<string | null>(null);
   const [respondingId, setRespondingId] = useState<string | null>(null);
@@ -197,13 +200,9 @@ export default function ConnectionsPage() {
 
     e.target.value = "";
 
-    if (!file.type.startsWith("video/")) {
-      toast("יש לבחור קובץ וידאו", "error");
-      return;
-    }
-
-    if (file.size > 500 * 1024 * 1024) {
-      toast("הקובץ גדול מדי (מקסימום 500MB)", "error");
+    const problem = videoFileProblem(file);
+    if (problem) {
+      toast(problem, "error");
       return;
     }
 
@@ -213,10 +212,11 @@ export default function ConnectionsPage() {
     }
 
     setUploadingId(connectionId);
+    setUploadProgress(0);
 
     try {
-      // Upload straight to Storage (the server can't take large bodies), then record the metadata.
-      // The path stays inside this user's own folder, which is all the storage policy allows.
+      // Upload straight to Storage (the server can't take large bodies) with progress, then record the
+      // metadata. The path stays inside this user's own folder, which is all the storage policy allows.
       const supabase = createClient();
       const ext = (file.name.split(".").pop() || "mp4").toLowerCase();
       const stamp = Date.now();
@@ -225,14 +225,18 @@ export default function ConnectionsPage() {
       const thumbPath = `${base}.jpg`;
 
       const [uploadResult, thumbBlob] = await Promise.all([
-        supabase.storage
-          .from("videos")
-          .upload(storagePath, file, { contentType: file.type || "video/mp4", upsert: false }),
+        uploadToStorage({
+          bucket: "videos",
+          path: storagePath,
+          file,
+          contentType: file.type || "video/mp4",
+          onProgress: setUploadProgress,
+        }),
         generateVideoThumbnail(file),
       ]);
 
-      if (uploadResult.error) {
-        toast("שגיאה בהעלאת הקובץ: " + uploadResult.error.message, "error");
+      if (!uploadResult.ok) {
+        toast(uploadResult.error, "error");
         return;
       }
 
@@ -265,6 +269,7 @@ export default function ConnectionsPage() {
       toast("שגיאה בהעלאת הסרטון", "error");
     } finally {
       setUploadingId(null);
+      setUploadProgress(0);
     }
   }
 
@@ -516,8 +521,14 @@ export default function ConnectionsPage() {
                             handleUploadClick(conn.id);
                           }}
                         >
-                          {isUploading ? "מעלה סרטון..." : "📹 העלאת סרטון"}
+                          {isUploading ? (uploadProgress < 100 ? `מעלה סרטון... ${uploadProgress}%` : "שומר...") : "📹 העלאת סרטון"}
                         </Button>
+                        {isUploading && (
+                          <div className="mt-2 h-1.5 bg-neutral-100 rounded-full overflow-hidden" aria-live="polite">
+                            <div className="h-full bg-pink-500 rounded-full transition-all" style={{ width: `${uploadProgress}%` }} />
+                          </div>
+                        )}
+                        <p className="mt-1 text-[11px] text-neutral-400">עד {MAX_VIDEO_MB}MB · MP4, MOV או WebM</p>
                       </div>
                     )}
                   </Card>

@@ -28,6 +28,34 @@ export async function createNotification(params: NotifyParams) {
   } as any);
 }
 
+// Creates the notification only if the same user hasn't received one of the same type for the same
+// connection within `withinHours` (daily cron reminders must not pile up). Returns whether it was created.
+export async function createNotificationOnce(params: NotifyParams, withinHours: number): Promise<boolean> {
+  const supabase = getAdminClient();
+  if (!supabase) return false;
+
+  const since = new Date(Date.now() - withinHours * 3600 * 1000).toISOString();
+  let query = supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", params.userId)
+    .eq("type", params.type)
+    .gte("created_at", since);
+  const connectionId = params.data?.connectionId;
+  if (typeof connectionId === "string") {
+    query = query.eq("data->>connectionId", connectionId);
+  }
+  const { count, error } = await query;
+  if (error) {
+    console.error("[notifications] dedupe lookup error:", error.message);
+  } else if ((count || 0) > 0) {
+    return false;
+  }
+
+  await createNotification(params);
+  return true;
+}
+
 export async function logActivity(params: {
   actorId?: string;
   action: string;

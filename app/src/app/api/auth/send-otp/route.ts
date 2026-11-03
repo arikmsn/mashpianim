@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getGreenAPI } from "@/lib/adapters/greenapi";
 import { createClient } from "@supabase/supabase-js";
+import { checkRateLimit, rateLimitedResponse, clientIp, RATE_LIMITS } from "@/lib/rate-limit";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -35,6 +36,16 @@ export async function POST(request: NextRequest) {
     }
 
     const formattedPhone = formatPhone(phone);
+
+    // Abuse control (SEC-07): a phone gets 3 codes per 10 minutes, an IP 10
+    const ip = clientIp(request.headers);
+    const [byPhone, byIp] = await Promise.all([
+      checkRateLimit(supabaseAdmin, "send-otp:phone", formattedPhone, RATE_LIMITS.sendOtpPhone),
+      checkRateLimit(supabaseAdmin, "send-otp:ip", ip, RATE_LIMITS.sendOtpIp),
+    ]);
+    if (!byPhone.allowed) return rateLimitedResponse(byPhone);
+    if (!byIp.allowed) return rateLimitedResponse(byIp);
+
     const code = generateOTP();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 

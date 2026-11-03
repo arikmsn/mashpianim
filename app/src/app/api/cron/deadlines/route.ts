@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { createNotification, logActivity } from "@/lib/notifications";
+import { createNotification, createNotificationOnce, logActivity } from "@/lib/notifications";
+
+// A reminder of the same kind for the same connection is sent at most once per this many hours
+const WARNING_DEDUPE_HOURS = 48;
 
 function getAdminClient() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -26,7 +29,7 @@ export async function GET(request: NextRequest) {
   }
 
   const now = new Date().toISOString();
-  const results = { expired: 0, cancelled: 0, warnings: 0, flagged: 0 };
+  const results = { expired: 0, cancelled: 0, warnings: 0, skipped_duplicates: 0, flagged: 0, purged_otps: 0, purged_rate_limits: 0 };
 
   // 0. Hearts left unanswered for 7 days expire
   const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
@@ -120,18 +123,19 @@ export async function GET(request: NextRequest) {
       });
       results.cancelled++;
     } else {
-      // Warning to brand
+      // Warning to brand — once per connection per WARNING_DEDUPE_HOURS, not every day
       const brandUser = conn.brand_profiles?.users;
+      let created = false;
       if (brandUser) {
-        await createNotification({
+        created = await createNotificationOnce({
           userId: brandUser.id,
           type: "shipping_deadline_warning",
           title: "תזכורת: שלחו את המוצר!",
           body: `עבר מועד השליחה למוצר "${conn.products?.name}". שלחו בהקדם או שהחיבור יבוטל.`,
           data: { connectionId: conn.id },
-        });
+        }, WARNING_DEDUPE_HOURS);
       }
-      results.warnings++;
+      if (created) results.warnings++; else results.skipped_duplicates++;
     }
   }
 
@@ -173,16 +177,17 @@ export async function GET(request: NextRequest) {
       results.cancelled++;
     } else {
       const creatorUser = conn.creator_profiles?.users;
+      let created = false;
       if (creatorUser) {
-        await createNotification({
+        created = await createNotificationOnce({
           userId: creatorUser.id,
           type: "filming_deadline_warning",
           title: "תזכורת: העלו סרטון!",
           body: `עבר מועד הצילום למוצר "${conn.products?.name}". העלו סרטון בהקדם.`,
           data: { connectionId: conn.id },
-        });
+        }, WARNING_DEDUPE_HOURS);
       }
-      results.warnings++;
+      if (created) results.warnings++; else results.skipped_duplicates++;
     }
   }
 
@@ -221,18 +226,36 @@ export async function GET(request: NextRequest) {
       results.flagged++;
     } else {
       const brandUser = conn.brand_profiles?.users;
+      let created = false;
       if (brandUser) {
-        await createNotification({
+        created = await createNotificationOnce({
           userId: brandUser.id,
           type: "review_deadline_warning",
           title: "תזכורת: אשרו את הסרטון!",
           body: `מועד הסקירה למוצר "${conn.products?.name}" עבר. אם לא תגיבו, הסרטון יאושר אוטומטית.`,
           data: { connectionId: conn.id },
-        });
+        }, WARNING_DEDUPE_HOURS);
       }
-      results.warnings++;
+      if (created) results.warnings++; else results.skipped_duplicates++;
     }
   }
+
+  // 4. Housekeeping: expired one-time codes and stale rate-limit windows (FLOW-03)
+  const { data: purgedOtps, error: otpPurgeError } = await supabase
+    .from("otp_codes")
+    .delete()
+    .lt("expires_at", now)
+    .select("phone");
+  if (otpPurgeError) console.error("[cron] otp purge error:", otpPurgeError.message);
+  results.purged_otps = purgedOtps?.length || 0;
+
+  const { data: purgedLimits, error: limitPurgeError } = await supabase
+    .from("rate_limits")
+    .delete()
+    .lt("window_start", new Date(Date.now() - 86400000).toISOString())
+    .select("key");
+  if (limitPurgeError) console.error("[cron] rate_limits purge error:", limitPurgeError.message);
+  results.purged_rate_limits = purgedLimits?.length || 0;
 
   return NextResponse.json({
     success: true,

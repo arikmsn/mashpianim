@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyAdmin, isSupabaseConfigured } from "@/lib/admin-auth";
 import { createClient } from "@/lib/supabase/server";
+import { logActivity } from "@/lib/notifications";
 
 const defaultContent: Record<string, Record<string, string>> = {
   hero: {
@@ -91,7 +92,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "המערכת לא מוגדרת" }, { status: 503 });
   }
 
-  const { isAdmin, supabase } = await verifyAdmin();
+  const { isAdmin, adminId, supabase } = await verifyAdmin();
   if (!isAdmin || !supabase) {
     return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
   }
@@ -106,7 +107,7 @@ export async function PUT(request: NextRequest) {
   const { error } = await supabase
     .from("site_content")
     .upsert(
-      { id: section, data, updated_at: new Date().toISOString() } as any,
+      { id: section, data, updated_at: new Date().toISOString(), updated_by: adminId } as any,
       { onConflict: "id" }
     );
 
@@ -114,6 +115,13 @@ export async function PUT(request: NextRequest) {
     console.error("[admin/content] upsert error:", error);
     return NextResponse.json({ error: "שגיאה בשמירה" }, { status: 500 });
   }
+
+  await logActivity({
+    actorId: adminId || undefined,
+    action: "admin_update_content",
+    entityType: "site_content",
+    details: { section, keys: Object.keys(data) },
+  });
 
   return NextResponse.json({ success: true });
 }

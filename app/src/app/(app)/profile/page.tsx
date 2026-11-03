@@ -8,6 +8,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch, clearCache } from "@/lib/client-cache";
 import { generateVideoThumbnail } from "@/lib/video-thumbnail";
+import { uploadToStorage } from "@/lib/storage-upload";
+import { videoFileProblem, MAX_VIDEO_MB } from "@/lib/uploads";
 
 interface PortfolioVideo {
   id: string;
@@ -529,6 +531,7 @@ export default function ProfilePage() {
   const [editOpen, setEditOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadTitle, setUploadTitle] = useState("");
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -652,28 +655,34 @@ export default function ProfilePage() {
       toast("בחרו קובץ וידאו", "error");
       return;
     }
+    const problem = videoFileProblem(selectedFile);
+    if (problem) {
+      toast(problem, "error");
+      return;
+    }
     setUploading(true);
+    setUploadProgress(0);
     try {
       const supabase = createClient();
-      const ext = selectedFile.name.split(".").pop() || "mp4";
+      const ext = (selectedFile.name.split(".").pop() || "mp4").toLowerCase();
       const stamp = Date.now();
       const fileName = `portfolio/${user!.id}/${stamp}.${ext}`;
       const thumbPath = `portfolio/${user!.id}/${stamp}.jpg`;
 
-      // Upload the video and grab a poster frame in the browser at the same time
+      // Upload the video (with progress) and grab a poster frame in the browser at the same time
       const [uploadResult, thumbBlob] = await Promise.all([
-        supabase.storage
-          .from("videos")
-          .upload(fileName, selectedFile, {
-            contentType: selectedFile.type || "video/mp4",
-            upsert: false,
-          }),
+        uploadToStorage({
+          bucket: "videos",
+          path: fileName,
+          file: selectedFile,
+          contentType: selectedFile.type || "video/mp4",
+          onProgress: setUploadProgress,
+        }),
         generateVideoThumbnail(selectedFile),
       ]);
 
-      if (uploadResult.error) {
-        console.error("Storage upload error:", uploadResult.error);
-        toast("שגיאה בהעלאת הקובץ: " + uploadResult.error.message, "error");
+      if (!uploadResult.ok) {
+        toast(uploadResult.error, "error");
         return;
       }
 
@@ -710,6 +719,7 @@ export default function ProfilePage() {
       toast("שגיאה בהעלאת הסרטון", "error");
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
   };
 
@@ -1192,19 +1202,41 @@ export default function ProfilePage() {
             <label className="block text-sm font-medium text-neutral-700 mb-1">קובץ וידאו *</label>
             <input
               type="file"
-              accept="video/*"
-              onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+              accept="video/mp4,video/quicktime,video/webm,video/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+                const issue = file ? videoFileProblem(file) : null;
+                if (issue) {
+                  toast(issue, "error");
+                  e.target.value = "";
+                  setSelectedFile(null);
+                  return;
+                }
+                setSelectedFile(file);
+              }}
               className="w-full text-sm text-neutral-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-pink-50 file:text-pink-500 hover:file:bg-pink-100 transition-all"
             />
+            <p className="text-xs text-neutral-400 mt-1">עד {MAX_VIDEO_MB}MB (כ-2 דקות ב-1080p) · MP4, MOV או WebM</p>
             {selectedFile && (
               <p className="text-xs text-neutral-400 mt-1">
                 {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(1)} MB)
               </p>
             )}
           </div>
+          {uploading && uploadProgress !== null && (
+            <div className="space-y-1" aria-live="polite">
+              <div className="flex justify-between text-xs text-neutral-500">
+                <span>{uploadProgress < 100 ? "מעלה את הסרטון..." : "שומר..."}</span>
+                <span dir="ltr">{uploadProgress}%</span>
+              </div>
+              <div className="h-2 bg-neutral-100 rounded-full overflow-hidden">
+                <div className="h-full bg-pink-500 rounded-full transition-all" style={{ width: `${uploadProgress}%` }} />
+              </div>
+            </div>
+          )}
           <div className="flex gap-3 pt-2">
             <Button fullWidth loading={uploading} onClick={handleUploadVideo}>
-              העלאה
+              {uploading && uploadProgress !== null && uploadProgress < 100 ? `מעלה ${uploadProgress}%` : uploading ? "שומר..." : "העלאה"}
             </Button>
             <Button variant="ghost" fullWidth onClick={() => { setShowUploadModal(false); setSelectedFile(null); setUploadTitle(""); }}>
               ביטול

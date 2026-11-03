@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyAdmin, isSupabaseConfigured } from "@/lib/admin-auth";
+import { logActivity } from "@/lib/notifications";
 
 export async function GET() {
   if (!isSupabaseConfigured()) {
@@ -54,7 +55,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "המערכת לא מוגדרת" }, { status: 503 });
   }
 
-  const { isAdmin, supabase } = await verifyAdmin();
+  const { isAdmin, adminId, supabase } = await verifyAdmin();
   if (!isAdmin || !supabase) {
     return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
   }
@@ -89,6 +90,18 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "שגיאה בעדכון רמה" }, { status: 500 });
     }
   }
+
+  // Admin actions are audited
+  await logActivity({
+    actorId: adminId || undefined,
+    action: "admin_update_creator",
+    entityType: "user",
+    entityId: userId,
+    details: {
+      ...(is_active !== undefined ? { is_active } : {}),
+      ...(level ? { level } : {}),
+    },
+  });
 
   return NextResponse.json({ success: true });
 }

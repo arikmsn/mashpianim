@@ -1,31 +1,32 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyAdmin, isSupabaseConfigured } from "@/lib/admin-auth";
-import { createClient } from "@/lib/supabase/server";
+import { logActivity } from "@/lib/notifications";
+import { DEFAULT_TIMELINES } from "@/lib/settings";
 
-const defaultSettings: Record<string, Record<string, string>> = {
+// Section ids and keys match the site_settings rows. `timelines` is read by the connection state machine
+// (src/lib/settings.ts) and by match_connection() in the database; the rest is informational for now.
+export const SETTINGS_SECTIONS = ["general", "credits", "moderation", "timelines"] as const;
+type Section = (typeof SETTINGS_SECTIONS)[number];
+
+const defaultSettings: Record<Section, Record<string, unknown>> = {
   general: {
     platform_name: "Mashpian",
     support_email: "support@mashpian.online",
     support_phone: "",
   },
   credits: {
-    single_price: "100",
-    pack_5_price: "450",
-    pack_10_price: "800",
-    pack_20_price: "1400",
+    single_price: 100,
+    pack_5_price: 450,
+    pack_10_price: 800,
+    pack_20_price: 1400,
   },
   moderation: {
-    ocr_enabled: "true",
-    chat_filter_enabled: "true",
-    speech_detection_enabled: "true",
-    nsfw_filter_enabled: "true",
+    auto_ocr: true,
+    chat_filter: true,
+    speech_detection: true,
+    nsfw_filter: true,
   },
-  deadlines: {
-    shipping_days: "7",
-    filming_days: "10",
-    review_days: "7",
-    max_revisions: "1",
-  },
+  timelines: { ...DEFAULT_TIMELINES },
 };
 
 export async function GET() {
@@ -46,9 +47,9 @@ export async function GET() {
     return NextResponse.json({ settings: defaultSettings });
   }
 
-  const settings = { ...defaultSettings };
+  const settings: Record<string, Record<string, unknown>> = { ...defaultSettings };
   for (const row of (data || []) as any[]) {
-    settings[row.id] = row.data as Record<string, string>;
+    settings[row.id] = { ...(settings[row.id] || {}), ...(row.data as Record<string, unknown>) };
   }
 
   return NextResponse.json({ settings });
@@ -59,22 +60,22 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "המערכת לא מוגדרת" }, { status: 503 });
   }
 
-  const { isAdmin, supabase } = await verifyAdmin();
+  const { isAdmin, adminId, supabase } = await verifyAdmin();
   if (!isAdmin || !supabase) {
     return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
   }
 
-  const body = await request.json();
-  const { section, data } = body as { section: string; data: Record<string, string> };
+  const body = await request.json().catch(() => null);
+  const { section, data } = (body || {}) as { section?: string; data?: Record<string, unknown> };
 
-  if (!section || !data) {
-    return NextResponse.json({ error: "פרטים חסרים" }, { status: 400 });
+  if (!section || !(SETTINGS_SECTIONS as readonly string[]).includes(section) || !data || typeof data !== "object" || Array.isArray(data)) {
+    return NextResponse.json({ error: "פרטים חסרים או לא תקינים" }, { status: 400 });
   }
 
   const { error } = await supabase
     .from("site_settings")
     .upsert(
-      { id: section, data, updated_at: new Date().toISOString() } as any,
+      { id: section, data, updated_at: new Date().toISOString(), updated_by: adminId } as any,
       { onConflict: "id" }
     );
 
@@ -82,6 +83,13 @@ export async function PUT(request: NextRequest) {
     console.error("[admin/settings] upsert error:", error);
     return NextResponse.json({ error: "שגיאה בשמירה" }, { status: 500 });
   }
+
+  await logActivity({
+    actorId: adminId || undefined,
+    action: "admin_update_settings",
+    entityType: "site_settings",
+    details: { section, data },
+  });
 
   return NextResponse.json({ success: true });
 }
