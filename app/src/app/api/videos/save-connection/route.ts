@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     const { data: connection } = await supabase
       .from("connections")
       .select(`
-        id, status, filmed_at,
+        id, status, filmed_at, product_id,
         products(name),
         creator_profiles!connections_creator_id_fkey(user_id, users(id, full_name)),
         brand_profiles!connections_brand_id_fkey(user_id, shop_name, users(id, full_name))
@@ -132,6 +132,7 @@ export async function POST(request: NextRequest) {
         brandName: conn.brand_profiles?.shop_name || brandUser.full_name || "עסק",
         creatorUserId: creatorUser.id,
         brandUserId: brandUser.id,
+        productId: conn.product_id,
       });
     }
     await logActivity({

@@ -63,8 +63,22 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "לא מחובר" }, { status: 401 });
   }
 
-  const body = await request.json();
-  const { id, read } = body;
+  const body = await request.json().catch(() => ({}));
+  const { id, read, all } = body as { id?: string; read?: boolean; all?: boolean };
+
+  // Opening the notifications screen marks everything as read in one call
+  if (all === true) {
+    const { error } = await admin
+      .from("notifications")
+      .update({ read: true })
+      .eq("user_id", userId)
+      .eq("read", false);
+    if (error) {
+      console.error("[notifications] mark-all error:", error);
+      return NextResponse.json({ error: "שגיאה בעדכון" }, { status: 500 });
+    }
+    return NextResponse.json({ success: true });
+  }
 
   if (!id) {
     return NextResponse.json({ error: "מזהה התראה חסר" }, { status: 400 });

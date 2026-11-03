@@ -308,6 +308,7 @@ export async function POST(request: NextRequest) {
       brandName,
       productName: (product as any).name,
       connectionId: (connection as any).id,
+      productId: (product as any).id,
     });
   } else if (brandUser) {
     await notifyBrandOfHeart({
@@ -316,6 +317,7 @@ export async function POST(request: NextRequest) {
       creatorName: creatorName || "יוצר/ת",
       productName: (product as any).name,
       connectionId: (connection as any).id,
+      productId: (product as any).id,
     });
   }
 

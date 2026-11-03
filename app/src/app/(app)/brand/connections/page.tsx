@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, Badge, Button, Modal, Avatar, Input, Textarea, useToast } from "@/components/ui";
 import { PublicProfileContent } from "@/components/features";
 import { createClient } from "@/lib/supabase/client";
@@ -84,11 +84,42 @@ function ConnectionsSkeleton() {
   );
 }
 
+// useSearchParams needs a Suspense boundary for the static shell
 export default function BrandConnectionsPage() {
+  return (
+    <Suspense>
+      <BrandConnectionsPageInner />
+    </Suspense>
+  );
+}
+
+function tabFor(status: string): TabId {
+  if (pendingStatuses.includes(status)) return "pending";
+  if (activeStatuses.includes(status)) return "active";
+  return "completed";
+}
+
+function BrandConnectionsPageInner() {
+  const searchParams = useSearchParams();
+  // `?open=<connectionId>` (from a notification) switches to its tab and opens its modal
+  const openId = searchParams.get("open");
+  const handledOpenRef = useRef<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>("pending");
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
+
+  useEffect(() => {
+    if (!openId || connections.length === 0 || handledOpenRef.current === openId) return;
+    const target = connections.find((c) => c.id === openId);
+    if (!target) return;
+    handledOpenRef.current = openId;
+    const t = setTimeout(() => {
+      setActiveTab(tabFor(target.status));
+      setSelectedConnection(target);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [openId, connections]);
   const [updating, setUpdating] = useState<string | null>(null);
   const [shipForm, setShipForm] = useState({ trackingNumber: "", trackingUrl: "", digitalAccessValue: "" });
   const [revisionNotes, setRevisionNotes] = useState("");

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createNotification } from "@/lib/notifications";
+import { createNotification, notificationData } from "@/lib/notifications";
 import { getGreenAPI } from "@/lib/adapters/greenapi";
 import { mapMatchError } from "@/lib/match-errors";
 import { buildBriefMessage as composeBrief } from "@/lib/brief";
@@ -45,13 +45,14 @@ export async function notifyHeartSent(params: {
   brandName: string;
   productName: string;
   connectionId: string;
+  productId?: string | null;
 }) {
   await createNotification({
     userId: params.creatorUserId,
     type: "heart_received",
     title: "💗 מישהו סימן אותך!",
     body: `${params.brandName} מתעניינים בך למוצר "${params.productName}". אשרו כדי לפתוח צ'אט.`,
-    data: { connectionId: params.connectionId },
+    data: notificationData(params.connectionId, params.productId),
   });
   await sendWhatsApp(
     params.creatorPhone,
@@ -65,13 +66,14 @@ export async function notifyBrandOfHeart(params: {
   creatorName: string;
   productName: string;
   connectionId: string;
+  productId?: string | null;
 }) {
   await createNotification({
     userId: params.brandUserId,
     type: "heart_received",
     title: "💗 יוצר/ת סימן/ה אתכם!",
     body: `${params.creatorName} רוצה ליצור סרטון ל"${params.productName}". אשרו כדי לפתוח צ'אט.`,
-    data: { connectionId: params.connectionId },
+    data: notificationData(params.connectionId, params.productId),
   });
   await sendWhatsApp(
     params.brandPhone,
@@ -88,7 +90,7 @@ export async function performMatch(admin: Admin, connectionId: string, actorUser
     .from("connections")
     .select(`
       id, status, brand_id, creator_id, credit_deducted, initiated_by,
-      products(name, price, description, product_type, brief,
+      products(id, name, price, description, product_type, brief,
         brand_profiles(id, user_id, shop_name, users(id, full_name, phone))),
       creator_profiles!connections_creator_id_fkey(user_id, users(id, full_name, phone))
     `)
@@ -153,7 +155,7 @@ export async function performMatch(admin: Admin, connectionId: string, actorUser
     },
   ] as any);
 
-  const data = { connectionId };
+  const data = notificationData(connectionId, product?.id);
   await Promise.all([
     createNotification({
       userId: creatorUser.id,

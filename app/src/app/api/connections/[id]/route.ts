@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/admin-auth";
 import { filterContactInfo } from "@/lib/moderation/chat-filter";
-import { notifyConnectionStatusChange, logActivity, createNotification } from "@/lib/notifications";
+import { notifyConnectionStatusChange, logActivity, createNotification, notificationData } from "@/lib/notifications";
 import { performMatch, countPortfolioVideos, portfolioGateError, MIN_PORTFOLIO_VIDEOS } from "@/lib/match";
 import { isConnectionParticipant } from "@/lib/authz";
 import { getTimelineSettings } from "@/lib/settings";
@@ -363,13 +363,14 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   // Send notifications
   const creatorUser = creatorProfile?.users;
   const brandUser = brandProfile?.users;
+  const productId = ((connection as any).product_id as string | null) || null;
   if (newStatus === "rejected" && initiatedBy === "brand" && brandUser) {
     await createNotification({
       userId: (brandUser as any).id,
       type: "heart_declined",
       title: "היוצר/ת דחה/תה את הלב",
       body: `${(creatorUser as any)?.full_name || "היוצר/ת"} לא מעוניין/ת כרגע ב"${product?.name || "המוצר"}". הקרדיט לא נוצל — אפשר לבחור יוצר/ת אחר/ת.`,
-      data: { connectionId: id },
+      data: notificationData(id, productId),
     });
   } else if (newStatus === "cancelled" && currentStatus === "pending" && creatorUser && brandUser) {
     const target = initiatedBy === "brand" ? creatorUser : brandUser;
@@ -378,7 +379,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       type: "heart_withdrawn",
       title: "לב בוטל",
       body: `הלב למוצר "${product?.name || ""}" בוטל על ידי הצד השני.`,
-      data: { connectionId: id },
+      data: notificationData(id, productId),
     });
   } else if (creatorUser && brandUser) {
     await notifyConnectionStatusChange(newStatus, {
@@ -388,6 +389,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       brandName: brandProfile?.shop_name || (brandUser as any).full_name || "עסק",
       creatorUserId: (creatorUser as any).id,
       brandUserId: (brandUser as any).id,
+      productId,
     });
   }
 

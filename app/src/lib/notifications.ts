@@ -15,6 +15,11 @@ type NotifyParams = {
   data?: Record<string, unknown>;
 };
 
+// Payload stored on connection notifications; `productId` lets a creator's tap open the product page directly
+export function notificationData(connectionId: string, productId?: string | null): Record<string, unknown> {
+  return productId ? { connectionId, productId } : { connectionId };
+}
+
 export async function createNotification(params: NotifyParams) {
   const supabase = getAdminClient();
   if (!supabase) return;
@@ -90,10 +95,12 @@ export function getConnectionStatusMessages(
     brandName: string;
     creatorUserId: string;
     brandUserId: string;
+    // Lets the creator's notification open the product page directly
+    productId?: string | null;
   }
 ): ConnectionStatusLabel {
-  const { connectionId, productName, creatorName, brandName, creatorUserId, brandUserId } = context;
-  const data = { connectionId };
+  const { connectionId, productName, creatorName, brandName, creatorUserId, brandUserId, productId } = context;
+  const data = notificationData(connectionId, productId);
 
   const map: Record<string, ConnectionStatusLabel> = {
     approved: {

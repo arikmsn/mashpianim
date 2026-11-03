@@ -127,6 +127,9 @@ Scripted runs: send Hebrew bodies from a UTF-8 shell (PowerShell `-Encoding utf8
 | 58 | Journey timeline | `/connections` active cards and the product page | 5 steps with ✓ up to the current one, next action + deadline (`activeDeadlineField`); digital products say גישה; `flow-timeline.test.ts` |
 | 59 | Deep link into connections | `/connections?open=<id>` | the right tab opens, the card is highlighted and scrolled into view |
 | 60 | Brief visibility | `GET /api/products/<id>` signed out vs. as a creator | signed out: no `brief`, no `connection`; creator: `brief` present, `connection` = own (open first, else latest), `settings` days |
+| 61 | Bell badge clears | with unread notifications open `/notifications`, then go back to the feed | the badge is gone at once (no reload); the rows that were new stay highlighted during that visit; `PUT /api/notifications {all:true}` was called once |
+| 62 | Badge updates live | trigger a notification for the signed-in user (e.g. a heart from the other account) while on the feed | the badge increments within seconds without a reload (realtime), and after returning to the app from the background |
+| 63 | Notification deep links | tap rows of different types as creator and as brand | creator: product page (rows with `productId`) or `/connections?open=…`; brand: `/brand/connections?open=…` opens the connection's modal; match → chat; takedown → profile; `notification-links.test.ts` |
 
 ## Release QA run — 2026-11-03 (browser, local production build)
 

@@ -75,12 +75,15 @@ app/src/
     pwa/                        service-worker registration, install prompt
   hooks/
     use-auth.ts                 ONE shared auth store (useSyncExternalStore) — session read from cookie, no per-component network call
-    use-notifications.ts        polls /api/notifications every 30 s
+    use-notifications.ts        ONE shared notifications store: realtime + 60 s poll + foreground refresh; markAsRead / markAllRead
+    use-deliverable-upload.tsx  creator deliverable upload (direct to Storage + save-connection) shared by product page and connections
   lib/
     match.ts                    performMatch(), countPortfolioVideos(), portfolioGateError(), buildBriefMessage(), notifyHeartSent(), notifyBrandOfHeart()
     client-cache.ts             swrFetch/fetchJson/readCache (stale-while-revalidate for GET APIs) + UNREAD_EVENT bus
     video-thumbnail.ts          browser-side poster generation from a video File
-    notifications.ts            createNotification(), logActivity(), notifyConnectionStatusChange()
+    notifications.ts            createNotification(), notificationData(connectionId, productId), logActivity(), notifyConnectionStatusChange()
+    notification-links.ts       notificationHref(row, role): where a tapped notification goes (product page / connection card / modal / chat)
+    connection-flow.ts          lifecycle rules + journey timeline (FLOW_STEPS, flowNextAction, activeDeadlineField) shared by API and pages
     admin-auth.ts               verifyAdmin(), isSupabaseConfigured()
     moderation/chat-filter.ts   blocks phone/email/links in chat
     adapters/                   greenapi.ts (live), messaging.ts, payments.ts (Cardcom stub), invoicing.ts (stub)
@@ -99,7 +102,7 @@ docs/                           design-research.md (visual references), this fil
 | `connections` | `id`, `creator_id` (→ creator_profiles.id), `brand_id` (→ brand_profiles.id), `product_id`, `status` enum (see §1), `initiated_by` text creator/brand (added 2026-11-02), `delivery_type`, `credit_deducted`, `revision_count`, `revision_notes`, `rejection_reason`, timestamps `approved_at/shipped_at/delivered_at/filmed_at/completed_at`, deadlines `ship_deadline/deliver_deadline/film_deadline/review_deadline`, `tracking_number/url`, `digital_access_value/expires_at`, `creator_read_at`, `brand_read_at` | Index on (creator_id, product_id) |
 | `videos` | `id`, `creator_id` (→ **users.id**, not creator_profiles), `connection_id` (NULL = portfolio video), `storage_path`, `url` (signed, refreshed on read), `thumbnail_url` (public URL), `title`, `description`, `status` enum pending/approved/revision_requested/rejected, `is_downloadable`, `download_count`, `approved_at/by` | Portfolio uploads are published immediately as `approved`; an admin can take one down (`rejected`: hidden from brands, not counted for the 5-video gate, creator notified) or restore it from `/admin/moderation`. Deliverables start `pending` and become `approved` + downloadable when the brand completes the connection (or the cron auto-approves) |
 | `messages` | `id`, `connection_id`, `sender_id` (users.id), `text`, `is_system`, `created_at` | Unread = messages after the reader's `*_read_at` on the connection |
-| `notifications` | `user_id`, `type`, `title`, `body`, `read`, `data jsonb` | |
+| `notifications` | `user_id`, `type`, `title`, `body`, `read`, `data jsonb` | `data` = `{connectionId, productId?}` for connection events, `{videoId}` for portfolio takedowns; the client resolves the destination from `type` + `data` |
 | `activity_log` | `actor_id`, `action`, `entity_type`, `entity_id`, `details` | |
 | `otp_codes` | custom WhatsApp OTP flow (not Supabase SMS) | |
 
@@ -134,7 +137,7 @@ Pattern in every route: `createServerClient()` → `auth.getUser()` for identity
 | `videos/save-portfolio` | POST | records a browser-uploaded portfolio video (`storagePath`, `title`, `thumbnailPath`); the path must be `portfolio/<auth uid>/<file>` |
 | `videos/save-connection` | POST | records a browser-uploaded deliverable for a connection (`connectionId`, `storagePath` = `portfolio/<auth uid>/connections/<connectionId>/<file>`, `thumbnailPath`) and moves the connection to `uploaded`; creator of that connection only, status must be delivered/filming/revision_requested |
 | `videos/[id]` | DELETE | creator deletes one of their own portfolio videos (storage objects + row); admins may delete any video |
-| `notifications` | GET, PUT | |
+| `notifications` | GET, PUT | GET: own rows (newest 50); PUT `{id, read}` marks one, `{all: true}` marks every unread row (the notifications screen calls it on open). `data` carries `connectionId` and, since Batch 7, `productId` — `lib/notification-links.ts` turns a row into its destination per role |
 | `admin/brands` | GET, PUT | list; PUT `{userId, is_active?, total_credits?}` (total can't drop below used → 400). Every admin PUT writes an `activity_log` row (`admin_update_*`, actor = admin's users.id) |
 | `admin/creators`, `admin/content`, `admin/stats` | | admin screens' data; the `/admin/*` pages themselves are gated server-side in `admin/layout.tsx` (anonymous → login, non-admin → 404) |
 | `admin/moderation` | GET, PUT | GET: deliverables awaiting the optional admin pass (`videos`), latest 100 portfolio videos with creator names (`portfolioVideos`), flagged chat. PUT `{videoId, action}`: deliverables → `approve` (→ `in_review`), `revision`, `reject`; portfolio videos → `reject` (takedown: `status='rejected'`, creator notified) / `restore` |
