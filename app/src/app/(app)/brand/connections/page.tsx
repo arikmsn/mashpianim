@@ -4,10 +4,10 @@ import { Suspense, useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, Badge, Button, Modal, Avatar, Input, Textarea, useToast } from "@/components/ui";
-import { PublicProfileContent } from "@/components/features";
+import { ConnectionTimeline, PublicProfileContent } from "@/components/features";
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch } from "@/lib/client-cache";
-import { canBrandReview } from "@/lib/connection-flow";
+import { activeDeadlineField, canBrandReview } from "@/lib/connection-flow";
 
 interface Connection {
   id: string;
@@ -28,6 +28,8 @@ interface Connection {
   trackingUrl: string | null;
   digitalAccessValue: string | null;
   revisionCount: number;
+  // The deadline that applies to the current step (ship / deliver / film / review)
+  activeDeadline: string | null;
 }
 
 type TabId = "pending" | "active" | "completed";
@@ -199,6 +201,10 @@ function BrandConnectionsPageInner() {
           trackingUrl: (c.tracking_url as string) || null,
           digitalAccessValue: (c.digital_access_value as string) || null,
           revisionCount: (c.revision_count as number) || 0,
+          activeDeadline: (() => {
+            const field = activeDeadlineField(c.status as string);
+            return field ? ((c[field] as string) || null) : null;
+          })(),
         }))
       );
       setLoading(false);
@@ -352,6 +358,19 @@ function BrandConnectionsPageInner() {
                         </p>
                       </div>
                     </div>
+                    {/* Where the connection stands and what the brand has to do next */}
+                    {activeStatuses.includes(conn.status) && (
+                      <div className="mt-3 pt-3 border-t border-neutral-100">
+                        <ConnectionTimeline
+                          status={conn.status}
+                          role="brand"
+                          initiatedBy={conn.initiatedBy}
+                          deliveryType={conn.productType}
+                          deadline={conn.activeDeadline}
+                          compact
+                        />
+                      </div>
+                    )}
                     {actions.length > 0 && (
                       <div className="flex gap-2 mt-3 pt-3 border-t border-neutral-100">
                         {actions.map((action) => (
@@ -427,6 +446,18 @@ function BrandConnectionsPageInner() {
                 >
                   💬 שליחת הודעה ל{selectedConnection.creatorName}
                 </Button>
+              )}
+
+              {!["pending", "rejected", "cancelled"].includes(selectedConnection.status) && (
+                <div className="bg-white border border-neutral-100 rounded-xl p-4">
+                  <ConnectionTimeline
+                    status={selectedConnection.status}
+                    role="brand"
+                    initiatedBy={selectedConnection.initiatedBy}
+                    deliveryType={selectedConnection.productType}
+                    deadline={selectedConnection.activeDeadline}
+                  />
+                </div>
               )}
 
               <div className="bg-neutral-50 rounded-xl p-4 space-y-2">
