@@ -269,7 +269,7 @@ function ConnectionsPageInner() {
   const tabs: { key: TabType; label: string }[] = [
     { key: "active", label: "פעילים" },
     { key: "pending", label: "ממתינים" },
-    { key: "completed", label: "הושלמו" },
+    { key: "completed", label: "הסתיימו" },
   ];
 
   return (

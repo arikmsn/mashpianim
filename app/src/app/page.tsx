@@ -573,7 +573,6 @@ export default function HomePage() {
             </div>
             <div className="flex gap-6 text-sm text-neutral-400">
               <Link href="/terms" className="hover:text-white transition-colors">תנאי שימוש</Link>
-              <Link href="/about" className="hover:text-white transition-colors">אודות</Link>
               <Link href="/login" className="hover:text-white transition-colors">התחברות</Link>
             </div>
           </div>

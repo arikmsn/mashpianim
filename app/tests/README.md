@@ -129,6 +129,10 @@ Scripted runs: send Hebrew bodies from a UTF-8 shell (PowerShell `-Encoding utf8
 | 60 | Brief visibility | `GET /api/products/<id>` signed out vs. as a creator | signed out: no `brief`, no `connection`; creator: `brief` present, `connection` = own (open first, else latest), `settings` days |
 | 61 | Bell badge clears | with unread notifications open `/notifications`, then go back to the feed | the badge is gone at once (no reload); the rows that were new stay highlighted during that visit; `PUT /api/notifications {all:true}` was called once |
 | 62 | Badge updates live | trigger a notification for the signed-in user (e.g. a heart from the other account) while on the feed | the badge increments within seconds without a reload (realtime), and after returning to the app from the background |
+| 91 | Brand profile counters | brand profile header | מוצרים = live products, חיבורים = connections past the heart stage (QA brand: 5 / 11) |
+| 92 | Creator profile modal | brand home → "פרופיל" on a card; brand connection modal | portfolio grid shows posters with a play button (no inline players); tap → modal player; intro video stays a single player |
+| 93 | Brand connections first tab | open `/brand/connections` with no pending hearts | lands on "פעילים" (or "הסתיימו"); tapping a tab is never overridden; `?open=<id>` still wins |
+| 94 | Birth date echo | creator "עריכת פרופיל" | label says (יום/חודש/שנה); after picking, a Hebrew date line appears (`dates.test.ts`) |
 | 84 | Profile stats | creator profile header | "סרטונים בתיק" = number of portfolio videos, "שיתופי פעולה" = completed connections, "לבבות" = hearts; no "דירוג —" |
 | 85 | No credits, no hearts | brand with 0 remaining credits → heart a creator | picker shows the red notice + "לרכישת סרטונים", send button disabled; `POST /api/connections` as that brand → 403 `no_credits`; approving a creator's heart still fails in `match_connection` with the credits message |
 | 86 | Purchase request | brand home "רכישה", brand profile "רכישת סרטונים" | opens "רכישת סרטונים" (contact kind preset, subject prefilled, intro text); sending creates a feedback row visible in `/admin/feedback` |

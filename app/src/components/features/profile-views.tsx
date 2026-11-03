@@ -120,6 +120,8 @@ export function CreatorProfileView({ profile, compact = false }: { profile: Crea
   const instagram = cleanHandle(profile.instagram || "");
   const tf = formatFollowers(profile.tiktokFollowers);
   const inf = formatFollowers(profile.instagramFollowers);
+  // The portfolio grid shows posters only; one video plays at a time in a modal (no <video> in lists)
+  const [playing, setPlaying] = useState<CreatorPublicProfile["portfolio"][number] | null>(null);
 
   return (
     <div className="space-y-4">
@@ -211,18 +213,25 @@ export function CreatorProfileView({ profile, compact = false }: { profile: Crea
           </p>
         ) : (
           <div className={`grid grid-cols-2 gap-2 ${compact ? "max-h-[260px]" : "max-h-[460px]"} overflow-y-auto`}>
-            {profile.portfolio.map((video) => (
+            {profile.portfolio.map((video, i) => (
               <div key={video.id} className="rounded-xl overflow-hidden bg-black">
                 {video.url ? (
-                  <video
-                    src={video.thumbnail ? video.url : `${video.url}#t=0.1`}
-                    poster={video.thumbnail || undefined}
-                    className="w-full aspect-[9/16] max-h-52 object-cover"
-                    controls
-                    preload={video.thumbnail ? "none" : "metadata"}
-                    controlsList="nodownload"
-                    onContextMenu={(e) => e.preventDefault()}
-                  />
+                  <button
+                    type="button"
+                    onClick={() => setPlaying(video)}
+                    aria-label={`ניגון ${video.title || "סרטון"}`}
+                    className={`relative block w-full aspect-[9/16] max-h-52 bg-gradient-to-br ${posterGradients[i % posterGradients.length]}`}
+                  >
+                    {video.thumbnail && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={video.thumbnail} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+                    )}
+                    <span className="absolute inset-0 flex items-center justify-center">
+                      <span className="w-11 h-11 rounded-full bg-white/90 text-pink-500 flex items-center justify-center shadow-lg">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+                      </span>
+                    </span>
+                  </button>
                 ) : (
                   <div className="w-full aspect-[9/16] max-h-52 flex items-center justify-center text-neutral-400 text-xs">לא זמין</div>
                 )}
@@ -237,9 +246,34 @@ export function CreatorProfileView({ profile, compact = false }: { profile: Crea
           </div>
         )}
       </div>
+
+      <Modal open={!!playing} onClose={() => setPlaying(null)} title={playing?.title || "סרטון מתיק העבודות"} size="lg">
+        {playing?.url && (
+          <video
+            key={playing.id}
+            src={playing.url}
+            poster={playing.thumbnail || undefined}
+            className="w-full rounded-xl bg-black max-h-[70vh]"
+            controls
+            autoPlay
+            playsInline
+            controlsList="nodownload"
+            onContextMenu={(e) => e.preventDefault()}
+          />
+        )}
+      </Modal>
     </div>
   );
 }
+
+// Poster backgrounds for portfolio videos uploaded before thumbnails existed
+const posterGradients = [
+  "from-pink-400 to-orange-300",
+  "from-purple-400 to-pink-400",
+  "from-emerald-400 to-teal-300",
+  "from-amber-400 to-orange-300",
+  "from-sky-400 to-indigo-300",
+];
 
 export function BrandProfileView({ profile, compact = false }: { profile: BrandPublicProfile; compact?: boolean }) {
   const site = profile.website ? profile.website.replace(/^https?:\/\//, "").replace(/\/$/, "") : "";

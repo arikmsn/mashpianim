@@ -4,12 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, Badge, Button, Modal, Input, Textarea, FilePicker, useToast } from "@/components/ui";
 import { PRODUCT_CATEGORIES } from "@/lib/categories";
-
-// "3 בדצמבר 2026" for a yyyy-mm-dd value from the date input
-function formatDateHe(value: string): string {
-  const d = new Date(`${value}T00:00:00`);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString("he-IL", { day: "numeric", month: "long", year: "numeric" });
-}
+import { formatDateHe } from "@/lib/dates";
 
 interface Product {
   id: string;

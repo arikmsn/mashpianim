@@ -38,7 +38,7 @@ type TabId = "pending" | "active" | "completed";
 const tabs: { id: TabId; label: string }[] = [
   { id: "pending", label: "ממתינים" },
   { id: "active", label: "פעילים" },
-  { id: "completed", label: "הושלמו" },
+  { id: "completed", label: "הסתיימו" },
 ];
 
 const statusLabels: Record<string, { label: string; variant: "pink" | "success" | "warning" | "default" }> = {
@@ -259,6 +259,20 @@ function BrandConnectionsPageInner() {
     completed: connections.filter((c) => completedStatuses.includes(c.status)).length,
   };
 
+  // The first visit opens on the first tab that has something in it (an empty "ממתינים" tab in front of
+  // five active connections reads as "nothing here"); a tab the user taps is never overridden
+  const tabPickedRef = useRef(false);
+  const { pending: pendingCount, active: activeCount, completed: completedCount } = tabCounts;
+  useEffect(() => {
+    if (loading || openId || tabPickedRef.current) return;
+    tabPickedRef.current = true;
+    if (pendingCount > 0) return;
+    const first: TabId | null = activeCount > 0 ? "active" : completedCount > 0 ? "completed" : null;
+    if (!first) return;
+    const t = setTimeout(() => setActiveTab(first), 0);
+    return () => clearTimeout(t);
+  }, [loading, openId, pendingCount, activeCount, completedCount]);
+
   function getActions(conn: Connection) {
     const actions: { label: string; status: string; variant: "primary" | "secondary" | "danger"; needsModal?: boolean }[] = [];
     switch (conn.status) {
@@ -295,7 +309,10 @@ function BrandConnectionsPageInner() {
             {tabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  tabPickedRef.current = true;
+                  setActiveTab(tab.id);
+                }}
                 className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
                   activeTab === tab.id
                     ? "bg-white text-pink-500 shadow-sm"
@@ -324,7 +341,7 @@ function BrandConnectionsPageInner() {
             <span className="text-4xl block mb-3">
               {activeTab === "pending" ? "⏳" : activeTab === "active" ? "🔗" : "🏆"}
             </span>
-            <p>אין חיבורים {activeTab === "pending" ? "ממתינים" : activeTab === "active" ? "פעילים" : "שהושלמו"}</p>
+            <p>אין חיבורים {activeTab === "pending" ? "ממתינים" : activeTab === "active" ? "פעילים" : "שהסתיימו"}</p>
           </div>
         ) : (
           <div className="space-y-3">

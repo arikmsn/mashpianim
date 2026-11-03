@@ -11,6 +11,7 @@ import { swrFetch, clearCache } from "@/lib/client-cache";
 import { generateVideoThumbnail } from "@/lib/video-thumbnail";
 import { uploadToStorage } from "@/lib/storage-upload";
 import { videoFileProblem, MAX_VIDEO_MB } from "@/lib/uploads";
+import { formatDateHe } from "@/lib/dates";
 
 interface PortfolioVideo {
   id: string;
@@ -318,12 +319,14 @@ function CreatorEditModal({
         </div>
         <p className="text-xs text-neutral-400 -mt-2">העסקים רואים את הפרטים האלה כשהם בוחנים את הבקשה שלכם — כדאי למלא.</p>
         <Input
-          label="תאריך לידה"
+          label="תאריך לידה (יום/חודש/שנה)"
           type="date"
+          lang="he-IL"
           value={form.date_of_birth}
           onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })}
           dir="ltr"
         />
+        {form.date_of_birth && <p className="text-xs text-neutral-500 -mt-2">{formatDateHe(form.date_of_birth)}</p>}
       </div>
       <div className="flex gap-3 mt-6">
         <Button fullWidth loading={saving} onClick={handleSave}>
@@ -630,8 +633,8 @@ export default function ProfilePage() {
             description: brandData?.description || "",
             websiteUrl: brandData?.website_url || "",
             stats: {
-              products: 0,
-              connections: 0,
+              products: brandData?.products_count || 0,
+              connections: brandData?.connections_count || 0,
               creditsLeft: (brandData?.total_credits || 0) - (brandData?.used_credits || 0),
             },
           });

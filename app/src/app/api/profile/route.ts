@@ -90,11 +90,29 @@ export async function GET() {
       .eq("user_id", userData.id)
       .maybeSingle();
 
+    // Counters for the profile header: live products and connections that went past the heart stage
+    let productsCount = 0;
+    let connectionsCount = 0;
+    const profileRow = (rawProfile || {}) as { id?: string } & Record<string, unknown>;
+    const brandProfileId = profileRow.id;
+    if (brandProfileId) {
+      const [productsRes, connectionsRes] = await Promise.all([
+        admin.from("products").select("id", { count: "exact", head: true }).eq("brand_id", brandProfileId).neq("status", "deleted"),
+        admin
+          .from("connections")
+          .select("id", { count: "exact", head: true })
+          .eq("brand_id", brandProfileId)
+          .not("status", "in", '("pending","cancelled","rejected")'),
+      ]);
+      productsCount = productsRes.count || 0;
+      connectionsCount = connectionsRes.count || 0;
+    }
+
     return NextResponse.json({
       user: userData,
       role,
       roles,
-      profile: rawProfile || {},
+      profile: { ...profileRow, products_count: productsCount, connections_count: connectionsCount },
     });
   }
 
