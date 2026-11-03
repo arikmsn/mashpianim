@@ -9,7 +9,8 @@ export interface BriefProduct {
   brief?: string | null;
 }
 
-const FORMAT_LINES = [
+// Standard format every deliverable follows (also shown on the product page)
+export const FORMAT_LINES = [
   `פורמט: וידאו 15–45 שנ' · 9:16 · דיבור למצלמה · כתוביות בעברית`,
   `יעד להעלאה: עד 10 ימים מקבלת המוצר`,
   `זכויות שימוש: העסק רשאי להשתמש בסרטון בכל הערוצים שלו`,

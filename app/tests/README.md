@@ -117,6 +117,17 @@ Scripted runs: send Hebrew bodies from a UTF-8 shell (PowerShell `-Encoding utf8
 | 53 | Icons come from `logo.png` | replace `public/logo.png`, run `python scripts/gen-icons.py`, bump the cache names in `public/sw.js` | all icon files regenerated; after deploy, an installed app shows the new icon once the new worker activates (reopen the app twice) |
 | 54 | No white around the icon | install on Android (circle and squircle launchers) and iOS; open the splash | icon fills its shape with the gradient, artwork not clipped; splash background is brand pink, not white |
 
+## Batch 7 checks (creator product page, feed, journey timeline)
+
+| # | Check | Steps | Expected |
+|---|---|---|---|
+| 55 | Feed chips | open `/feed` as a creator with categories | chips: `בשבילך`, `הכל`, own categories, the rest; `בשבילך` is active and lists own-category products plus anything hearted/matched; empty state offers "הצגת כל המוצרים" |
+| 56 | Product page | tap a feed card (image or title) | `/products/<id>`: value, slots, brand row → brand profile modal, "על המוצר", "הבריף — מה צריך להיות בסרטון" (brand text or the fallback + 3 format lines), "לוח זמנים ומשלוח" from admin settings; locked creators (< 5 videos) see blurred details + the gate |
+| 57 | Product page actions | with a connection in each status | pending-from-brand → approve/decline; own pending → cancel; `shipped` → tracking + confirm receipt; `delivered`/`filming`/`revision_requested` → upload with progress (`uploaded` afterwards); `uploaded` → "waiting for the brand"; chat link whenever the chat exists; no open connection → heart (or "המוצר מלא") |
+| 58 | Journey timeline | `/connections` active cards and the product page | 5 steps with ✓ up to the current one, next action + deadline (`activeDeadlineField`); digital products say גישה; `flow-timeline.test.ts` |
+| 59 | Deep link into connections | `/connections?open=<id>` | the right tab opens, the card is highlighted and scrolled into view |
+| 60 | Brief visibility | `GET /api/products/<id>` signed out vs. as a creator | signed out: no `brief`, no `connection`; creator: `brief` present, `connection` = own (open first, else latest), `settings` days |
+
 ## Release QA run — 2026-11-03 (browser, local production build)
 
 How it was run: `npm run build` then `npm start -- -p 3100` from `app/` with the env passed to the process only (dev-login gate `ADMIN_LOGIN_PHONE`/`ADMIN_LOGIN_PASSWORD` set to local-only values, `NODE_ENV=production`, `ALLOW_DEV_LOGIN=true`), against the live database using only the two QA accounts. The hidden gate opens with 5 taps on the login title; the gate values and `CRON_SECRET` used here are not the production ones.

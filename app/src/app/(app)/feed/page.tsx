@@ -5,11 +5,14 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, Badge, Button, Card, Modal, useToast } from "@/components/ui";
-import { ProfileModal } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { useNotifications } from "@/hooks/use-notifications";
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch, fetchJson } from "@/lib/client-cache";
+
+// Filter chips: "for you" (the creator's categories + anything already in motion), everything, then categories
+const FOR_YOU = "בשבילך";
+const ALL = "הכל";
 
 const allFeedCategories = [
   "אופנה",
@@ -99,7 +102,7 @@ function ProductCard({
   onApply,
   onApprove,
   onOpenChat,
-  onViewBrand,
+  onOpen,
   applying,
   approving,
 }: {
@@ -109,7 +112,7 @@ function ProductCard({
   onApply: (id: string) => void;
   onApprove: (connectionId: string) => void;
   onOpenChat: (connectionId: string) => void;
-  onViewBrand: (userId: string) => void;
+  onOpen: (productId: string) => void;
   applying: string | null;
   approving: string | null;
 }) {
@@ -140,43 +143,47 @@ function ProductCard({
           🎉 מאטץ&apos;
         </div>
       )}
-      {product.image ? (
-        <div className="h-48 overflow-hidden">
-          <img
-            src={product.image}
-            alt={product.name}
-            loading="lazy"
-            decoding="async"
-            className="w-full h-full object-cover"
-          />
-        </div>
-      ) : (
-        <div
-          className={`h-48 bg-gradient-to-br ${placeholderColors[colorIndex]} flex items-center justify-center`}
-        >
-          <span className="text-5xl opacity-50">📦</span>
-        </div>
-      )}
+      {/* The card opens the product page (details, brief, status); the buttons below act in place */}
+      <button
+        type="button"
+        onClick={() => onOpen(product.id)}
+        className="block w-full text-right"
+        aria-label={`פרטי המוצר ${product.name}`}
+      >
+        {product.image ? (
+          <div className="h-48 overflow-hidden">
+            <img
+              src={product.image}
+              alt={product.name}
+              loading="lazy"
+              decoding="async"
+              className="w-full h-full object-cover"
+            />
+          </div>
+        ) : (
+          <div
+            className={`h-48 bg-gradient-to-br ${placeholderColors[colorIndex]} flex items-center justify-center`}
+          >
+            <span className="text-5xl opacity-50">📦</span>
+          </div>
+        )}
+      </button>
       <div className="p-4">
         <div className="flex items-start justify-between mb-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <button
-              type="button"
-              disabled={!product.brandUserId}
-              onClick={() => product.brandUserId && onViewBrand(product.brandUserId)}
-              className="flex items-center gap-2 text-right min-w-0 disabled:cursor-default group"
-              aria-label={`פרופיל ${product.brand}`}
-            >
-              <Avatar src={product.brandAvatar} name={product.brand} size="sm" className="group-enabled:group-hover:ring-pink-300 transition-all" />
-              <div className="min-w-0">
-                <h3 className="font-bold text-neutral-900 truncate">{product.name}</h3>
-                <p className="text-sm text-neutral-500 truncate group-enabled:group-hover:text-pink-500 transition-colors">
-                  {product.brand}
-                  {product.brandUserId && <span className="text-[10px] text-neutral-300 mr-1">· פרופיל</span>}
-                </p>
-              </div>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => onOpen(product.id)}
+            className="flex items-center gap-2 text-right min-w-0 group"
+          >
+            <Avatar src={product.brandAvatar} name={product.brand} size="sm" className="group-hover:ring-pink-300 transition-all" />
+            <div className="min-w-0">
+              <h3 className="font-bold text-neutral-900 truncate group-hover:text-pink-600 transition-colors">{product.name}</h3>
+              <p className="text-sm text-neutral-500 truncate">
+                {product.brand}
+                <span className="text-[10px] text-pink-400 mr-1">· פרטים ובריף ›</span>
+              </p>
+            </div>
+          </button>
           <Badge variant="pink" size="sm">
             ₪{product.value}
           </Badge>
@@ -241,18 +248,19 @@ function ProductCard({
 }
 
 function productMatchesCategory(p: Product, cat: string): boolean {
-  if (cat === "הכל") return true;
+  if (cat === ALL || cat === FOR_YOU) return true;
   const cats = p.categories.length > 0 ? p.categories : [p.category];
   return cats.some((c) => c === cat || c.startsWith(cat));
 }
 
+// Chip order: "for you", everything, the creator's own categories, then the rest
 function buildCategoryList(userCategories: string[]): string[] {
   const mapped = userCategories
     .map((c) => registrationToFeedMap[c] || c)
     .filter((c) => allFeedCategories.includes(c));
   const unique = [...new Set(mapped)];
   const rest = allFeedCategories.filter((c) => !unique.includes(c));
-  return [...unique, "הכל", ...rest];
+  return [FOR_YOU, ALL, ...unique, ...rest];
 }
 
 export default function FeedPage() {
@@ -261,8 +269,7 @@ export default function FeedPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState<string | null>(null);
-  const [categories, setCategories] = useState<string[]>(["הכל", ...allFeedCategories]);
-  const [viewBrandId, setViewBrandId] = useState<string | null>(null);
+  const [categories, setCategories] = useState<string[]>([FOR_YOU, ALL, ...allFeedCategories]);
   const [portfolioCount, setPortfolioCount] = useState<number | null>(null);
   const [userCategories, setUserCategories] = useState<string[]>([]);
   const [relations, setRelations] = useState<Record<string, Relation>>({});
@@ -369,17 +376,6 @@ export default function FeedPage() {
     };
   }, [applyProducts]);
 
-  useEffect(() => {
-    if (activeCategory !== null || loading) return;
-    const firstUserCat = categories[0];
-    if (firstUserCat && firstUserCat !== "הכל") {
-      const hasProducts = products.some((p) => productMatchesCategory(p, firstUserCat));
-      setActiveCategory(hasProducts ? firstUserCat : "הכל");
-    } else {
-      setActiveCategory("הכל");
-    }
-  }, [loading, categories, products, activeCategory]);
-
   const locked = portfolioCount !== null && portfolioCount < MIN_PORTFOLIO;
 
   const handleApply = useCallback(
@@ -468,10 +464,19 @@ export default function FeedPage() {
     [locked, router, toast]
   );
 
-  const effectiveCategory = activeCategory || "הכל";
+  // Until the creator picks a chip: "for you" when there is something to match on (own categories or hearts/matches), else "all"
+  const effectiveCategory =
+    activeCategory ?? (userCategories.length > 0 || Object.keys(relations).length > 0 ? FOR_YOU : ALL);
+
+  // Products that match the creator's own categories float to the top; brand hearts first of all
+  const matchesUser = (p: Product) => userCategories.some((c) => productMatchesCategory(p, registrationToFeedMap[c] || c));
 
   const filtered = products.filter((p) => {
-    if (!productMatchesCategory(p, effectiveCategory)) return false;
+    if (effectiveCategory === FOR_YOU) {
+      if (!matchesUser(p) && !relations[p.id]) return false;
+    } else if (!productMatchesCategory(p, effectiveCategory)) {
+      return false;
+    }
     if (
       searchQuery &&
       !p.name.includes(searchQuery) &&
@@ -480,9 +485,6 @@ export default function FeedPage() {
       return false;
     return true;
   });
-
-  // Products that match the creator's own categories float to the top; brand hearts first of all
-  const matchesUser = (p: Product) => userCategories.some((c) => productMatchesCategory(p, registrationToFeedMap[c] || c));
   const rank = (p: Product) => {
     const r = relations[p.id];
     if (r?.status === "pending" && r.initiatedBy === "brand") return 3;
@@ -616,7 +618,7 @@ export default function FeedPage() {
                     onApply={handleApply}
                     onApprove={handleApprove}
                     onOpenChat={(id) => router.push(`/messages?connection=${id}`)}
-                    onViewBrand={setViewBrandId}
+                    onOpen={(id) => router.push(`/products/${id}`)}
                     applying={applying}
                     approving={approving}
                   />
@@ -628,12 +630,19 @@ export default function FeedPage() {
         {!loading && ordered.length === 0 && (
           <div className="text-center py-20 text-neutral-400">
             <span className="text-4xl block mb-4">🔍</span>
-            <p>לא נמצאו מוצרים בקטגוריה זו</p>
+            {effectiveCategory === FOR_YOU ? (
+              <>
+                <p>אין כרגע מוצרים בקטגוריות שלך</p>
+                <Button variant="secondary" size="sm" rounded className="mt-4" onClick={() => setActiveCategory(ALL)}>
+                  הצגת כל המוצרים
+                </Button>
+              </>
+            ) : (
+              <p>לא נמצאו מוצרים בקטגוריה זו</p>
+            )}
           </div>
         )}
       </div>
-
-      <ProfileModal userId={viewBrandId} onClose={() => setViewBrandId(null)} title="פרופיל העסק" />
 
       <Modal open={gateOpen} onClose={() => setGateOpen(false)} size="sm">
         <div className="text-center space-y-4">

@@ -1,16 +1,15 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect, useCallback, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Badge, Avatar, Card, Button, Modal, useToast } from "@/components/ui";
-import { ProfileModal } from "@/components/features";
-import { useAuth } from "@/hooks/use-auth";
+import { ConnectionTimeline, ProfileModal } from "@/components/features";
+import { useDeliverableUpload } from "@/hooks/use-deliverable-upload";
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch, fetchJson } from "@/lib/client-cache";
-import { generateVideoThumbnail } from "@/lib/video-thumbnail";
-import { uploadToStorage } from "@/lib/storage-upload";
-import { videoFileProblem, MAX_VIDEO_MB } from "@/lib/uploads";
+import { activeDeadlineField } from "@/lib/connection-flow";
+import { MAX_VIDEO_MB } from "@/lib/uploads";
 
 type TabType = "active" | "pending" | "completed";
 
@@ -33,15 +32,20 @@ const statusConfig: Record<
 
 interface Connection {
   id: string;
+  productId: string | null;
   product: string;
+  productImage: string | null;
   brand: string;
   brandAvatar: string | null;
   brandUserId: string | null;
   initiatedBy: "creator" | "brand";
   status: string;
   daysLeft: number | null;
+  // The deadline that applies to the current step (ship / deliver / film / review)
+  activeDeadline: string | null;
   deliveryType: "physical" | "digital";
   trackingNumber: string | null;
+  trackingUrl: string | null;
   digitalAccessValue: string | null;
   revisionNotes: string | null;
 }
@@ -55,17 +59,23 @@ function mapConnection(c: Record<string, unknown>): Connection {
     const diff = new Date(deadline).getTime() - Date.now();
     daysLeft = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
   }
+  const status = (c.status as string) || "pending";
+  const deadlineField = activeDeadlineField(status);
   return {
     id: c.id as string,
+    productId: (c.product_id as string) || null,
     product: (c as any).products?.name || (c.product_name as string) || "",
+    productImage: (c as any).products?.image_url || null,
     brand: (c as any).brand_profiles?.shop_name || (c.brand_name as string) || "",
     brandAvatar: (c as any).brand_profiles?.logo_url || (c as any).brand_profiles?.users?.avatar_url || null,
     brandUserId: (c as any).brand_profiles?.user_id || null,
     initiatedBy: (c as any).initiated_by === "brand" ? "brand" : "creator",
-    status: (c.status as string) || "pending",
+    status,
     daysLeft,
+    activeDeadline: deadlineField ? ((c[deadlineField] as string) || null) : null,
     deliveryType: ((c as any).delivery_type as "physical" | "digital") || "physical",
     trackingNumber: (c.tracking_number as string) || null,
+    trackingUrl: (c.tracking_url as string) || null,
     digitalAccessValue: (c.digital_access_value as string) || null,
     revisionNotes: (c.revision_notes as string) || null,
   };
@@ -94,22 +104,47 @@ function canConfirmDelivery(status: string) {
   return status === "shipped";
 }
 
+// useSearchParams needs a Suspense boundary for the static shell
 export default function ConnectionsPage() {
+  return (
+    <Suspense>
+      <ConnectionsPageInner />
+    </Suspense>
+  );
+}
+
+function ConnectionsPageInner() {
+  const searchParams = useSearchParams();
+  // `?open=<connectionId>` (from a notification) lands on the right tab and highlights that card
+  const openId = searchParams.get("open");
   const [activeTab, setActiveTab] = useState<TabType>("active");
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
-  const [uploadingId, setUploadingId] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [viewBrandId, setViewBrandId] = useState<string | null>(null);
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [portfolioCount, setPortfolioCount] = useState<number | null>(null);
   const [gateOpen, setGateOpen] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const uploadConnectionIdRef = useRef<string | null>(null);
-  const { user } = useAuth();
+  const handledOpenRef = useRef<string | null>(null);
+  const focusedId = openId;
   const { toast } = useToast();
   const router = useRouter();
+
+  // Once the list is in, switch to the tab holding the requested card and scroll it into view (once per id)
+  useEffect(() => {
+    if (!openId || connections.length === 0 || handledOpenRef.current === openId) return;
+    const target = connections.find((c) => c.id === openId);
+    if (!target) return;
+    handledOpenRef.current = openId;
+    const tab = statusConfig[target.status]?.tab || "pending";
+    const t = setTimeout(() => {
+      setActiveTab(tab);
+      requestAnimationFrame(() => {
+        document.getElementById(`connection-${openId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    }, 0);
+    return () => clearTimeout(t);
+  }, [openId, connections]);
 
   const applyConnections = useCallback((data: ConnectionsPayload) => {
     if (!data.connections) return;
@@ -188,90 +223,12 @@ export default function ConnectionsPage() {
     };
   }, [applyConnections]);
 
-  function handleUploadClick(connectionId: string) {
-    uploadConnectionIdRef.current = connectionId;
-    fileInputRef.current?.click();
-  }
-
-  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    const connectionId = uploadConnectionIdRef.current;
-    if (!file || !connectionId) return;
-
-    e.target.value = "";
-
-    const problem = videoFileProblem(file);
-    if (problem) {
-      toast(problem, "error");
-      return;
-    }
-
-    if (!user) {
-      toast("יש להתחבר מחדש", "error");
-      return;
-    }
-
-    setUploadingId(connectionId);
-    setUploadProgress(0);
-
-    try {
-      // Upload straight to Storage (the server can't take large bodies) with progress, then record the
-      // metadata. The path stays inside this user's own folder, which is all the storage policy allows.
-      const supabase = createClient();
-      const ext = (file.name.split(".").pop() || "mp4").toLowerCase();
-      const stamp = Date.now();
-      const base = `portfolio/${user.id}/connections/${connectionId}/${stamp}`;
-      const storagePath = `${base}.${ext}`;
-      const thumbPath = `${base}.jpg`;
-
-      const [uploadResult, thumbBlob] = await Promise.all([
-        uploadToStorage({
-          bucket: "videos",
-          path: storagePath,
-          file,
-          contentType: file.type || "video/mp4",
-          onProgress: setUploadProgress,
-        }),
-        generateVideoThumbnail(file),
-      ]);
-
-      if (!uploadResult.ok) {
-        toast(uploadResult.error, "error");
-        return;
-      }
-
-      let thumbnailPath: string | null = null;
-      if (thumbBlob) {
-        const { error: thumbError } = await supabase.storage
-          .from("thumbnails")
-          .upload(thumbPath, thumbBlob, { contentType: "image/jpeg", upsert: true });
-        if (!thumbError) thumbnailPath = thumbPath;
-      }
-
-      const res = await fetch("/api/videos/save-connection", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ connectionId, storagePath, thumbnailPath }),
-      });
-
-      if (res.ok) {
-        toast("הסרטון הועלה בהצלחה! 🎬", "success");
-        setConnections((prev) =>
-          prev.map((c) =>
-            c.id === connectionId ? { ...c, status: "uploaded" } : c
-          )
-        );
-      } else {
-        const data = await res.json().catch(() => ({}));
-        toast((data as any).error || "שגיאה בהעלאת הסרטון", "error");
-      }
-    } catch {
-      toast("שגיאה בהעלאת הסרטון", "error");
-    } finally {
-      setUploadingId(null);
-      setUploadProgress(0);
-    }
-  }
+  // Direct-to-Storage upload with progress (shared with the product page)
+  const upload = useDeliverableUpload(
+    useCallback((connectionId: string) => {
+      setConnections((prev) => prev.map((c) => (c.id === connectionId ? { ...c, status: "uploaded" } : c)));
+    }, [])
+  );
 
   async function confirmDelivery(connectionId: string) {
     setConfirmingId(connectionId);
@@ -317,13 +274,7 @@ export default function ConnectionsPage() {
 
   return (
     <main className="min-h-screen bg-background pb-20">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="video/*"
-        className="hidden"
-        onChange={handleFileSelected}
-      />
+      {upload.input}
 
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-neutral-100">
         <div className="max-w-2xl mx-auto px-4 py-4">
@@ -367,18 +318,20 @@ export default function ConnectionsPage() {
                         variant: "default" as const,
                       };
               const showUpload = canUploadVideo(conn.status);
-              const isUploading = uploadingId === conn.id;
+              const isUploading = upload.uploadingId === conn.id;
+              const uploadProgress = upload.progress;
 
               return (
                 <motion.div
                   key={conn.id}
+                  id={`connection-${conn.id}`}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                 >
-                  <Card hover padding="md">
+                  <Card hover padding="md" className={focusedId === conn.id ? "ring-2 ring-pink-300" : undefined}>
                     <button
                       className="w-full text-right"
-                      onClick={() => router.push(`/messages?connection=${conn.id}`)}
+                      onClick={() => (conn.productId ? router.push(`/products/${conn.productId}`) : router.push(`/messages?connection=${conn.id}`))}
                     >
                       <div className="flex items-center gap-4">
                         <span
@@ -413,10 +366,13 @@ export default function ConnectionsPage() {
                             <Badge variant={status.variant} size="sm" dot>
                               {status.label}
                             </Badge>
-                            {conn.daysLeft !== null && (
+                            {conn.daysLeft !== null && statusConfig[conn.status]?.tab === "active" && (
                               <span className="text-xs text-neutral-400">
                                 {conn.daysLeft} ימים נותרו
                               </span>
+                            )}
+                            {conn.productId && (
+                              <span className="text-xs text-pink-500 mr-auto">לדף המוצר ›</span>
                             )}
                           </div>
                         </div>
@@ -433,6 +389,20 @@ export default function ConnectionsPage() {
                         </svg>
                       </div>
                     </button>
+
+                    {/* Where the connection stands and what happens next (matched connections only) */}
+                    {!["pending", "rejected", "cancelled"].includes(conn.status) && (
+                      <div className="mt-3 pt-3 border-t border-neutral-100">
+                        <ConnectionTimeline
+                          status={conn.status}
+                          role="creator"
+                          initiatedBy={conn.initiatedBy}
+                          deliveryType={conn.deliveryType}
+                          deadline={conn.activeDeadline}
+                          compact
+                        />
+                      </div>
+                    )}
 
                     {conn.status === "pending" && (
                       <div className="mt-3 pt-3 border-t border-neutral-100">
@@ -518,10 +488,10 @@ export default function ConnectionsPage() {
                           loading={isUploading}
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleUploadClick(conn.id);
+                            upload.start(conn.id);
                           }}
                         >
-                          {isUploading ? (uploadProgress < 100 ? `מעלה סרטון... ${uploadProgress}%` : "שומר...") : "📹 העלאת סרטון"}
+                          {upload.buttonLabel(conn.id, conn.status === "revision_requested" ? "📹 העלאת גרסה מתוקנת" : "📹 העלאת סרטון")}
                         </Button>
                         {isUploading && (
                           <div className="mt-2 h-1.5 bg-neutral-100 rounded-full overflow-hidden" aria-live="polite">

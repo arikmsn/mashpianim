@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { toPublicProduct, pickProductUpdates } from "@/lib/authz";
+import { CLOSED_STATUSES, OCCUPYING_STATUSES, normalizeMaxCreators, spotsLeft } from "@/lib/connection-flow";
+import { getTimelineSettings } from "@/lib/settings";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -35,6 +37,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
   // Owner and admins see everything; anyone else sees the public shape only
   let privileged = false;
+  let viewer: { id: string; type: string } | null = null;
   const userClient = await createServerClient();
   const { data: { user } } = await userClient.auth.getUser();
   if (user) {
@@ -43,19 +46,70 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       .select("id, type")
       .eq("auth_user_id", user.id)
       .single();
-    privileged = !!dbUser && ((dbUser as any).type === "admin" || (dbUser as any).id === ownerUserId);
+    viewer = (dbUser as any) || null;
+    privileged = !!viewer && (viewer.type === "admin" || viewer.id === ownerUserId);
   }
+
+  // Creator slots taken (every status from the match on) — same numbers as the list route
+  const { count } = await admin
+    .from("connections")
+    .select("id", { count: "exact", head: true })
+    .eq("product_id", id)
+    .in("status", [...OCCUPYING_STATUSES]);
+  const occupied = count || 0;
 
   const fields = { ...row };
   delete fields.brand_profiles;
   const shaped = {
     ...fields,
+    max_creators: normalizeMaxCreators(row.max_creators),
+    occupied,
+    spots_left: spotsLeft(row.max_creators, occupied),
     brand_name: row.brand_profiles?.shop_name || "",
     brand_user_id: ownerUserId || null,
     logo_url: row.brand_profiles?.logo_url || null,
   };
 
-  return NextResponse.json({ product: privileged ? shaped : toPublicProduct(shaped) });
+  // Signed-in creators read the brand's brief on the product page (to decide whether to heart);
+  // anonymous visitors still get the public shape without it
+  const product = privileged
+    ? shaped
+    : { ...toPublicProduct(shaped), ...(viewer?.type === "creator" ? { brief: row.brief ?? null } : {}) };
+
+  // The viewing creator's own connection for this product (open one first, else the latest closed one)
+  let connection: Record<string, unknown> | null = null;
+  if (viewer?.type === "creator") {
+    const { data: cp } = await admin
+      .from("creator_profiles")
+      .select("id")
+      .eq("user_id", viewer.id)
+      .maybeSingle();
+    if (cp) {
+      const { data: conns } = await admin
+        .from("connections")
+        .select(
+          "id, status, initiated_by, delivery_type, tracking_number, tracking_url, digital_access_value, revision_notes, revision_count, approved_at, shipped_at, delivered_at, filmed_at, completed_at, ship_deadline, deliver_deadline, film_deadline, review_deadline, created_at"
+        )
+        .eq("creator_id", (cp as any).id)
+        .eq("product_id", id)
+        .order("created_at", { ascending: false })
+        .limit(5);
+      const list = (conns || []) as Record<string, unknown>[];
+      connection = list.find((c) => !(CLOSED_STATUSES as readonly string[]).includes(c.status as string)) || list[0] || null;
+    }
+  }
+
+  const timelines = await getTimelineSettings(admin);
+
+  return NextResponse.json({
+    product,
+    connection,
+    settings: {
+      shipping_days: timelines.shipping_days,
+      filming_days: timelines.filming_days,
+      review_days: timelines.review_days,
+    },
+  });
 }
 
 export async function PUT(request: NextRequest, context: RouteContext) {

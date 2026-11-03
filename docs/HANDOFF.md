@@ -57,8 +57,9 @@ app/src/
     login/, register/           phone OTP flows (register has creator + brand branches; brand categories are chips)
     terms/
     (app)/                      authenticated area; layout.tsx gates on useAuth, template.tsx = 150ms fade
-      feed/                     CREATOR HOME: product feed, hearts, gate banner, brand-hearts strip
-      connections/              creator's connections; pending tab shows hearts with approve/decline/cancel
+      feed/                     CREATOR HOME: product feed ("בשבילך" / "הכל" / categories), hearts, gate banner, brand-hearts strip
+      products/[id]/            creator product page: details, the brand's brief, timeline settings, own connection's journey + actions
+      connections/              creator's connections; journey timeline per card, pending tab shows hearts with approve/decline/cancel; `?open=<id>` highlights a card
       messages/                 chat list + chat view (both roles); product image in header
       profile/                  own profile (creator & brand variants), portfolio upload, edit modals, logout confirm
       notifications/

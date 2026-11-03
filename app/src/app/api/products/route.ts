@@ -117,7 +117,9 @@ export async function GET(request: NextRequest) {
         categories: brandCats,
         logo_url: p.brand_profiles?.logo_url || null,
       };
-      return privileged ? shaped : toPublicProduct(shaped);
+      if (privileged) return shaped;
+      // Signed-in creators also get the brand's brief (shown on the product page); anonymous callers don't
+      return viewer?.type === "creator" ? { ...toPublicProduct(shaped), brief: p.brief ?? null } : toPublicProduct(shaped);
     })
     // Creators browsing the feed don't see products whose creator slots are all taken
     .filter((p: any) => privileged || (p.spots_left as number) > 0);

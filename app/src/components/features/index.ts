@@ -7,3 +7,4 @@ export {
   type CreatorPublicProfile,
   type BrandPublicProfile,
 } from "./profile-views";
+export { ConnectionTimeline } from "./connection-timeline";

@@ -24,7 +24,8 @@ app/src/
 ├── app/
 │   ├── login/, register/    # phone OTP flows
 │   ├── (app)/               # authenticated: feed (creator home), brand (brand home = creator gallery),
-│   │                        #   connections, brand/connections, brand/products, messages, profile, notifications
+│   │                        #   products/[id] (creator product page: brief + journey), connections, brand/connections,
+│   │                        #   brand/products, messages, profile, notifications
 │   ├── admin/               # admin dashboard
 │   └── api/                 # route handlers (see docs/HANDOFF.md §5)
 ├── components/ui/           # design-system primitives
