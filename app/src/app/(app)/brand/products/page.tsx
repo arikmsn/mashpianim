@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Card, Badge, Button, Modal, Input, Textarea, useToast } from "@/components/ui";
+import { Card, Badge, Button, Modal, Input, Textarea, FilePicker, useToast } from "@/components/ui";
+import { PRODUCT_CATEGORIES } from "@/lib/categories";
 
 interface Product {
   id: string;
@@ -11,6 +12,7 @@ interface Product {
   price: number;
   imageUrl: string | null;
   status: "active" | "paused";
+  category: string;
   brief: string;
   shippingPolicy: string;
   sourceUrl: string | null;
@@ -66,7 +68,7 @@ export default function BrandProductsPage() {
     price: "",
     brief: "",
     imageUrl: "",
-    shippingPolicy: "free",
+    shippingPolicy: "free", category: "",
     sourceUrl: "",
     productType: "physical" as "physical" | "digital",
     digitalAccessType: "",
@@ -98,6 +100,7 @@ export default function BrandProductsPage() {
               status: (p.status as string) || "active",
               brief: (p.brief as string) || "",
               shippingPolicy: (p.shipping_policy as string) || "free",
+              category: (p.category as string) || "",
               sourceUrl: (p.source_url as string) || null,
               applicantsCount: (p.matched_count as number) || 0,
               maxCreators: (p.max_creators as number) || 3,
@@ -122,7 +125,7 @@ export default function BrandProductsPage() {
   }
 
   function resetForm() {
-    setFormData({ name: "", description: "", price: "", brief: "", imageUrl: "", shippingPolicy: "free", sourceUrl: "", productType: "physical", digitalAccessType: "", digitalAccessInstructions: "", digitalAccessDurationDays: "", expirationDate: "", quantity: "", maxCreators: "3" });
+    setFormData({ name: "", description: "", price: "", brief: "", imageUrl: "", shippingPolicy: "free", category: "", sourceUrl: "", productType: "physical", digitalAccessType: "", digitalAccessInstructions: "", digitalAccessDurationDays: "", expirationDate: "", quantity: "", maxCreators: "3" });
     setImageFile(null);
     setEditingProduct(null);
   }
@@ -140,6 +143,7 @@ export default function BrandProductsPage() {
       brief: product.brief || "",
       imageUrl: product.imageUrl || "",
       shippingPolicy: product.shippingPolicy,
+      category: product.category || "",
       sourceUrl: product.sourceUrl || "",
       productType: product.productType || "physical",
       digitalAccessType: product.digitalAccessType || "",
@@ -186,6 +190,8 @@ export default function BrandProductsPage() {
         brief: formData.brief.trim() || null,
         image_url: imageUrl,
         shipping_policy: formData.shippingPolicy,
+        // Empty = let the server pick the brand's own category
+        ...(formData.category ? { category: formData.category } : {}),
         source_url: formData.sourceUrl.trim() || null,
         product_type: formData.productType,
         digital_access_type: formData.productType === "digital" ? formData.digitalAccessType || null : null,
@@ -215,6 +221,7 @@ export default function BrandProductsPage() {
                     brief: (body.brief as string) || "",
                     imageUrl: (body.image_url as string) || null,
                     shippingPolicy: body.shipping_policy as string,
+                    category: (body.category as string) || p.category,
                     sourceUrl: (body.source_url as string) || null,
                     productType: (body.product_type as "physical" | "digital") || "physical",
                     digitalAccessType: (body.digital_access_type as string) || null,
@@ -249,6 +256,7 @@ export default function BrandProductsPage() {
               status: "active",
               brief: (body.brief as string) || "",
               shippingPolicy: body.shipping_policy as string,
+              category: (data.product?.category as string) || (body.category as string) || "",
               sourceUrl: body.source_url as string | null,
               applicantsCount: 0,
               maxCreators: (body.max_creators as number) || 3,
@@ -388,6 +396,7 @@ export default function BrandProductsPage() {
                             <span>₪{product.price}</span>
                             <span>👥 {product.applicantsCount}/{product.maxCreators} יוצרים</span>
                             <span>{product.productType === "digital" ? "📱 דיגיטלי" : shippingLabels[product.shippingPolicy] || product.shippingPolicy}</span>
+                            {product.category && <span>🏷️ {product.category}</span>}
                           </div>
                           <div className="flex gap-2">
                             <button
@@ -513,6 +522,33 @@ export default function BrandProductsPage() {
             </div>
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">קטגוריה</label>
+            <div className="flex flex-wrap gap-2">
+              {PRODUCT_CATEGORIES.map((cat) => {
+                const active = formData.category === cat;
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setFormData((p) => ({ ...p, category: active ? "" : cat }))}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                      active
+                        ? "bg-pink-50 border-pink-300 text-pink-600"
+                        : "bg-neutral-50 border-neutral-200 text-neutral-500"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-neutral-400 mt-1">
+              {formData.category ? "הקטגוריה שבה המוצר יופיע בפיד היוצרים" : "לא נבחר — המוצר יוצג תחת הקטגוריה של העסק"}
+            </p>
+          </div>
+
           {formData.productType === "physical" ? (
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-1">מדיניות משלוח</label>
@@ -563,19 +599,16 @@ export default function BrandProductsPage() {
 
           <div>
             <label className="block text-sm font-medium text-neutral-700 mb-1">תמונת מוצר</label>
-            <input
-              type="file"
+            <FilePicker
               accept="image/*"
-              onChange={(e) => {
-                const f = e.target.files?.[0] || null;
+              file={imageFile}
+              label="בחירת תמונה"
+              changeLabel="החלפת תמונה"
+              onChange={(f) => {
                 setImageFile(f);
                 if (f) setFormData((p) => ({ ...p, imageUrl: "" }));
               }}
-              className="w-full text-sm text-neutral-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-pink-50 file:text-pink-500 hover:file:bg-pink-100 transition-all"
             />
-            {imageFile && (
-              <p className="text-xs text-neutral-400 mt-1">{imageFile.name} ({(imageFile.size / 1024 / 1024).toFixed(1)} MB)</p>
-            )}
             {!imageFile && (
               <div className="mt-2">
                 <p className="text-xs text-neutral-400 mb-1">או הדביקו קישור לתמונה:</p>

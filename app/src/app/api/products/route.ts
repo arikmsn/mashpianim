@@ -5,6 +5,7 @@ import { toPublicProduct } from "@/lib/authz";
 import { OCCUPYING_STATUSES, normalizeMaxCreators, spotsLeft } from "@/lib/connection-flow";
 import { resolveViewer } from "@/lib/viewer";
 import { readActiveRole } from "@/lib/active-role";
+import { resolveProductCategory } from "@/lib/categories";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -112,8 +113,9 @@ export async function GET(request: NextRequest) {
         matched_count: occupied,
         brand_name: p.brand_profiles?.shop_name || "",
         brand_user_id: p.brand_profiles?.user_id || null,
-        category: brandCats[0] || "",
-        categories: brandCats,
+        // The product's own category (migration 013); older rows without one fall back to the brand's
+        category: p.category || brandCats[0] || "",
+        categories: p.category ? [p.category] : brandCats,
         logo_url: p.brand_profiles?.logo_url || null,
       };
       if (privileged) return shaped;
@@ -148,7 +150,7 @@ export async function POST(request: NextRequest) {
 
   let { data: brandProfile } = await admin
     .from("brand_profiles")
-    .select("id")
+    .select("id, category, categories")
     .eq("user_id", dbUser.id)
     .maybeSingle();
 
@@ -169,8 +171,14 @@ export async function POST(request: NextRequest) {
     name, description, price, image_url,
     shipping_policy, shipping_address, source_url,
     product_type, digital_access_type, digital_access_instructions, digital_access_duration_days,
-    expiration_date, quantity, brief, max_creators,
+    expiration_date, quantity, brief, max_creators, category,
   } = body;
+
+  // Product category: the brand's pick if valid, else the brand's own first category, else "כללי"
+  const bp = brandProfile as { category?: string | null; categories?: string[] | null };
+  const brandCategories: string[] = Array.isArray(bp.categories) && bp.categories.length > 0
+    ? bp.categories
+    : [bp.category].filter((c): c is string => typeof c === "string" && c.length > 0);
 
   if (!name || !price) {
     return NextResponse.json({ error: "שם ומחיר חובה" }, { status: 400 });
@@ -202,6 +210,7 @@ export async function POST(request: NextRequest) {
       brief: typeof brief === "string" && brief.trim() ? brief.trim() : null,
       // How many creators may be matched with this product (1–50, default 3)
       max_creators: normalizeMaxCreators(max_creators),
+      category: resolveProductCategory(category, brandCategories),
     } as any)
     .select()
     .single();

@@ -1,4 +1,6 @@
 // Pure authorization helpers shared by API routes. No framework imports so they can be unit-tested directly.
+// Explicit extension so `node --test` (tests/*.test.ts import this file directly) can resolve it too
+import { isProductCategory } from "./categories.ts";
 
 export const ALLOWED_REGISTRATION_TYPES = ["creator", "brand"] as const;
 export type RegistrationType = (typeof ALLOWED_REGISTRATION_TYPES)[number];
@@ -132,8 +134,8 @@ export function devLoginEnabled(env: DevLoginEnv): boolean {
 // --- Products -------------------------------------------------------------------------------------
 
 // Fields a brand may change on its own product through PUT /api/products/[id].
-// `category` is deliberately absent: products have no such column (brand categories live on brand_profiles),
-// and writing it made every product edit fail (FUNC-02).
+// `category` is the product's own feed category (migration 013) and is validated against the shared list
+// below; unknown values are dropped rather than failing the whole edit (FUNC-02).
 export const PRODUCT_EDITABLE_FIELDS = [
   "name",
   "description",
@@ -151,13 +153,15 @@ export const PRODUCT_EDITABLE_FIELDS = [
   "quantity",
   "brief",
   "max_creators",
+  "category",
 ] as const;
 
 const PRODUCT_NUMERIC_FIELDS = new Set(["price", "quantity", "digital_access_duration_days", "max_creators"]);
 
 // Returns only allowed, present keys. Numeric fields accept numbers or numeric strings (null/"" clears the
-// optional ones, never the price); everything else must be a string or null. Unknown keys and other types
-// are dropped. The database still validates enums and NOT NULL columns.
+// optional ones, never the price); `category` must be one of the feed categories; everything else must be
+// a string or null. Unknown keys and other types are dropped. The database still validates enums and
+// NOT NULL columns.
 export function pickProductUpdates(input: unknown): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (!input || typeof input !== "object" || Array.isArray(input)) return out;
@@ -165,6 +169,10 @@ export function pickProductUpdates(input: unknown): Record<string, unknown> {
     if (!Object.hasOwn(input, key)) continue;
     const value = (input as Record<string, unknown>)[key];
     if (value === undefined) continue;
+    if (key === "category") {
+      if (isProductCategory(value)) out[key] = value;
+      continue;
+    }
     if (PRODUCT_NUMERIC_FIELDS.has(key)) {
       if (value === null || value === "") {
         if (key !== "price" && key !== "max_creators") out[key] = null;

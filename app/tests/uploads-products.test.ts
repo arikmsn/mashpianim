@@ -83,12 +83,12 @@ describe("connection upload statuses", () => {
 });
 
 describe("product update allowlist (FUNC-02)", () => {
-  test("category is not an editable product column", () => {
-    assert.equal((PRODUCT_EDITABLE_FIELDS as readonly string[]).includes("category"), false);
+  test("category is editable (migration 013) but the owner column is not", () => {
+    assert.equal((PRODUCT_EDITABLE_FIELDS as readonly string[]).includes("category"), true);
     assert.equal((PRODUCT_EDITABLE_FIELDS as readonly string[]).includes("brand_id"), false);
   });
 
-  test("drops category, brand_id and unknown keys; keeps allowed ones with their types", () => {
+  test("drops brand_id, unknown keys and an unknown category; keeps allowed ones with their types", () => {
     const updates = pickProductUpdates({
       name: "שרשרת",
       category: "ביוטי",
@@ -100,7 +100,8 @@ describe("product update allowlist (FUNC-02)", () => {
       status: "paused",
       description: null,
     });
-    assert.deepEqual(updates, { name: "שרשרת", price: 120, quantity: null, status: "paused", description: null, max_creators: 4 });
+    assert.deepEqual(updates, { name: "שרשרת", category: "ביוטי", price: 120, quantity: null, status: "paused", description: null, max_creators: 4 });
+    assert.deepEqual(pickProductUpdates({ category: "not-a-category" }), {});
   });
 
   test("numeric fields accept numbers and numeric strings; junk and negatives are dropped; price cannot be cleared", () => {

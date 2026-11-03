@@ -10,33 +10,15 @@ import { useNotifications } from "@/hooks/use-notifications";
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch, fetchJson } from "@/lib/client-cache";
 import { toDirectImageUrl } from "@/lib/images";
+import { PRODUCT_CATEGORIES, REGISTRATION_TO_FEED } from "@/lib/categories";
 
 // Filter chips: "for you" (the creator's categories + anything already in motion), everything, then categories
 const FOR_YOU = "בשבילך";
 const ALL = "הכל";
 
-const allFeedCategories = [
-  "אופנה",
-  "ביוטי",
-  "טכנולוגיה",
-  "בית וגינה",
-  "אוכל",
-  "ספורט",
-  "ילדים",
-  "כללי",
-];
-
-const registrationToFeedMap: Record<string, string> = {
-  "אופנה": "אופנה",
-  "ביוטי וטיפוח": "ביוטי",
-  "מזון ומשקאות": "אוכל",
-  "ניקיון ובית": "בית וגינה",
-  "ילדים ותינוקות": "ילדים",
-  "ספורט ובריאות": "ספורט",
-  "טכנולוגיה": "טכנולוגיה",
-  "חיות מחמד": "כללי",
-  "אחר": "כללי",
-};
+// One shared list with the product form and the API (lib/categories.ts)
+const allFeedCategories: string[] = [...PRODUCT_CATEGORIES];
+const registrationToFeedMap: Record<string, string> = REGISTRATION_TO_FEED;
 
 interface Product {
   id: string;

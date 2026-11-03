@@ -7,3 +7,4 @@ export { Badge, type BadgeProps } from "./badge";
 export { Modal, type ModalProps } from "./modal";
 export { ToastProvider, useToast } from "./toast";
 export { BottomNav } from "./bottom-nav";
+export { FilePicker } from "./file-picker";

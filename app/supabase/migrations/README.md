@@ -10,6 +10,7 @@ Files here mirror what was applied to the Supabase project `rhhfzvmiwhmnviznxvlv
 | `010_review_flow_moderation_brief.sql` | Supabase MCP `apply_migration` on 2026-11-03 (`review_flow_moderation_brief`) | Yes |
 | `011_max_creators.sql` | Supabase MCP `apply_migration` on 2026-11-03 (`max_creators`) | Yes |
 | `012_feedback.sql` | Supabase MCP `apply_migration` on 2026-11-03 (`feedback`), owner-approved — new `feedback` table for in-app reports (additive) | Yes |
+| `013_product_category.sql` | Supabase MCP `apply_migration` on 2026-11-03 (`product_category`), owner-requested (QA item 4) — `products.category` text NOT NULL default 'כללי', backfilled from the brand's first category | Yes |
 
 Rules:
 - Never edit an applied file; add a new numbered file.

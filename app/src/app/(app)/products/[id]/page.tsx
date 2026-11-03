@@ -24,6 +24,7 @@ interface ProductDetail {
   image_url: string | null;
   product_type: string | null;
   shipping_policy: string | null;
+  category?: string | null;
   brief?: string | null;
   brand_name: string;
   brand_user_id: string | null;
@@ -280,6 +281,7 @@ export default function ProductPage() {
                 <div className="min-w-0">
                   <h2 className="text-xl font-bold text-neutral-900">{product.name}</h2>
                   <p className="text-xs text-neutral-400 mt-0.5">
+                    {product.category ? `${product.category} · ` : ""}
                     {isDigital ? "מוצר דיגיטלי" : "מוצר פיזי"} · {product.occupied}/{product.max_creators} יוצרים
                     {product.spots_left > 0 ? ` · נותרו ${product.spots_left} מקומות` : " · המוצר מלא"}
                   </p>

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Avatar, Badge, Button, Card, Modal, Input, Textarea, useToast } from "@/components/ui";
+import { Avatar, Badge, Button, Card, Modal, Input, Textarea, FilePicker, useToast } from "@/components/ui";
 import { FeedbackModal, RoleSwitchModal, roleLabel, type AppRole } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
@@ -538,6 +538,8 @@ export default function ProfilePage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PortfolioVideo | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // Portfolio video open in the player modal (the list shows posters only)
+  const [playingVideo, setPlayingVideo] = useState<PortfolioVideo | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   // Every role the account holds; more than one → the profile offers switching
   const [accountRoles, setAccountRoles] = useState<AppRole[]>([]);
@@ -1127,16 +1129,21 @@ export default function ProfilePage() {
                         </button>
                       </div>
                     </div>
+                    {/* Poster only in the list (no players): the video plays in a modal on tap */}
                     {video.url && video.status !== "rejected" && (
-                      <video
-                        src={video.thumbnail_url ? video.url : `${video.url}#t=0.1`}
-                        poster={video.thumbnail_url || undefined}
-                        className="mt-2 w-full rounded-lg max-h-48 object-cover"
-                        controls
-                        preload={video.thumbnail_url ? "none" : "metadata"}
-                        controlsList="nodownload"
-                        onContextMenu={(e) => e.preventDefault()}
-                      />
+                      <button
+                        type="button"
+                        onClick={() => setPlayingVideo(video)}
+                        className="mt-2 w-full h-44 rounded-lg overflow-hidden relative bg-gradient-to-br from-pink-100 to-purple-100 group"
+                        aria-label={`ניגון ${video.title || "סרטון"}`}
+                      >
+                        {video.thumbnail_url && (
+                          <img src={video.thumbnail_url} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+                        )}
+                        <span className="absolute inset-0 flex items-center justify-center">
+                          <span className="w-14 h-14 rounded-full bg-white/90 shadow-lg flex items-center justify-center text-2xl text-pink-500 group-hover:scale-105 transition-transform">▶</span>
+                        </span>
+                      </button>
                     )}
                   </Card>
                 ))}
@@ -1223,6 +1230,22 @@ export default function ProfilePage() {
         onConfirm={handleLogout}
       />
 
+      <Modal open={!!playingVideo} onClose={() => setPlayingVideo(null)} title={playingVideo?.title || "סרטון פורטפוליו"} size="lg">
+        {playingVideo && (
+          <video
+            key={playingVideo.id}
+            src={playingVideo.url}
+            poster={playingVideo.thumbnail_url || undefined}
+            className="w-full rounded-xl bg-black max-h-[70vh]"
+            controls
+            autoPlay
+            playsInline
+            controlsList="nodownload"
+            onContextMenu={(e) => e.preventDefault()}
+          />
+        )}
+      </Modal>
+
       <Modal
         open={showUploadModal}
         onClose={() => { setShowUploadModal(false); setSelectedFile(null); setUploadTitle(""); }}
@@ -1240,31 +1263,26 @@ export default function ProfilePage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-neutral-700 mb-1">קובץ וידאו *</label>
-            <input
-              type="file"
+            <FilePicker
               accept="video/mp4,video/quicktime,video/webm,video/*"
-              onChange={(e) => {
-                const file = e.target.files?.[0] || null;
+              file={selectedFile}
+              label="בחירת סרטון"
+              changeLabel="החלפת סרטון"
+              disabled={uploading}
+              onChange={(file) => {
                 const issue = file ? videoFileProblem(file) : null;
                 if (issue) {
                   toast(issue, "error");
-                  e.target.value = "";
                   setSelectedFile(null);
                   return;
                 }
                 setSelectedFile(file);
               }}
-              className="w-full text-sm text-neutral-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-pink-50 file:text-pink-500 hover:file:bg-pink-100 transition-all"
             />
             <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
               <span className="block">פורמטים נתמכים: MP4, MOV, WebM</span>
               <span className="block">גודל מקסימלי: {MAX_VIDEO_MB}MB</span>
             </p>
-            {selectedFile && (
-              <p className="text-xs text-neutral-400 mt-1">
-                {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(1)} MB)
-              </p>
-            )}
           </div>
           {uploading && uploadProgress !== null && (
             <div className="space-y-1" aria-live="polite">
