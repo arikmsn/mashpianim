@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui";
+import { UPDATE_BANNER_EVENT } from "./sw-register";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -41,6 +42,15 @@ export function InstallPrompt() {
 
     window.addEventListener("beforeinstallprompt", handler);
     return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  // One overlay at a time: step aside while the "new version" banner is up (QA 12)
+  useEffect(() => {
+    const onBanner = (e: Event) => {
+      if ((e as CustomEvent<{ visible: boolean }>).detail?.visible) setShow(false);
+    };
+    window.addEventListener(UPDATE_BANNER_EVENT, onBanner);
+    return () => window.removeEventListener(UPDATE_BANNER_EVENT, onBanner);
   }, []);
 
   async function handleInstall() {

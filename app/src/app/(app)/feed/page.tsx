@@ -460,18 +460,15 @@ export default function FeedPage() {
   // Products that match the creator's own categories float to the top; brand hearts first of all
   const matchesUser = (p: Product) => userCategories.some((c) => productMatchesCategory(p, registrationToFeedMap[c] || c));
 
+  // Search matches the product name or the brand name, ignoring case and surrounding spaces
+  const query = searchQuery.trim().toLowerCase();
   const filtered = products.filter((p) => {
     if (effectiveCategory === FOR_YOU) {
       if (!matchesUser(p) && !relations[p.id]) return false;
     } else if (!productMatchesCategory(p, effectiveCategory)) {
       return false;
     }
-    if (
-      searchQuery &&
-      !p.name.includes(searchQuery) &&
-      !p.brand.includes(searchQuery)
-    )
-      return false;
+    if (query && !p.name.toLowerCase().includes(query) && !p.brand.toLowerCase().includes(query)) return false;
     return true;
   });
   const rank = (p: Product) => {
@@ -620,7 +617,27 @@ export default function FeedPage() {
         {ready && ordered.length === 0 && (
           <div className="text-center py-20 text-neutral-400">
             <span className="text-4xl block mb-4">🔍</span>
-            {effectiveCategory === FOR_YOU ? (
+            {query ? (
+              // A search with no hits is a search problem, not a category one (QA 13)
+              <>
+                <p>לא נמצאו מוצרים עבור ״{searchQuery.trim()}״</p>
+                <p className="text-xs mt-1">
+                  {effectiveCategory === FOR_YOU || effectiveCategory === ALL
+                    ? "נסו שם מוצר או שם עסק אחר"
+                    : `החיפוש מוגבל לקטגוריה ״${effectiveCategory}״ — נסו גם ב״הכל״`}
+                </p>
+                <div className="flex justify-center gap-2 mt-4">
+                  <Button variant="secondary" size="sm" rounded onClick={() => setSearchQuery("")}>
+                    ניקוי החיפוש
+                  </Button>
+                  {effectiveCategory !== ALL && (
+                    <Button variant="ghost" size="sm" rounded onClick={() => setActiveCategory(ALL)}>
+                      חיפוש בכל המוצרים
+                    </Button>
+                  )}
+                </div>
+              </>
+            ) : effectiveCategory === FOR_YOU ? (
               <>
                 <p>אין כרגע מוצרים בקטגוריות שלך</p>
                 <Button variant="secondary" size="sm" rounded className="mt-4" onClick={() => setActiveCategory(ALL)}>

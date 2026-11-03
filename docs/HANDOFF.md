@@ -88,6 +88,7 @@ app/src/
     images.ts                   toDirectImageUrl(): Google Drive links → embeddable thumbnail url (the root layout also sets referrer: no-referrer — Google refuses hotlinked Drive images with a Referer)
     phone.ts                    normalizeIsraeliMobile(): the only phone format the app accepts (05X / 972 → E.164), used by the login form and send-otp
     categories.ts               PRODUCT_CATEGORIES (the 8 feed categories), REGISTRATION_TO_FEED, resolveProductCategory(): one list behind the feed chips, the product form and the API validation
+    chat-time.ts                formatMessageTime() / sameDay() / dayLabel(): bubble times and day separators in the chat (viewer's zone)
     connection-flow.ts          lifecycle rules + journey timeline (FLOW_STEPS, flowNextAction, activeDeadlineField) shared by API and pages
     admin-auth.ts               verifyAdmin(), isSupabaseConfigured()
     moderation/chat-filter.ts   blocks phone/email/links in chat

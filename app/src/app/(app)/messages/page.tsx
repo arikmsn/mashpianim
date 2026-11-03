@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { formatMessageTime, sameDay, dayLabel } from "@/lib/chat-time";
 import { motion } from "framer-motion";
 import { Avatar, Badge, useToast } from "@/components/ui";
 import { ProfileModal } from "@/components/features";
@@ -67,6 +68,8 @@ function MessagesContent() {
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [sendingMessage, setSendingMessage] = useState(false);
+  // Why the last message was refused (contact details / links), shown under the composer until the next send
+  const [blockedNotice, setBlockedNotice] = useState<string | null>(null);
   const [viewProfileId, setViewProfileId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user, loading: authLoading } = useAuth();
@@ -291,6 +294,7 @@ function MessagesContent() {
         body: JSON.stringify({ text: msgText }),
       });
       if (res.ok) {
+        setBlockedNotice(null);
         setConversations((prev) => {
           const idx = prev.findIndex((c) => c.id === selectedId);
           if (idx < 0) return prev;
@@ -302,6 +306,9 @@ function MessagesContent() {
         const data = await res.json().catch(() => null);
         if (res.status === 400 && data?.error) {
           toast(data.error, "error");
+          // Keep the reason on screen under the composer and give the text back for editing
+          setBlockedNotice(data.error);
+          setNewMessage(msgText);
           setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
         }
       }
@@ -448,32 +455,50 @@ function MessagesContent() {
                 </div>
               </div>
             ) : (
-              messages.map((msg) => {
+              messages.map((msg, i) => {
                 const isMe = msg.senderId === (user?.id || "me");
+                const prev = messages[i - 1];
+                // A day separator before the first message of each day (QA 14)
+                const daySeparator = !prev || !sameDay(prev.createdAt, msg.createdAt) ? (
+                  <div className="text-center pt-1">
+                    <span className="text-[11px] text-neutral-400">{dayLabel(msg.createdAt)}</span>
+                  </div>
+                ) : null;
+                const time = formatMessageTime(msg.createdAt);
                 if (msg.isSystem) {
                   return (
-                    <div key={msg.id} className="text-center">
-                      <span className="text-xs text-neutral-400 bg-neutral-50 px-3 py-1 rounded-full">
-                        {msg.text}
-                      </span>
-                    </div>
+                    <Fragment key={msg.id}>
+                      {daySeparator}
+                      <div className="text-center">
+                        <span className="text-xs text-neutral-400 bg-neutral-50 px-3 py-1 rounded-full">
+                          {msg.text}
+                        </span>
+                      </div>
+                    </Fragment>
                   );
                 }
                 return (
-                  <div
-                    key={msg.id}
-                    className={`flex ${isMe ? "justify-start" : "justify-end"}`}
-                  >
-                    <div
-                      className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${
-                        isMe
-                          ? "bg-pink-500 text-white rounded-br-md"
-                          : "bg-neutral-100 text-neutral-800 rounded-bl-md"
-                      }`}
-                    >
-                      {msg.text}
+                  <Fragment key={msg.id}>
+                    {daySeparator}
+                    <div className={`flex ${isMe ? "justify-start" : "justify-end"}`}>
+                      <div
+                        className={`max-w-[75%] px-4 pt-2.5 pb-1.5 rounded-2xl text-sm ${
+                          isMe
+                            ? "bg-pink-500 text-white rounded-br-md"
+                            : "bg-neutral-100 text-neutral-800 rounded-bl-md"
+                        }`}
+                      >
+                        <span className="whitespace-pre-wrap break-words">{msg.text}</span>
+                        <span
+                          className={`block text-[10px] leading-none mt-1.5 text-left ${isMe ? "text-pink-100" : "text-neutral-400"}`}
+                          dir="ltr"
+                          title={new Date(msg.createdAt).toLocaleString("he-IL")}
+                        >
+                          {time}
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                  </Fragment>
                 );
               })
             )}
@@ -509,7 +534,23 @@ function MessagesContent() {
                     שלחו
                   </button>
                 </div>
-                <p className="text-[10px] text-neutral-400 text-center mt-1">שיתוף פרטי קשר אישיים אסור</p>
+                {blockedNotice ? (
+                  // The server refused the message (contact details / links): say so where the user is looking (QA 14)
+                  <div role="alert" className="mt-2 flex items-start gap-2 rounded-xl bg-red-50 border border-red-100 px-3 py-2 text-xs text-red-700">
+                    <span aria-hidden="true">🚫</span>
+                    <span className="flex-1">
+                      <span className="font-semibold block">ההודעה לא נשלחה</span>
+                      {blockedNotice}
+                    </span>
+                    <button onClick={() => setBlockedNotice(null)} className="text-red-400 hover:text-red-600 leading-none" aria-label="סגירה">
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-neutral-500 text-center mt-1.5">
+                    🔒 כל התקשורת נשארת בפלטפורמה — הודעה עם טלפון, אימייל או קישור לא תישלח
+                  </p>
+                )}
               </>
             )}
           </div>
