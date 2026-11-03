@@ -71,7 +71,7 @@ export function InstallPrompt() {
         >
           <div className="bg-white rounded-2xl shadow-xl border border-neutral-100 p-4">
             <div className="flex items-start gap-3">
-              <Image src="/logo.png" unoptimized alt="משפיען אונליין" width={48} height={48} className="rounded-xl flex-shrink-0" />
+              <Image src="/icon-192.png" unoptimized alt="משפיען אונליין" width={48} height={48} className="rounded-xl flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-sm">התקינו את משפיען אונליין</h3>
                 <p className="text-xs text-neutral-500 mt-0.5">

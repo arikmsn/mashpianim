@@ -6,6 +6,13 @@
 const memory = new Map<string, unknown>();
 const PREFIX = "mashpian:cache:";
 
+// One network request per URL at a time (several components asking for /api/profile on the same screen
+// share a single fetch), and a short freshness window so a screen change doesn't refetch what arrived a
+// moment ago.
+const inflight = new Map<string, Promise<unknown>>();
+const fetchedAt = new Map<string, number>();
+const DEFAULT_FRESH_MS = 2000;
+
 export function readCache<T>(key: string): T | undefined {
   if (memory.has(key)) return memory.get(key) as T;
   try {
@@ -33,6 +40,9 @@ export function writeCache(key: string, data: unknown) {
 export function clearCache(prefix?: string) {
   for (const key of Array.from(memory.keys())) {
     if (!prefix || key.startsWith(prefix)) memory.delete(key);
+  }
+  for (const key of Array.from(fetchedAt.keys())) {
+    if (!prefix || key.startsWith(prefix)) fetchedAt.delete(key);
   }
   try {
     for (let i = sessionStorage.length - 1; i >= 0; i--) {
@@ -71,22 +81,42 @@ export function syncCacheOwner(userId: string | null) {
   }
 }
 
+// Always goes to the network (deduplicated while a request for the same URL is in flight).
 export async function fetchJson<T>(url: string): Promise<T | null> {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data = (await res.json()) as T;
-    writeCache(url, data);
-    return data;
-  } catch {
-    return null;
-  }
+  const running = inflight.get(url);
+  if (running) return running as Promise<T | null>;
+
+  const request = (async () => {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const data = (await res.json()) as T;
+      writeCache(url, data);
+      fetchedAt.set(url, Date.now());
+      return data;
+    } catch {
+      return null;
+    } finally {
+      inflight.delete(url);
+    }
+  })();
+  inflight.set(url, request);
+  return request;
 }
 
-// Calls `apply` with cached data right away (if any), then again with fresh data.
-export async function swrFetch<T>(url: string, apply: (data: T, fromCache: boolean) => void): Promise<T | null> {
+// Calls `apply` with cached data right away (if any), then again with fresh data — unless the same URL was
+// fetched within `freshMs` (default 2 s), in which case the cached copy is already current.
+export async function swrFetch<T>(
+  url: string,
+  apply: (data: T, fromCache: boolean) => void,
+  freshMs: number = DEFAULT_FRESH_MS
+): Promise<T | null> {
   const cached = readCache<T>(url);
-  if (cached !== undefined) apply(cached, true);
+  if (cached !== undefined) {
+    apply(cached, true);
+    const last = fetchedAt.get(url);
+    if (last && Date.now() - last < freshMs) return cached;
+  }
   const fresh = await fetchJson<T>(url);
   if (fresh !== null) apply(fresh, false);
   return fresh;

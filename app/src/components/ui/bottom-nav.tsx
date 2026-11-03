@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
-import { readCache, UNREAD_EVENT } from "@/lib/client-cache";
+import { fetchJson, readCache, swrFetch, UNREAD_EVENT } from "@/lib/client-cache";
 
 interface NavItem {
   href: string;
@@ -72,29 +72,21 @@ function BottomNav() {
   const fetchedRef = useRef(false);
 
   const fetchUnread = useCallback(async () => {
-    try {
-      const res = await fetch("/api/messages/unread");
-      if (res.ok) {
-        const data = await res.json();
-        setUnreadMessages(data.count || 0);
-      }
-    } catch {
-      // ignore
-    }
+    // fetchJson collapses the mount / route-change / focus triggers that fire together into one request
+    const data = await fetchJson<{ count?: number }>("/api/messages/unread");
+    if (data) setUnreadMessages(data.count || 0);
   }, []);
 
   useEffect(() => {
     if (!user || fetchedRef.current) return;
     fetchedRef.current = true;
 
-    fetch("/api/profile")
-      .then((res) => res.ok ? res.json() : null)
-      .then((data) => {
-        if (data?.user?.type) {
-          setUserType(data.user.type as "creator" | "brand" | "admin");
-        }
-      })
-      .catch(() => {});
+    // Shares the page's own /api/profile request (one network call per screen)
+    swrFetch<{ user?: { type?: string } }>("/api/profile", (data) => {
+      if (data?.user?.type) {
+        setUserType(data.user.type as "creator" | "brand" | "admin");
+      }
+    });
 
     fetchUnread();
   }, [user, fetchUnread]);

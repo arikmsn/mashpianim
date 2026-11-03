@@ -79,7 +79,7 @@ app/src/
     use-deliverable-upload.tsx  creator deliverable upload (direct to Storage + save-connection) shared by product page and connections
   lib/
     match.ts                    performMatch(), countPortfolioVideos(), portfolioGateError(), buildBriefMessage(), notifyHeartSent(), notifyBrandOfHeart()
-    client-cache.ts             swrFetch/fetchJson/readCache (stale-while-revalidate for GET APIs) + UNREAD_EVENT bus
+    client-cache.ts             swrFetch/fetchJson/readCache (stale-while-revalidate for GET APIs; one in-flight request per URL, 2 s freshness window) + UNREAD_EVENT bus
     video-thumbnail.ts          browser-side poster generation from a video File
     notifications.ts            createNotification(), notificationData(connectionId, productId), logActivity(), notifyConnectionStatusChange()
     notification-links.ts       notificationHref(row, role): where a tapped notification goes (product page / connection card / modal / chat)

@@ -275,6 +275,10 @@ export default function FeedPage() {
   const [relations, setRelations] = useState<Record<string, Relation>>({});
   const [gateOpen, setGateOpen] = useState(false);
   const [approving, setApproving] = useState<string | null>(null);
+  // The grid is painted only once products, the profile (categories → chip + ranking) and the creator's
+  // relations (hearts/matches → ranking, strip) are all in, so nothing reorders in front of the user
+  const [profileReady, setProfileReady] = useState(false);
+  const [relationsReady, setRelationsReady] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
   const { unreadCount } = useNotifications();
@@ -297,8 +301,11 @@ export default function FeedPage() {
         if (data.user?.type === "creator") {
           setPortfolioCount(typeof profile.portfolio_count === "number" ? profile.portfolio_count : 0);
         }
+        setProfileReady(true);
       }
-    );
+    ).then((fresh) => {
+      if (fresh === null) setProfileReady(true); // offline / error: don't block the screen
+    });
   }, [router]);
 
   const applyProducts = useCallback((data: { products?: Record<string, unknown>[] }) => {
@@ -338,11 +345,14 @@ export default function FeedPage() {
       map[pid] = { connectionId: c.id as string, status, initiatedBy: c.initiated_by === "brand" ? "brand" : "creator" };
     }
     setRelations(map);
+    setRelationsReady(true);
   }, []);
 
   useEffect(() => {
     if (!user) return;
-    swrFetch("/api/connections", applyRelations);
+    swrFetch("/api/connections", applyRelations).then((fresh) => {
+      if (fresh === null) setRelationsReady(true); // offline / error: don't block the screen
+    });
     const supabase = createClient();
     const channel = supabase
       .channel("feed-connections")
@@ -377,6 +387,7 @@ export default function FeedPage() {
   }, [applyProducts]);
 
   const locked = portfolioCount !== null && portfolioCount < MIN_PORTFOLIO;
+  const ready = !loading && profileReady && (!user || relationsReady);
 
   const handleApply = useCallback(
     async (productId: string) => {
@@ -565,7 +576,7 @@ export default function FeedPage() {
 
       {/* Product grid */}
       <div className="max-w-2xl mx-auto px-4 py-4">
-        {brandHearts > 0 && (
+        {ready && brandHearts > 0 && (
           <button
             type="button"
             onClick={() => router.push("/connections")}
@@ -579,7 +590,7 @@ export default function FeedPage() {
             <span className="text-sm font-medium">לצפייה ›</span>
           </button>
         )}
-        {locked && (
+        {ready && locked && (
           <button
             type="button"
             onClick={() => router.push("/profile")}
@@ -593,7 +604,7 @@ export default function FeedPage() {
             <span className="text-amber-600 text-sm font-medium">להעלאה ›</span>
           </button>
         )}
-        {loading ? (
+        {!ready ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[1, 2, 3, 4].map((i) => (
               <ProductSkeleton key={i} />
@@ -627,7 +638,7 @@ export default function FeedPage() {
             </AnimatePresence>
           </div>
         )}
-        {!loading && ordered.length === 0 && (
+        {ready && ordered.length === 0 && (
           <div className="text-center py-20 text-neutral-400">
             <span className="text-4xl block mb-4">🔍</span>
             {effectiveCategory === FOR_YOU ? (

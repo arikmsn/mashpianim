@@ -26,7 +26,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       <aside className="hidden md:flex w-64 bg-[#0B051D] text-white flex-col fixed right-0 top-0 h-screen z-40">
         <div className="p-6 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <Image src="/logo.png" unoptimized alt="משפיען" width={32} height={32} className="rounded-lg" />
+            <Image src="/icon-192.png" unoptimized alt="משפיען" width={32} height={32} className="rounded-lg" />
             <h1 className="text-lg font-bold">
               <span className="text-ig-pink">Mashpian</span> Admin
             </h1>
@@ -65,7 +65,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       {/* Mobile header */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-[#0B051D] text-white px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Image src="/logo.png" unoptimized alt="משפיען" width={24} height={24} className="rounded-md" />
+          <Image src="/icon-192.png" unoptimized alt="משפיען" width={24} height={24} className="rounded-md" />
           <h1 className="text-sm font-bold">
             <span className="text-ig-pink">Mashpian</span> Admin
           </h1>
@@ -96,7 +96,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           <aside className="absolute right-0 top-0 h-full w-64 bg-[#0B051D] text-white flex flex-col animate-in slide-in-from-right">
             <div className="p-6 border-b border-white/10 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Image src="/logo.png" unoptimized alt="משפיען" width={32} height={32} className="rounded-lg" />
+                <Image src="/icon-192.png" unoptimized alt="משפיען" width={32} height={32} className="rounded-lg" />
                 <h1 className="text-lg font-bold">
                   <span className="text-ig-pink">Mashpian</span> Admin
                 </h1>
