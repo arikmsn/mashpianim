@@ -54,6 +54,9 @@ export default function BrandProductsPage() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  // Product awaiting the "really delete?" confirmation
+  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
@@ -285,22 +288,33 @@ export default function BrandProductsPage() {
         setProducts((prev) =>
           prev.map((p) => (p.id === product.id ? { ...p, status: newStatus } : p))
         );
-        toast(newStatus === "active" ? "המוצר הופעל" : "המוצר הושהה", "success");
+        toast(newStatus === "active" ? "המוצר הופעל — מופיע שוב ליוצרים" : "המוצר הושהה — לא מוצג ליוצרים עד להפעלה", "success");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast((data as { error?: string }).error || "שגיאה בעדכון סטטוס המוצר", "error");
       }
     } catch {
       toast("שגיאה בעדכון", "error");
     }
   }
 
+  // Runs after the confirmation modal; a product with active connections keeps them (soft delete)
   async function deleteProduct(product: Product) {
+    setDeleting(true);
     try {
       const res = await fetch(`/api/products/${product.id}`, { method: "DELETE" });
       if (res.ok) {
         setProducts((prev) => prev.filter((p) => p.id !== product.id));
         toast("המוצר נמחק", "success");
+        setDeleteTarget(null);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast((data as { error?: string }).error || "שגיאה במחיקה", "error");
       }
     } catch {
       toast("שגיאה במחיקה", "error");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -389,7 +403,7 @@ export default function BrandProductsPage() {
                               {product.status === "active" ? "השהיה" : "הפעלה"}
                             </button>
                             <button
-                              onClick={() => deleteProduct(product)}
+                              onClick={() => setDeleteTarget(product)}
                               className="text-xs text-red-500 font-medium"
                             >
                               מחיקה
@@ -405,6 +419,26 @@ export default function BrandProductsPage() {
           </div>
         )}
       </div>
+
+      <Modal open={!!deleteTarget} onClose={() => !deleting && setDeleteTarget(null)} size="sm">
+        <div className="text-center space-y-4">
+          <span className="text-4xl block">🗑️</span>
+          <div>
+            <h3 className="text-lg font-bold">למחוק את &quot;{deleteTarget?.name}&quot;?</h3>
+            <p className="text-sm text-neutral-500 mt-1">
+              המוצר יוסר מהפיד ולא יופיע יותר ליוצרים. חיבורים שכבר נפתחו עליו ממשיכים כרגיל.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="danger" fullWidth loading={deleting} onClick={() => deleteTarget && deleteProduct(deleteTarget)}>
+              כן, למחוק
+            </Button>
+            <Button variant="ghost" fullWidth disabled={deleting} onClick={() => setDeleteTarget(null)}>
+              ביטול
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={showAddModal}

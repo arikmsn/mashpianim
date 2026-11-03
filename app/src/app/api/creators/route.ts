@@ -46,6 +46,8 @@ export async function GET() {
       .select("id, full_name, avatar_url, created_at, creator_profiles(id, bio, city, categories, level, completed_connections, tiktok_followers, instagram_followers, tiktok_handle, instagram_handle)")
       .eq("type", "creator")
       .eq("is_active", true)
+      // An account that is both a brand and a creator must not see (or heart) itself
+      .neq("id", me.id)
       .limit(300),
     admin
       .from("videos")

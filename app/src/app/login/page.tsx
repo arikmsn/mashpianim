@@ -3,8 +3,8 @@
 import { Suspense, useState, useRef, useCallback, useEffect } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { clearCache } from "@/lib/client-cache";
+import { normalizeIsraeliMobile, PHONE_ERROR } from "@/lib/phone";
 import { refreshAuth } from "@/hooks/use-auth";
 import { useToast } from "@/components/ui";
 import { RoleOptions, chooseRole, type AppRole } from "@/components/features";
@@ -20,11 +20,9 @@ export default function LoginPage() {
 function LoginContent() {
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [adminPhone, setAdminPhone] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
-  const [step, setStep] = useState<"phone" | "otp" | "email" | "admin-login" | "admin-roles" | "choose-role">("phone");
+  const [step, setStep] = useState<"phone" | "otp" | "admin-login" | "admin-roles" | "choose-role">("phone");
   // Roles the verified account holds when there is more than one (creator / brand / admin)
   const [availableRoles, setAvailableRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(false);
@@ -34,7 +32,6 @@ function LoginContent() {
   const redirect = searchParams.get("redirect") || "/feed";
   const router = useRouter();
   const { toast } = useToast();
-  const supabase = createClient();
 
   // Opened from the link in the WhatsApp message (?phone=972…&code=123456): fill both in and verify at once
   const autoVerifyRef = useRef(false);
@@ -73,6 +70,11 @@ function LoginContent() {
 
   async function handleSendOTP(e: React.FormEvent) {
     e.preventDefault();
+    // Only an Israeli mobile number can receive the WhatsApp code; say so before touching the server
+    if (!normalizeIsraeliMobile(phone)) {
+      toast(PHONE_ERROR, "error");
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch("/api/auth/send-otp", {
@@ -131,39 +133,6 @@ function LoginContent() {
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "קוד שגוי";
-      toast(msg, "error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleEmailLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      clearCache();
-      toast("התחברתם בהצלחה!", "success");
-
-      let targetRedirect = redirect;
-      if (redirect === "/feed" && signInData?.user) {
-        try {
-          const { data: dbUser } = await supabase
-            .from("users")
-            .select("type")
-            .eq("auth_user_id", signInData.user.id)
-            .single();
-          if ((dbUser as any)?.type === "brand") {
-            targetRedirect = "/brand";
-          }
-        } catch {
-          // Default redirect
-        }
-      }
-      router.push(targetRedirect);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "שגיאה בהתחברות";
       toast(msg, "error");
     } finally {
       setLoading(false);
@@ -263,9 +232,6 @@ function LoginContent() {
               >
                 {loading ? "שולח..." : "שלחו לי קוד"}
               </button>
-              <button type="button" onClick={() => setStep("email")} className="w-full mt-2 text-sm text-neutral-400 hover:text-neutral-600">
-                התחברות עם אימייל
-              </button>
             </form>
           )}
 
@@ -297,24 +263,6 @@ function LoginContent() {
               </button>
               <button type="button" onClick={() => { setStep("phone"); setOtp(""); }} className="w-full mt-2 text-sm text-neutral-400 hover:text-neutral-600">
                 שנו מספר טלפון
-              </button>
-            </form>
-          )}
-
-          {step === "email" && (
-            <form onSubmit={handleEmailLogin}>
-              <label className="block text-sm font-medium mb-2">אימייל</label>
-              <input type="email" dir="ltr" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@example.com"
-                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-ig-pink focus:ring-2 focus:ring-ig-pink/20 outline-none transition-all text-center" required autoFocus />
-              <label className="block text-sm font-medium mb-2 mt-3">סיסמה</label>
-              <input type="password" dir="ltr" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••"
-                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:border-ig-pink focus:ring-2 focus:ring-ig-pink/20 outline-none transition-all text-center" required />
-              <button type="submit" disabled={loading}
-                className="w-full mt-4 px-6 py-3 rounded-xl ig-gradient-bg text-white font-medium hover:opacity-90 transition-colors disabled:opacity-50">
-                {loading ? "מתחבר..." : "התחברות"}
-              </button>
-              <button type="button" onClick={() => setStep("phone")} className="w-full mt-2 text-sm text-neutral-400 hover:text-neutral-600">
-                התחברות עם טלפון
               </button>
             </form>
           )}

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getGreenAPI } from "@/lib/adapters/greenapi";
 import { createClient } from "@supabase/supabase-js";
 import { checkRateLimit, rateLimitedResponse, clientIp, RATE_LIMITS } from "@/lib/rate-limit";
+import { normalizeIsraeliMobile, PHONE_ERROR } from "@/lib/phone";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -12,14 +13,6 @@ function getSupabaseAdmin() {
 
 function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-function formatPhone(phone: string): string {
-  let cleaned = phone.replace(/[\s\-()]/g, "");
-  if (cleaned.startsWith("+")) cleaned = cleaned.slice(1);
-  if (cleaned.startsWith("0")) cleaned = `972${cleaned.slice(1)}`;
-  if (!cleaned.startsWith("972")) cleaned = `972${cleaned}`;
-  return `+${cleaned}`;
 }
 
 export async function POST(request: NextRequest) {
@@ -35,7 +28,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "מספר טלפון חסר" }, { status: 400 });
     }
 
-    const formattedPhone = formatPhone(phone);
+    // Only a real Israeli mobile number gets a code (anything else used to be padded with 972 and sent)
+    const formattedPhone = normalizeIsraeliMobile(phone);
+    if (!formattedPhone) {
+      return NextResponse.json({ error: PHONE_ERROR }, { status: 400 });
+    }
 
     // Abuse control (SEC-07): a phone gets 3 codes per 10 minutes, an IP 10
     const ip = clientIp(request.headers);

@@ -615,7 +615,7 @@ export default function ProfilePage() {
             avatar_url: userData.avatar_url || "",
           });
           setUserType("creator");
-        } else if (userData.type === "brand") {
+        } else if (sessionRole === "brand") {
           const brandData = profileData as any;
           setBrandProfile({
             name: userData.full_name,

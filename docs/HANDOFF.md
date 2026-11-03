@@ -86,6 +86,7 @@ app/src/
     viewer.ts                   resolveViewer(admin, authUserId, activeRole): the role this session signs in as + every role the account holds — user-facing routes scope to it, never "admin sees all"
     active-role.ts              the `mashpian-role` cookie (creator/brand/admin) chosen at login: readActiveRole(), set/clear helpers, homeForRole()
     images.ts                   toDirectImageUrl(): Google Drive links → embeddable thumbnail url (the root layout also sets referrer: no-referrer — Google refuses hotlinked Drive images with a Referer)
+    phone.ts                    normalizeIsraeliMobile(): the only phone format the app accepts (05X / 972 → E.164), used by the login form and send-otp
     connection-flow.ts          lifecycle rules + journey timeline (FLOW_STEPS, flowNextAction, activeDeadlineField) shared by API and pages
     admin-auth.ts               verifyAdmin(), isSupabaseConfigured()
     moderation/chat-filter.ts   blocks phone/email/links in chat

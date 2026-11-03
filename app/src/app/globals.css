@@ -69,11 +69,11 @@
   --radius-full: 9999px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0B051D;
-    --foreground: #FAFAFA;
-  }
+/* The design is light-only: cards, headers and inputs are white. Pinning the color scheme stops the
+   system dark setting from turning the page background dark behind white cards (and keeps native
+   controls light). */
+:root {
+  color-scheme: light;
 }
 
 body {
