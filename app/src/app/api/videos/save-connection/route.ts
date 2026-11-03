@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { resolveViewer } from "@/lib/viewer";
+import { readActiveRole } from "@/lib/active-role";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { isOwnConnectionVideoPath, isImagePath, canUploadConnectionVideo } from "@/lib/authz";
@@ -47,7 +49,8 @@ export async function POST(request: NextRequest) {
       .select("id, type")
       .eq("auth_user_id", user.id)
       .single();
-    if (!dbUser || (dbUser as any).type !== "creator") {
+    const sessionRole = (await resolveViewer(supabase, user.id, await readActiveRole()))?.role;
+    if (!dbUser || sessionRole !== "creator") {
       return NextResponse.json({ error: "רק יוצרים יכולים להעלות סרטונים לחיבור" }, { status: 403 });
     }
 

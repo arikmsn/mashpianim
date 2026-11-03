@@ -65,8 +65,9 @@ const brandNavItems: NavItem[] = [
 function BottomNav() {
   const pathname = usePathname();
   const { user } = useAuth();
+  // The role this session is signed in as (not the account type: an admin signed in as a brand sees the brand nav)
   const [userType, setUserType] = useState<"creator" | "brand" | "admin" | null>(
-    () => (readCache<{ user?: { type?: string } }>("/api/profile")?.user?.type as "creator" | "brand" | "admin" | undefined) || null
+    () => (readCache<{ role?: string }>("/api/profile")?.role as "creator" | "brand" | "admin" | undefined) || null
   );
   const [unreadMessages, setUnreadMessages] = useState(0);
   const fetchedRef = useRef(false);
@@ -82,9 +83,10 @@ function BottomNav() {
     fetchedRef.current = true;
 
     // Shares the page's own /api/profile request (one network call per screen)
-    swrFetch<{ user?: { type?: string } }>("/api/profile", (data) => {
-      if (data?.user?.type) {
-        setUserType(data.user.type as "creator" | "brand" | "admin");
+    swrFetch<{ user?: { type?: string }; role?: string }>("/api/profile", (data) => {
+      const role = data?.role || data?.user?.type;
+      if (role) {
+        setUserType(role as "creator" | "brand" | "admin");
       }
     });
 

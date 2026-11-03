@@ -52,7 +52,7 @@ export async function notifyHeartSent(params: {
     type: "heart_received",
     title: "💗 מישהו סימן אותך!",
     body: `${params.brandName} מתעניינים בך למוצר "${params.productName}". אשרו כדי לפתוח צ'אט.`,
-    data: notificationData(params.connectionId, params.productId),
+    data: notificationData(params.connectionId, params.productId, "creator"),
   });
   await sendWhatsApp(
     params.creatorPhone,
@@ -73,7 +73,7 @@ export async function notifyBrandOfHeart(params: {
     type: "heart_received",
     title: "💗 יוצר/ת סימן/ה אתכם!",
     body: `${params.creatorName} רוצה ליצור סרטון ל"${params.productName}". אשרו כדי לפתוח צ'אט.`,
-    data: notificationData(params.connectionId, params.productId),
+    data: notificationData(params.connectionId, params.productId, "brand"),
   });
   await sendWhatsApp(
     params.brandPhone,
@@ -155,21 +155,20 @@ export async function performMatch(admin: Admin, connectionId: string, actorUser
     },
   ] as any);
 
-  const data = notificationData(connectionId, product?.id);
   await Promise.all([
     createNotification({
       userId: creatorUser.id,
       type: "match",
       title: "🎉 יש מאטץ'!",
       body: `את/ה ו-${brandName} עובדים יחד על "${productName}". הצ'אט פתוח.`,
-      data,
+      data: notificationData(connectionId, product?.id, "creator"),
     }),
     createNotification({
       userId: brandUser.id,
       type: "match",
       title: "🎉 יש מאטץ'!",
       body: `${creatorName} אישר/ה — אתם עובדים יחד על "${productName}". שלחו את המוצר.`,
-      data,
+      data: notificationData(connectionId, product?.id, "brand"),
     }),
   ]);
 

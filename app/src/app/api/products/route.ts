@@ -3,6 +3,8 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { toPublicProduct } from "@/lib/authz";
 import { OCCUPYING_STATUSES, normalizeMaxCreators, spotsLeft } from "@/lib/connection-flow";
+import { resolveViewer } from "@/lib/viewer";
+import { readActiveRole } from "@/lib/active-role";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -24,17 +26,14 @@ export async function GET(request: NextRequest) {
 
   let resolvedBrandId = brandId;
 
-  // Who is asking? Owners of the listed brand and admins get the full rows; everyone else the public shape.
+  // Who is asking? Owners of the listed brand and admin sessions get the full rows; everyone else the public
+  // shape. `viewer.type` is the role this session is signed in as.
   const userClient = await createServerClient();
   const { data: { user } } = await userClient.auth.getUser();
   let viewer: { id: string; type: string } | null = null;
   if (user) {
-    const { data: dbUser } = await admin
-      .from("users")
-      .select("id, type")
-      .eq("auth_user_id", user.id)
-      .single();
-    viewer = (dbUser as any) || null;
+    const resolved = await resolveViewer(admin, user.id, await readActiveRole());
+    viewer = resolved ? { id: resolved.userId, type: resolved.role } : null;
   }
 
   if (brandMe === "me") {
@@ -140,23 +139,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "לא מחובר" }, { status: 401 });
   }
 
-  const { data: dbUser } = await admin
-    .from("users")
-    .select("id, type")
-    .eq("auth_user_id", user.id)
-    .single();
-
-  if ((dbUser as any)?.type !== "brand" && (dbUser as any)?.type !== "admin") {
+  // Only a session signed in as a brand creates products (an admin signed in as a brand counts)
+  const creator = await resolveViewer(admin, user.id, await readActiveRole());
+  if (!creator || creator.role !== "brand") {
     return NextResponse.json({ error: "רק עסקים יכולים להוסיף מוצרים" }, { status: 403 });
   }
+  const dbUser = { id: creator.userId, type: creator.type };
 
   let { data: brandProfile } = await admin
     .from("brand_profiles")
     .select("id")
-    .eq("user_id", (dbUser as any).id)
-    .single();
+    .eq("user_id", dbUser.id)
+    .maybeSingle();
 
-  if (!brandProfile && (dbUser as any)?.type === "admin") {
+  if (!brandProfile && dbUser.type === "admin") {
     const { data: newProfile } = await (admin.from("brand_profiles") as any)
       .insert({ user_id: (dbUser as any).id, shop_name: "מנהל מערכת", category: "כללי", total_credits: 100, used_credits: 0 })
       .select("id")

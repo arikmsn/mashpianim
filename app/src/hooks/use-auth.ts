@@ -65,6 +65,8 @@ export function useAuth() {
   const signOut = useCallback(async () => {
     // Drop the previous user's cached API responses before the session goes away
     clearCache();
+    // The role chosen at login lives in an httpOnly cookie; the server clears it
+    await fetch("/api/auth/user-type", { method: "DELETE" }).catch(() => {});
     if (isClientConfigured()) {
       await createClient().auth.signOut();
     }

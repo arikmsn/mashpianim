@@ -4,30 +4,51 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 type Admin = SupabaseClient<any, any, any, any, any>;
 
 export type UserType = "creator" | "brand" | "admin";
-export type UiRole = "creator" | "brand";
+export type UiRole = "creator" | "brand" | "admin";
 
 export interface Viewer {
   userId: string;
   type: UserType;
   isAdmin: boolean;
-  // The side of the marketplace this account acts on in the app. Admins use the regular screens too:
-  // they act as a creator when they have a creator profile (the profile route creates one), else as a brand.
+  // The role this session acts as. One account can hold several (an admin with a creator profile, a phone
+  // registered as both creator and brand); the session picks one at login and sees only that side.
   role: UiRole;
+  // Every role the account may sign in as
+  roles: UiRole[];
   creatorProfileId: string | null;
   brandProfileId: string | null;
 }
 
-export function effectiveRole(type: UserType, creatorProfileId: string | null, brandProfileId: string | null): UiRole {
+export function availableRoles(type: UserType, creatorProfileId: string | null, brandProfileId: string | null): UiRole[] {
+  const roles: UiRole[] = [];
+  if (type === "creator" || creatorProfileId) roles.push("creator");
+  if (type === "brand" || brandProfileId) roles.push("brand");
+  if (type === "admin") roles.push("admin");
+  return roles;
+}
+
+// The role a session acts as: the chosen one when valid for this account, else the account's own type.
+// Sessions opened before role selection existed (no cookie) keep the old behaviour: an admin with a creator
+// profile acts as a creator.
+export function effectiveRole(
+  type: UserType,
+  creatorProfileId: string | null,
+  brandProfileId: string | null,
+  activeRole: string | null | undefined = null
+): UiRole {
+  const roles = availableRoles(type, creatorProfileId, brandProfileId);
+  if (activeRole && (roles as string[]).includes(activeRole)) return activeRole as UiRole;
   if (type === "brand") return "brand";
   if (type === "creator") return "creator";
   if (creatorProfileId) return "creator";
   if (brandProfileId) return "brand";
-  return "creator";
+  return "admin";
 }
 
-// Resolves the signed-in app user with their profiles and the side they act on. Never "admin sees all":
-// user-facing routes must scope to the viewer's own profile; admin-wide views live under /api/admin.
-export async function resolveViewer(admin: Admin, authUserId: string): Promise<Viewer | null> {
+// Resolves the signed-in app user with their profiles and the role this session acts as. Never
+// "admin sees all": user-facing routes scope to the viewer's own profile; admin-wide views live under
+// /api/admin and require role === "admin".
+export async function resolveViewer(admin: Admin, authUserId: string, activeRole: string | null = null): Promise<Viewer | null> {
   const { data: dbUser } = await admin.from("users").select("id, type").eq("auth_user_id", authUserId).maybeSingle();
   if (!dbUser) return null;
   const userId = (dbUser as { id: string }).id;
@@ -44,7 +65,8 @@ export async function resolveViewer(admin: Admin, authUserId: string): Promise<V
     userId,
     type,
     isAdmin: type === "admin",
-    role: effectiveRole(type, creatorProfileId, brandProfileId),
+    role: effectiveRole(type, creatorProfileId, brandProfileId, activeRole),
+    roles: availableRoles(type, creatorProfileId, brandProfileId),
     creatorProfileId,
     brandProfileId,
   };

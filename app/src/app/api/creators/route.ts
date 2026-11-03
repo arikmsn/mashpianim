@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { resolveViewer } from "@/lib/viewer";
+import { readActiveRole } from "@/lib/active-role";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { MIN_PORTFOLIO_VIDEOS } from "@/lib/match";
@@ -21,13 +23,10 @@ export async function GET() {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
 
-  const { data: dbUser } = await admin
-    .from("users")
-    .select("id, type")
-    .eq("auth_user_id", user.id)
-    .single();
-  const me = dbUser as any;
-  if (!me || (me.type !== "brand" && me.type !== "admin")) {
+  // The gallery is a brand screen — judged by the role this session is signed in as
+  const viewer = await resolveViewer(admin, user.id, await readActiveRole());
+  const me = viewer ? ({ id: viewer.userId, type: viewer.role } as any) : null;
+  if (!me || me.type !== "brand") {
     return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
   }
 

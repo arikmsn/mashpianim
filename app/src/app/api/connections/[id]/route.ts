@@ -4,6 +4,8 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/admin-auth";
 import { filterContactInfo } from "@/lib/moderation/chat-filter";
 import { notifyConnectionStatusChange, logActivity, createNotification, notificationData } from "@/lib/notifications";
+import { resolveViewer } from "@/lib/viewer";
+import { readActiveRole } from "@/lib/active-role";
 import { performMatch, countPortfolioVideos, portfolioGateError, MIN_PORTFOLIO_VIDEOS } from "@/lib/match";
 import { isConnectionParticipant } from "@/lib/authz";
 import { getTimelineSettings } from "@/lib/settings";
@@ -36,11 +38,9 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 
-  const { data: dbUser } = await admin
-    .from("users")
-    .select("id, type")
-    .eq("auth_user_id", user.id)
-    .single();
+  // `type` here is the role this session is signed in as (an admin signed in as a creator is a creator)
+  const viewerGet = await resolveViewer(admin, user.id, await readActiveRole());
+  const dbUser = viewerGet ? { id: viewerGet.userId, type: viewerGet.role } : null;
   if (!dbUser) {
     return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 404 });
   }
@@ -110,12 +110,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 
-  // Get current user info
-  const { data: dbUser } = await admin
-    .from("users")
-    .select("id, type")
-    .eq("auth_user_id", user.id)
-    .single();
+  // Current user — `type` is the role this session is signed in as (creator / brand / admin)
+  const viewerPut = await resolveViewer(admin, user.id, await readActiveRole());
+  const dbUser = viewerPut ? { id: viewerPut.userId, type: viewerPut.role } : null;
 
   if (!dbUser) {
     return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 404 });
@@ -370,7 +367,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       type: "heart_declined",
       title: "היוצר/ת דחה/תה את הלב",
       body: `${(creatorUser as any)?.full_name || "היוצר/ת"} לא מעוניין/ת כרגע ב"${product?.name || "המוצר"}". הקרדיט לא נוצל — אפשר לבחור יוצר/ת אחר/ת.`,
-      data: notificationData(id, productId),
+      data: notificationData(id, productId, "brand"),
     });
   } else if (newStatus === "cancelled" && currentStatus === "pending" && creatorUser && brandUser) {
     const target = initiatedBy === "brand" ? creatorUser : brandUser;
@@ -379,7 +376,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       type: "heart_withdrawn",
       title: "לב בוטל",
       body: `הלב למוצר "${product?.name || ""}" בוטל על ידי הצד השני.`,
-      data: notificationData(id, productId),
+      data: notificationData(id, productId, initiatedBy === "brand" ? "creator" : "brand"),
     });
   } else if (creatorUser && brandUser) {
     await notifyConnectionStatusChange(newStatus, {

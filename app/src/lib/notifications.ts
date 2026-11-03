@@ -15,9 +15,16 @@ type NotifyParams = {
   data?: Record<string, unknown>;
 };
 
-// Payload stored on connection notifications; `productId` lets a creator's tap open the product page directly
-export function notificationData(connectionId: string, productId?: string | null): Record<string, unknown> {
-  return productId ? { connectionId, productId } : { connectionId };
+export type NotificationRole = "creator" | "brand" | "admin";
+
+// Payload stored on connection notifications; `productId` lets a creator's tap open the product page directly,
+// `role` says which side of the account the row belongs to (a session signed in as the other role doesn't see it)
+export function notificationData(
+  connectionId: string,
+  productId?: string | null,
+  role?: NotificationRole | null
+): Record<string, unknown> {
+  return { connectionId, ...(productId ? { productId } : {}), ...(role ? { role } : {}) };
 }
 
 export async function createNotification(params: NotifyParams) {
@@ -100,7 +107,9 @@ export function getConnectionStatusMessages(
   }
 ): ConnectionStatusLabel {
   const { connectionId, productName, creatorName, brandName, creatorUserId, brandUserId, productId } = context;
-  const data = notificationData(connectionId, productId);
+  // Each row is tagged with the side it belongs to, so a session signed in as the other role doesn't see it
+  const forCreator = notificationData(connectionId, productId, "creator");
+  const forBrand = notificationData(connectionId, productId, "brand");
 
   const map: Record<string, ConnectionStatusLabel> = {
     approved: {
@@ -110,7 +119,7 @@ export function getConnectionStatusMessages(
         type: "connection_approved",
         title: "בקשת חיבור אושרה!",
         body: `${brandName} אישרו את הבקשה שלך למוצר "${productName}"`,
-        data,
+        data: forCreator,
       },
     },
     rejected: {
@@ -120,7 +129,7 @@ export function getConnectionStatusMessages(
         type: "connection_rejected",
         title: "בקשת חיבור נדחתה",
         body: `${brandName} דחו את הבקשה שלך למוצר "${productName}"`,
-        data,
+        data: forCreator,
       },
     },
     shipped: {
@@ -130,7 +139,7 @@ export function getConnectionStatusMessages(
         type: "product_shipped",
         title: "המוצר בדרך אליך!",
         body: `${brandName} שלחו את "${productName}". אשרו קבלה כשהמוצר מגיע.`,
-        data,
+        data: forCreator,
       },
     },
     delivered: {
@@ -140,7 +149,7 @@ export function getConnectionStatusMessages(
         type: "product_delivered",
         title: "המוצר נמסר!",
         body: `${creatorName} אישר/ה שקיבל/ה את "${productName}". הצילום מתחיל עכשיו.`,
-        data,
+        data: forBrand,
       },
     },
     filming: {
@@ -153,7 +162,7 @@ export function getConnectionStatusMessages(
         type: "video_uploaded",
         title: "סרטון חדש הועלה!",
         body: `${creatorName} העלה/תה סרטון עבור "${productName}". ממתין לסקירה.`,
-        data,
+        data: forBrand,
       },
     },
     in_review: {
@@ -166,14 +175,14 @@ export function getConnectionStatusMessages(
         type: "connection_completed",
         title: "החיבור הושלם!",
         body: `הסרטון שלך למוצר "${productName}" אושר. כל הכבוד!`,
-        data,
+        data: forCreator,
       },
       notifyBrand: {
         userId: brandUserId,
         type: "connection_completed",
         title: "הסרטון מוכן!",
         body: `הסרטון של ${creatorName} עבור "${productName}" אושר ומוכן לשימוש.`,
-        data,
+        data: forBrand,
       },
     },
     revision_requested: {
@@ -183,7 +192,7 @@ export function getConnectionStatusMessages(
         type: "revision_requested",
         title: "נדרש תיקון בסרטון",
         body: `התבקשת לתקן את הסרטון עבור "${productName}". בדקו את ההערות.`,
-        data,
+        data: forCreator,
       },
     },
     cancelled: {
@@ -193,14 +202,14 @@ export function getConnectionStatusMessages(
         type: "connection_cancelled",
         title: "חיבור בוטל",
         body: `החיבור למוצר "${productName}" בוטל.`,
-        data,
+        data: forCreator,
       },
       notifyBrand: {
         userId: brandUserId,
         type: "connection_cancelled",
         title: "חיבור בוטל",
         body: `החיבור עם ${creatorName} למוצר "${productName}" בוטל.`,
-        data,
+        data: forBrand,
       },
     },
   };

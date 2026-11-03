@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { thumbnailPathFromUrl } from "@/lib/authz";
 import { countPortfolioVideos } from "@/lib/match";
+import { resolveViewer } from "@/lib/viewer";
+import { readActiveRole } from "@/lib/active-role";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -29,11 +31,9 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   }
 
   // Get user info
-  const { data: dbUser } = await supabase
-    .from("users")
-    .select("id, type")
-    .eq("auth_user_id", user.id)
-    .single();
+  // `type` is the role this session is signed in as (an admin signed in as a creator is a creator here)
+  const viewer = await resolveViewer(supabase, user.id, await readActiveRole());
+  const dbUser = viewer ? { id: viewer.userId, type: viewer.role } : null;
 
   if (!dbUser) {
     return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 403 });
@@ -150,11 +150,9 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 
-  const { data: dbUser } = await supabase
-    .from("users")
-    .select("id, type")
-    .eq("auth_user_id", user.id)
-    .single();
+  // `type` is the role this session is signed in as (an admin signed in as a creator is a creator here)
+  const viewer = await resolveViewer(supabase, user.id, await readActiveRole());
+  const dbUser = viewer ? { id: viewer.userId, type: viewer.role } : null;
   if (!dbUser) {
     return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 403 });
   }

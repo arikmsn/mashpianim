@@ -4,6 +4,8 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { toPublicProduct, pickProductUpdates } from "@/lib/authz";
 import { CLOSED_STATUSES, OCCUPYING_STATUSES, normalizeMaxCreators, spotsLeft } from "@/lib/connection-flow";
 import { getTimelineSettings } from "@/lib/settings";
+import { resolveViewer } from "@/lib/viewer";
+import { readActiveRole } from "@/lib/active-role";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -36,17 +38,14 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   const ownerUserId = row.brand_profiles?.user_id as string | undefined;
 
   // Owner and admins see everything; anyone else sees the public shape only
+  // `viewer.type` here is the role this session is signed in as (creator / brand / admin)
   let privileged = false;
   let viewer: { id: string; type: string } | null = null;
   const userClient = await createServerClient();
   const { data: { user } } = await userClient.auth.getUser();
   if (user) {
-    const { data: dbUser } = await admin
-      .from("users")
-      .select("id, type")
-      .eq("auth_user_id", user.id)
-      .single();
-    viewer = (dbUser as any) || null;
+    const resolved = await resolveViewer(admin, user.id, await readActiveRole());
+    viewer = resolved ? { id: resolved.userId, type: resolved.role } : null;
     privileged = !!viewer && (viewer.type === "admin" || viewer.id === ownerUserId);
   }
 

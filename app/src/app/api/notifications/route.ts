@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/admin-auth";
+import { resolveViewer } from "@/lib/viewer";
+import { readActiveRole } from "@/lib/active-role";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -37,10 +39,18 @@ export async function GET() {
     return NextResponse.json({ notifications: [] });
   }
 
+  // Only the rows that belong to the role this session is signed in as (rows written before role tagging
+  // carry no role and are shown to every role of the account)
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const viewer = user ? await resolveViewer(admin, user.id, await readActiveRole()) : null;
+  const role = viewer?.role || "creator";
+
   const { data, error } = await admin
     .from("notifications")
     .select("*")
     .eq("user_id", userId)
+    .or(`data->>role.is.null,data->>role.eq.${role}`)
     .order("created_at", { ascending: false })
     .limit(50);
 

@@ -60,7 +60,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "המערכת לא מוגדרת" }, { status: 503 });
   }
 
-  const { isAdmin, adminId, supabase } = await verifyAdmin();
+  const { isAdmin, adminId, userId, supabase } = await verifyAdmin();
   if (!isAdmin || !supabase) {
     return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
   }
@@ -72,10 +72,12 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "פרטים חסרים או לא תקינים" }, { status: 400 });
   }
 
+  // `updated_by` references auth.users, so it takes the auth id (writing the public.users id here broke
+  // every save with a foreign-key error)
   const { error } = await supabase
     .from("site_settings")
     .upsert(
-      { id: section, data, updated_at: new Date().toISOString(), updated_by: adminId } as any,
+      { id: section, data, updated_at: new Date().toISOString(), updated_by: userId } as any,
       { onConflict: "id" }
     );
 

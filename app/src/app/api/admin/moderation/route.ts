@@ -124,7 +124,7 @@ export async function PUT(request: NextRequest) {
           type: "portfolio_video_removed",
           title: "סרטון הוסר מתיק העבודות",
           body: `${notes}. הסרטון לא נספר יותר ב-5 הסרטונים ואינו מוצג לעסקים.`,
-          data: { videoId },
+          data: { videoId, role: "creator" },
         });
       }
       await logActivity({ actorId: adminId || undefined, action: "portfolio_video_rejected", entityType: "video", entityId: videoId, details: { notes } });
@@ -165,7 +165,7 @@ export async function PUT(request: NextRequest) {
           type: "video_ready_for_review",
           title: "סרטון מוכן לסקירה",
           body: `סרטון חדש עבור "${conn.products?.name}" מוכן לצפייה ואישור.`,
-          data: { connectionId: conn.id },
+          data: { connectionId: conn.id, role: "brand" },
         });
       }
     }

@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { checkRateLimit, rateLimitedResponse, clientIp, RATE_LIMITS } from "@/lib/rate-limit";
+import { resolveViewer } from "@/lib/viewer";
+import { clearActiveRoleCookie, homeForRole, setActiveRoleCookie } from "@/lib/active-role";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -191,12 +193,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "שגיאה בפתיחת ההתחברות. נסו שוב" }, { status: 500 });
     }
 
-    return NextResponse.json({
+    // Which role does this session act as? One role → chosen here; several (admin with a creator profile,
+    // a phone registered as creator and brand) → the login screen asks and POSTs /api/auth/user-type
+    let roles: string[] = [];
+    let role: string | null = null;
+    if (!needsOnboarding) {
+      const viewer = await resolveViewer(supabaseAdmin, authUserId);
+      roles = viewer?.roles || [];
+      if (roles.length === 1) role = roles[0];
+    }
+
+    const response = NextResponse.json({
       success: true,
       userId: authUserId,
       userType,
       needsOnboarding,
+      roles,
+      role,
+      redirect: role ? homeForRole(role as "creator" | "brand" | "admin") : null,
     });
+    if (role) setActiveRoleCookie(response, role as "creator" | "brand" | "admin");
+    else clearActiveRoleCookie(response);
+    return response;
   } catch (err) {
     console.error("[verify-otp] error:", err);
     return NextResponse.json(

@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { AdminRoleSwitch } from "@/components/features";
 
 const navItems = [
   { href: "/admin", label: "דשבורד", icon: "📊" },
@@ -56,8 +57,9 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             );
           })}
         </nav>
-        <div className="p-4 border-t border-white/10">
-          <Link href="/" className="text-xs text-white/40 hover:text-white/70 transition-colors">
+        <div className="p-4 border-t border-white/10 space-y-2">
+          <AdminRoleSwitch />
+          <Link href="/" className="block text-xs text-white/40 hover:text-white/70 transition-colors">
             → חזרה לאתר
           </Link>
         </div>
@@ -135,8 +137,9 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                 );
               })}
             </nav>
-            <div className="p-4 border-t border-white/10">
-              <Link href="/" className="text-xs text-white/40 hover:text-white/70 transition-colors">
+            <div className="p-4 border-t border-white/10 space-y-2">
+              <AdminRoleSwitch />
+              <Link href="/" className="block text-xs text-white/40 hover:text-white/70 transition-colors">
                 → חזרה לאתר
               </Link>
             </div>

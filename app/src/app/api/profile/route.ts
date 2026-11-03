@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { pickAllowedFields, USER_EDITABLE_FIELDS, CREATOR_EDITABLE_FIELDS, BRAND_EDITABLE_FIELDS } from "@/lib/authz";
+import { resolveViewer } from "@/lib/viewer";
+import { readActiveRole } from "@/lib/active-role";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -47,12 +49,17 @@ export async function GET() {
     return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 404 });
   }
 
-  if (userData.type === "creator" || userData.type === "admin") {
+  // `role` = the role this session is signed in as; `roles` = every role the account holds (for switching)
+  const viewer = await resolveViewer(admin, authUser.id, await readActiveRole());
+  const role = viewer?.role || "creator";
+  const roles = viewer?.roles || [role];
+
+  if (role === "creator") {
     let { data: rawProfile } = await admin
       .from("creator_profiles")
       .select("*")
       .eq("user_id", userData.id)
-      .single();
+      .maybeSingle();
 
     if (!rawProfile && userData.type === "admin") {
       const { data: newProfile } = await (admin.from("creator_profiles") as any)
@@ -68,27 +75,30 @@ export async function GET() {
       .eq("creator_id", userData.id)
       .is("connection_id", null);
 
-    // `role` = the side this account acts on in the app (admins act as creators here)
     return NextResponse.json({
       user: userData,
-      role: "creator",
+      role,
+      roles,
       profile: { ...((rawProfile as any) || {}), portfolio_count: portfolioCount || 0 },
     });
-  } else if (userData.type === "brand") {
+  }
+
+  if (role === "brand") {
     const { data: rawProfile } = await admin
       .from("brand_profiles")
       .select("*")
       .eq("user_id", userData.id)
-      .single();
+      .maybeSingle();
 
     return NextResponse.json({
       user: userData,
-      role: "brand",
+      role,
+      roles,
       profile: rawProfile || {},
     });
   }
 
-  return NextResponse.json({ user: userData, role: "creator", profile: {} });
+  return NextResponse.json({ user: userData, role, roles, profile: {} });
 }
 
 export async function PUT(req: Request) {
@@ -139,7 +149,9 @@ export async function PUT(req: Request) {
   }
 
   if (profileFields && typeof profileFields === "object") {
-    if (userData.type === "creator" || userData.type === "admin") {
+    // The profile being edited is the one of the role this session is signed in as
+    const sessionRole = (await resolveViewer(admin, authUser.id, await readActiveRole()))?.role;
+    if (sessionRole === "creator") {
       const safeProfile = pickAllowedFields(profileFields, CREATOR_EDITABLE_FIELDS);
       const { error } = Object.keys(safeProfile).length > 0
         ? await admin.from("creator_profiles").update(safeProfile).eq("user_id", userData.id)

@@ -1,5 +1,13 @@
 import type { MessagingProvider, MessageParams } from "./messaging";
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://www.mashpian.online";
+
+// Tapping this in WhatsApp opens the login screen with the phone and the code already filled in
+export function otpLoginLink(phone: string, code: string): string {
+  const digits = phone.replace(/[^\d]/g, "");
+  return `${APP_URL}/login?phone=${encodeURIComponent(digits)}&code=${encodeURIComponent(code)}`;
+}
+
 interface GreenAPIConfig {
   instanceId: string;
   apiTokenInstance: string;
@@ -64,7 +72,8 @@ export class GreenAPIProvider implements MessagingProvider {
   ): Promise<{ success: boolean; messageId?: string }> {
     return this.sendWhatsApp({
       to: phone,
-      body: `🔐 *משפיען אונליין* — קוד אימות\n\nהקוד שלך:\n\n*${code}*\n\n👆 לחצו על הקוד להעתקה\n\n⏱ תקף ל-5 דקות בלבד.\nאין לשתף את הקוד עם אף אחד.`,
+      // WhatsApp offers no "copy" for a bare number; the link opens the app with the code filled in
+      body: `🔐 *משפיען אונליין* — קוד אימות\n\nהקוד שלך:\n\n*${code}*\n\n👇 או לחצו כאן והקוד יוזן אוטומטית:\n${otpLoginLink(phone, code)}\n\n⏱ תקף ל-5 דקות בלבד.\nאין לשתף את הקוד עם אף אחד.`,
     });
   }
 

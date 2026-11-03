@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { readActiveRole } from "@/lib/active-role";
 
 export interface AdminCheck {
   isAdmin: boolean;
@@ -11,6 +12,9 @@ export interface AdminCheck {
   supabase: any;
 }
 
+// An admin is an admin-type account whose session is signed in AS admin: a session that chose the creator
+// or brand role at login is a regular user for the whole app, including this area (role separation).
+// Sessions from before role selection existed (no role cookie) are judged by the account type alone.
 export async function verifyAdmin(): Promise<AdminCheck> {
   const supabaseUrl = process.env.NEXT_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_SUPABASE_ANON_KEY;
@@ -29,6 +33,9 @@ export async function verifyAdmin(): Promise<AdminCheck> {
     return { isAdmin: false, userId: null, adminId: null, supabase };
   }
 
+  const activeRole = await readActiveRole();
+  const roleAllowsAdmin = activeRole === null || activeRole === "admin";
+
   // Use service role client to bypass RLS when checking admin status
   if (supabaseServiceKey) {
     const adminClient = createSupabaseClient(supabaseUrl, supabaseServiceKey);
@@ -38,7 +45,7 @@ export async function verifyAdmin(): Promise<AdminCheck> {
       .eq("auth_user_id", user.id)
       .single();
 
-    if ((dbUser as any)?.type === "admin") {
+    if ((dbUser as any)?.type === "admin" && roleAllowsAdmin) {
       // Return service role client so admin operations bypass RLS too
       return { isAdmin: true, userId: user.id, adminId: (dbUser as any).id, supabase: adminClient as any };
     }
@@ -52,7 +59,7 @@ export async function verifyAdmin(): Promise<AdminCheck> {
     .eq("auth_user_id", user.id)
     .single();
 
-  const isAdmin = (dbUser as any)?.type === "admin";
+  const isAdmin = (dbUser as any)?.type === "admin" && roleAllowsAdmin;
   return {
     isAdmin,
     userId: user.id,

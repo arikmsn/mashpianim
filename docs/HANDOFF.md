@@ -83,7 +83,8 @@ app/src/
     video-thumbnail.ts          browser-side poster generation from a video File
     notifications.ts            createNotification(), notificationData(connectionId, productId), logActivity(), notifyConnectionStatusChange()
     notification-links.ts       notificationHref(row, role, isAdmin): where a tapped notification goes (product page / connection card / modal / chat)
-    viewer.ts                   resolveViewer(): the side an account acts on (admins act as the creator/brand behind their own profiles) — user-facing routes scope to it, never "admin sees all"
+    viewer.ts                   resolveViewer(admin, authUserId, activeRole): the role this session signs in as + every role the account holds — user-facing routes scope to it, never "admin sees all"
+    active-role.ts              the `mashpian-role` cookie (creator/brand/admin) chosen at login: readActiveRole(), set/clear helpers, homeForRole()
     images.ts                   toDirectImageUrl(): Google Drive links → embeddable thumbnail url (the root layout also sets referrer: no-referrer — Google refuses hotlinked Drive images with a Referer)
     connection-flow.ts          lifecycle rules + journey timeline (FLOW_STEPS, flowNextAction, activeDeadlineField) shared by API and pages
     admin-auth.ts               verifyAdmin(), isSupabaseConfigured()
@@ -123,7 +124,7 @@ Pattern in every route: `createServerClient()` → `auth.getUser()` for identity
 | --- | --- | --- |
 | `auth/send-otp`, `auth/verify-otp` | POST | WhatsApp OTP login/registration (creates the Supabase auth user; `verify-otp` signs the user in **server-side** — auth cookies on the response, no password in the JSON — the client then calls `refreshAuth()` and navigates). Rate limited: 3 codes per phone / 10 per IP per 10 min; 10 verifications per phone / 30 per IP per 10 min (429 + `Retry-After`, `code: rate_limited`) |
 | `auth/register` | POST | completes profile (creator or brand) after OTP; 10 per IP per hour |
-| `auth/user-type` | GET | role lookup for routing |
+| `auth/user-type` | GET, POST, DELETE | GET: onboarding status + the role this session signs in as + every role the account holds; POST `{role}` picks the session role (only roles the account holds; sets the httpOnly `mashpian-role` cookie, returns the role's home); DELETE clears it (logout). `verify-otp` returns `roles`/`role` and sets the cookie itself for single-role accounts; `register` and `dev-login` set it too |
 | `auth/dev-login` | POST | **non-production only** (404 in Vercel production; local/preview production builds need `ALLOW_DEV_LOGIN=true`). Gate = `ADMIN_LOGIN_PHONE`+`ADMIN_LOGIN_PASSWORD`; signs in the synthetic `creator` / `brand` test accounts (flagged `dev_account`) server-side; 10 attempts per IP per 15 min |
 | `profile` | GET, PUT | own user + profile; creator GET includes `portfolio_count` |
 | `profile/upload-avatar` | POST | avatar/logo to `images` bucket, 365-day signed URL; ≤ 5 MB, type decided by magic bytes (JPEG/PNG/WebP) |

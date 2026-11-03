@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { resolveViewer } from "@/lib/viewer";
+import { readActiveRole } from "@/lib/active-role";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { isOwnPortfolioPath, isImagePath } from "@/lib/authz";
@@ -38,13 +40,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
     }
 
-    const { data: dbUser } = await supabase
-      .from("users")
-      .select("id, type")
-      .eq("auth_user_id", user.id)
-      .single();
+    // The role this session is signed in as decides (an admin signed in as a creator uploads like one)
+    const viewer = await resolveViewer(supabase, user.id, await readActiveRole());
+    const dbUser = viewer ? { id: viewer.userId, type: viewer.role } : null;
 
-    if (!dbUser || (dbUser as any).type !== "creator") {
+    if (!dbUser || dbUser.type !== "creator") {
       return NextResponse.json({ error: "רק יוצרים יכולים להעלות סרטוני פורטפוליו" }, { status: 403 });
     }
 

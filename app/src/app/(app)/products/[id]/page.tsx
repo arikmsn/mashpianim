@@ -121,12 +121,13 @@ export default function ProductPage() {
   }, [url, apply]);
 
   useEffect(() => {
-    swrFetch<{ user?: { type?: string }; profile?: { portfolio_count?: number } }>("/api/profile", (data) => {
-      if (data.user?.type === "brand") {
+    swrFetch<{ user?: { type?: string }; role?: string; profile?: { portfolio_count?: number } }>("/api/profile", (data) => {
+      const role = data.role || data.user?.type;
+      if (role === "brand") {
         router.replace("/brand/products");
         return;
       }
-      if (data.user?.type === "creator") {
+      if (role === "creator") {
         setPortfolioCount(typeof data.profile?.portfolio_count === "number" ? data.profile.portfolio_count : 0);
       }
     });
@@ -374,7 +375,10 @@ export default function ProductPage() {
                       <div className="h-full bg-pink-500 rounded-full transition-all" style={{ width: `${upload.progress}%` }} />
                     </div>
                   )}
-                  <p className="mt-1 text-[11px] text-neutral-400">עד {MAX_VIDEO_MB}MB · MP4, MOV או WebM · הסרטון נשמר על המוצר ונשלח לעסק לבדיקה</p>
+                  <p className="mt-1 text-[11px] text-neutral-400 leading-relaxed">
+                    <span className="block">פורמטים נתמכים: MP4, MOV, WebM</span>
+                    <span className="block">גודל מקסימלי: {MAX_VIDEO_MB}MB · הסרטון נשמר על המוצר ונשלח לעסק לבדיקה</span>
+                  </p>
                 </div>
               )}
 

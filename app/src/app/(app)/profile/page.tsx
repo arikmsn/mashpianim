@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Avatar, Badge, Button, Card, Modal, Input, Textarea, useToast } from "@/components/ui";
-import { FeedbackModal } from "@/components/features";
+import { FeedbackModal, RoleSwitchModal, roleLabel, type AppRole } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch, clearCache } from "@/lib/client-cache";
@@ -539,6 +539,9 @@ export default function ProfilePage() {
   const [deleteTarget, setDeleteTarget] = useState<PortfolioVideo | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  // Every role the account holds; more than one → the profile offers switching
+  const [accountRoles, setAccountRoles] = useState<AppRole[]>([]);
+  const [roleSwitchOpen, setRoleSwitchOpen] = useState(false);
   const { user, loading: authLoading, signOut } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
@@ -574,12 +577,16 @@ export default function ProfilePage() {
         return;
       }
 
-      const applyProfile = (payload: { user?: any; profile?: any }) => {
+      const applyProfile = (payload: { user?: any; profile?: any; role?: string; roles?: string[] }) => {
         const userData = payload.user;
         const profileData = payload.profile;
         if (!userData) return;
 
-        if (userData.type === "creator" || userData.type === "admin") {
+        // The screen follows the role this session is signed in as, not the account type
+        const sessionRole = payload.role || userData.type;
+        setAccountRoles(Array.isArray(payload.roles) ? (payload.roles as AppRole[]) : []);
+
+        if (sessionRole === "creator") {
           const creatorData = profileData as any;
           setProfile({
             name: userData.full_name,
@@ -911,6 +918,11 @@ export default function ProfilePage() {
           <Button variant="ghost" fullWidth onClick={() => setFeedbackOpen(true)}>
             📨 צור קשר / דיווח על תקלה
           </Button>
+          {accountRoles.length > 1 && (
+            <Button variant="ghost" fullWidth onClick={() => setRoleSwitchOpen(true)}>
+              🔁 החלפת ממשק (כרגע: {roleLabel("brand")})
+            </Button>
+          )}
           <Button
             variant="ghost"
             fullWidth
@@ -923,6 +935,7 @@ export default function ProfilePage() {
         </div>
 
         <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
+        <RoleSwitchModal open={roleSwitchOpen} onClose={() => setRoleSwitchOpen(false)} roles={accountRoles} current="brand" />
         <BrandEditModal
           open={editOpen}
           onClose={() => setEditOpen(false)}
@@ -1178,6 +1191,11 @@ export default function ProfilePage() {
           <Button variant="ghost" fullWidth onClick={() => setFeedbackOpen(true)}>
             📨 צור קשר / דיווח על תקלה
           </Button>
+          {accountRoles.length > 1 && (
+            <Button variant="ghost" fullWidth onClick={() => setRoleSwitchOpen(true)}>
+              🔁 החלפת ממשק (כרגע: {roleLabel("creator")})
+            </Button>
+          )}
           <Button
             variant="ghost"
             fullWidth
@@ -1191,6 +1209,7 @@ export default function ProfilePage() {
       </div>
 
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
+      <RoleSwitchModal open={roleSwitchOpen} onClose={() => setRoleSwitchOpen(false)} roles={accountRoles} current="creator" />
       <CreatorEditModal
         open={editOpen}
         onClose={() => setEditOpen(false)}
@@ -1237,7 +1256,10 @@ export default function ProfilePage() {
               }}
               className="w-full text-sm text-neutral-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-pink-50 file:text-pink-500 hover:file:bg-pink-100 transition-all"
             />
-            <p className="text-xs text-neutral-400 mt-1">עד {MAX_VIDEO_MB}MB · MP4, MOV או WebM</p>
+            <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
+              <span className="block">פורמטים נתמכים: MP4, MOV, WebM</span>
+              <span className="block">גודל מקסימלי: {MAX_VIDEO_MB}MB</span>
+            </p>
             {selectedFile && (
               <p className="text-xs text-neutral-400 mt-1">
                 {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(1)} MB)

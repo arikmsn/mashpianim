@@ -4,6 +4,7 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/admin-auth";
 import { logActivity } from "@/lib/notifications";
 import { resolveViewer } from "@/lib/viewer";
+import { readActiveRole } from "@/lib/active-role";
 import { performMatch, countPortfolioVideos, portfolioGateError, MIN_PORTFOLIO_VIDEOS, notifyHeartSent, notifyBrandOfHeart } from "@/lib/match";
 import { isUniqueViolation } from "@/lib/match-errors";
 import { getTimelineSettings } from "@/lib/settings";
@@ -32,13 +33,12 @@ export async function GET() {
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 
-  const viewer = await resolveViewer(admin, user.id);
+  const viewer = await resolveViewer(admin, user.id, await readActiveRole());
   if (!viewer) {
     return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 404 });
   }
 
-  // Always the viewer's own connections — an admin acts as the creator/brand behind the account here;
-  // platform-wide views live under /api/admin
+  // Always the connections of the role this session is signed in as; platform-wide views live under /api/admin
   const ownProfileId = viewer.role === "brand" ? viewer.brandProfileId : viewer.creatorProfileId;
   if (!ownProfileId) {
     return NextResponse.json({ connections: [], settings: { max_revisions: (await getTimelineSettings(admin)).max_revisions } });
@@ -128,10 +128,12 @@ export async function POST(request: NextRequest) {
     .select("id, type, full_name, phone")
     .eq("auth_user_id", user.id)
     .single();
-  const me = dbUser as any;
-  if (!me) {
+  if (!dbUser) {
     return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 404 });
   }
+  // `me.type` is the role this session is signed in as; `me.accountType` the account's own type
+  const viewerPost = await resolveViewer(admin, user.id, await readActiveRole());
+  const me = { ...(dbUser as any), type: viewerPost?.role || (dbUser as any).type, accountType: (dbUser as any).type };
 
   const body = await request.json();
   const { product_id, creator_user_id } = body;
@@ -172,9 +174,11 @@ export async function POST(request: NextRequest) {
   let creatorName = "";
   let creatorPhone: string | null = null;
 
+  // The side a heart comes from is the role this session is signed in as (an admin signed in as a brand
+  // hearts like a brand). A session signed in as admin may act for a brand on a product it owns.
   const actsAsBrand = me.type === "brand" || (me.type === "admin" && creator_user_id);
   if (actsAsBrand) {
-    if (me.type === "brand" && brandProfile?.user_id !== me.id) {
+    if (brandProfile?.user_id !== me.id) {
       return NextResponse.json({ error: "המוצר לא שייך לעסק שלכם" }, { status: 403 });
     }
     if (!creator_user_id) {

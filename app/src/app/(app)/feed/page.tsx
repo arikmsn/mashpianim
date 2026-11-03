@@ -279,10 +279,12 @@ export default function FeedPage() {
   const router = useRouter();
 
   useEffect(() => {
-    swrFetch<{ user?: { type?: string }; profile?: { categories?: string[]; category?: string; portfolio_count?: number } }>(
+    swrFetch<{ user?: { type?: string }; role?: string; profile?: { categories?: string[]; category?: string; portfolio_count?: number } }>(
       "/api/profile",
       (data) => {
-        if (data.user?.type === "brand") {
+        // The feed is the creator home; a session signed in as a brand belongs on /brand
+        const role = data.role || data.user?.type;
+        if (role === "brand") {
           router.replace("/brand");
           return;
         }
@@ -292,7 +294,7 @@ export default function FeedPage() {
         if (userCats.length > 0) {
           setCategories(buildCategoryList(userCats));
         }
-        if (data.user?.type === "creator") {
+        if (role === "creator") {
           setPortfolioCount(typeof profile.portfolio_count === "number" ? profile.portfolio_count : 0);
         }
         setProfileReady(true);

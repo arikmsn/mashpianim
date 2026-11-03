@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { BottomNav } from "@/components/ui";
 import { useAuth } from "@/hooks/use-auth";
+import { swrFetch } from "@/lib/client-cache";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -20,6 +21,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       }
     }
   }, [user, loading, router, pathname]);
+
+  // A session signed in as admin lives in the admin area; the app screens are for creators and brands
+  useEffect(() => {
+    if (!user) return;
+    swrFetch<{ role?: string }>("/api/profile", (data) => {
+      if (data.role === "admin") router.replace("/admin");
+    });
+  }, [user, router]);
 
   if (loading || !checked) {
     return (

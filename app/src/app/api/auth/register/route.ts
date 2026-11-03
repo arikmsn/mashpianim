@@ -4,6 +4,7 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { getGreenAPI } from "@/lib/adapters/greenapi";
 import { isAllowedRegistrationType } from "@/lib/authz";
 import { checkRateLimit, rateLimitedResponse, clientIp, RATE_LIMITS } from "@/lib/rate-limit";
+import { setActiveRoleCookie } from "@/lib/active-role";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -172,7 +173,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, userType: effectiveType });
+    // The new account has exactly one role; the session acts as it from here on
+    const response = NextResponse.json({ success: true, userType: effectiveType, role: effectiveType });
+    if (effectiveType === "creator" || effectiveType === "brand") setActiveRoleCookie(response, effectiveType);
+    return response;
   } catch (err) {
     console.error("[register] error:", err);
     return NextResponse.json({ error: "שגיאה בהרשמה" }, { status: 500 });

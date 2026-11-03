@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { resolveViewer } from "@/lib/viewer";
+import { readActiveRole } from "@/lib/active-role";
 
 function getAdminClient() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -22,8 +23,8 @@ export async function GET() {
     return NextResponse.json({ count: 0 });
   }
 
-  // The side this account acts on (admins act as the creator/brand behind the account)
-  const viewer = await resolveViewer(admin, user.id);
+  // The role this session is signed in as
+  const viewer = await resolveViewer(admin, user.id, await readActiveRole());
   if (!viewer) {
     return NextResponse.json({ count: 0 });
   }

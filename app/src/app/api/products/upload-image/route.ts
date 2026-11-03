@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { resolveViewer } from "@/lib/viewer";
+import { readActiveRole } from "@/lib/active-role";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { MAX_IMAGE_BYTES, MAX_IMAGE_MB, detectImageType, extensionForImage } from "@/lib/uploads";
@@ -23,15 +25,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
     }
 
-    const { data: dbUser } = await supabase
-      .from("users")
-      .select("id, type")
-      .eq("auth_user_id", user.id)
-      .single();
-
-    if (!dbUser || ((dbUser as any).type !== "brand" && (dbUser as any).type !== "admin")) {
+    // Brands only — judged by the role this session is signed in as
+    const viewer = await resolveViewer(supabase, user.id, await readActiveRole());
+    if (!viewer || viewer.role !== "brand") {
       return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
     }
+    const dbUser = { id: viewer.userId, type: viewer.role };
 
     const formData = await request.formData();
     const file = formData.get("image") as File | null;

@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { isConnectionParticipant, canUploadConnectionVideo } from "@/lib/authz";
 import { videoFileProblem } from "@/lib/uploads";
+import { resolveViewer } from "@/lib/viewer";
+import { readActiveRole } from "@/lib/active-role";
 
 export const maxDuration = 60;
 
@@ -28,11 +30,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 
-  const { data: dbUser } = await supabase
-    .from("users")
-    .select("id, type")
-    .eq("auth_user_id", user.id)
-    .single();
+  // `type` here is the role this session is signed in as
+  const viewer = await resolveViewer(supabase, user.id, await readActiveRole());
+  const dbUser = viewer ? { id: viewer.userId, type: viewer.role } : null;
 
   if (!dbUser) {
     return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 403 });
@@ -144,11 +144,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
     }
 
-    const { data: dbUser } = await supabase
-      .from("users")
-      .select("id, type")
-      .eq("auth_user_id", user.id)
-      .single();
+    // `type` is the role this session is signed in as
+    const viewer = await resolveViewer(supabase, user.id, await readActiveRole());
+    const dbUser = viewer ? { id: viewer.userId, type: viewer.role } : null;
 
     if (!dbUser) {
       return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 403 });

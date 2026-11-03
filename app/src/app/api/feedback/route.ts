@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
         type: "feedback_received",
         title: `📨 ${kindLabel}: ${check.value.subject}`,
         body: `${me.full_name || "משתמש/ת"} (${me.type === "brand" ? "עסק" : me.type === "creator" ? "יוצר/ת" : me.type}): ${check.value.message.slice(0, 140)}`,
-        data: { feedbackId: (row as any).id },
+        data: { feedbackId: (row as any).id, role: "admin" },
       })
     )
   );

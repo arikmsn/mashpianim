@@ -1,12 +1,13 @@
 "use client";
 
-import { Suspense, useState, useRef, useCallback } from "react";
+import { Suspense, useState, useRef, useCallback, useEffect } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { clearCache } from "@/lib/client-cache";
 import { refreshAuth } from "@/hooks/use-auth";
 import { useToast } from "@/components/ui";
+import { RoleOptions, chooseRole, type AppRole } from "@/components/features";
 
 export default function LoginPage() {
   return (
@@ -23,7 +24,9 @@ function LoginContent() {
   const [password, setPassword] = useState("");
   const [adminPhone, setAdminPhone] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
-  const [step, setStep] = useState<"phone" | "otp" | "email" | "admin-login" | "admin-roles">("phone");
+  const [step, setStep] = useState<"phone" | "otp" | "email" | "admin-login" | "admin-roles" | "choose-role">("phone");
+  // Roles the verified account holds when there is more than one (creator / brand / admin)
+  const [availableRoles, setAvailableRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(false);
   const [formattedPhone, setFormattedPhone] = useState("");
   const tapRef = useRef({ count: 0, timer: 0 });
@@ -32,6 +35,41 @@ function LoginContent() {
   const router = useRouter();
   const { toast } = useToast();
   const supabase = createClient();
+
+  // Opened from the link in the WhatsApp message (?phone=972…&code=123456): fill both in and verify at once
+  const autoVerifyRef = useRef(false);
+  useEffect(() => {
+    const linkPhone = searchParams.get("phone");
+    const linkCode = searchParams.get("code");
+    if (!linkPhone || !linkCode || autoVerifyRef.current) return;
+    autoVerifyRef.current = true;
+    const digits = linkPhone.replace(/[^\d]/g, "");
+    setPhone(digits.startsWith("972") ? `0${digits.slice(3)}` : digits);
+    setFormattedPhone(`+${digits}`);
+    setOtp(linkCode);
+    setStep("otp");
+    const t = setTimeout(() => {
+      verifyCode(`+${digits}`, linkCode);
+    }, 250);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  // The account holds several roles: this session signs in as the chosen one
+  async function handleChooseRole(role: AppRole) {
+    setLoading(true);
+    try {
+      const result = await chooseRole(role);
+      if (!result.ok) throw new Error(result.error);
+      clearCache();
+      toast("התחברתם בהצלחה!", "success");
+      window.location.assign(redirect !== "/feed" ? redirect : result.redirect || "/feed");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "שגיאה בבחירת ממשק", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handleSendOTP(e: React.FormEvent) {
     e.preventDefault();
@@ -57,12 +95,18 @@ function LoginContent() {
 
   async function handleVerifyOTP(e: React.FormEvent) {
     e.preventDefault();
+    await verifyCode(formattedPhone, otp);
+  }
+
+  // Shared by the form and by the link in the WhatsApp message (which passes the values directly,
+  // before React state has caught up)
+  async function verifyCode(phoneValue: string, codeValue: string) {
     setLoading(true);
     try {
       const res = await fetch("/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: formattedPhone, code: otp }),
+        body: JSON.stringify({ phone: phoneValue, code: codeValue }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -75,9 +119,14 @@ function LoginContent() {
 
       if (data.needsOnboarding) {
         router.push(`/register?verified=1&userId=${data.userId}&phone=${encodeURIComponent(formattedPhone)}`);
+      } else if (Array.isArray(data.roles) && data.roles.length > 1 && !data.role) {
+        // The account holds several roles (creator / brand / admin): the session must pick one
+        setAvailableRoles(data.roles as AppRole[]);
+        setStep("choose-role");
       } else {
         toast("התחברתם בהצלחה!", "success");
-        const defaultRedirect = data.userType === "brand" ? "/brand" : "/feed";
+        const role = data.role || data.userType;
+        const defaultRedirect = role === "brand" ? "/brand" : role === "admin" ? "/admin" : "/feed";
         router.push(redirect !== "/feed" ? redirect : defaultRedirect);
       }
     } catch (err: unknown) {
@@ -307,7 +356,8 @@ function LoginContent() {
             </form>
           )}
 
-          {step === "admin-roles" && (
+          {/* Role choice: after the OTP for accounts that hold several roles, and for the test-account gate */}
+          {(step === "admin-roles" || step === "choose-role") && (
             <div>
               <div className="text-center mb-5">
                 <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-3">
@@ -316,30 +366,15 @@ function LoginContent() {
                   </svg>
                 </div>
                 <p className="font-semibold text-neutral-900">אומתת בהצלחה</p>
-                <p className="text-sm text-neutral-400 mt-1">בחרו ממשק כניסה</p>
+                <p className="text-sm text-neutral-400 mt-1">
+                  {step === "choose-role" ? "החשבון הזה רשום ביותר מתפקיד אחד — באיזה ממשק להיכנס?" : "בחרו ממשק כניסה"}
+                </p>
               </div>
-              <div className="flex flex-col gap-2">
-                {[
-                  { role: "creator", label: "ממשק יוצר תוכן", desc: "פיד, פרופיל, חיבורים", color: "purple" },
-                  { role: "brand", label: "ממשק מפרסם", desc: "קמפיינים, יוצרים, סרטונים", color: "blue" },
-                ].map((item) => (
-                  <button
-                    key={item.role}
-                    type="button"
-                    disabled={loading}
-                    onClick={() => handleAdminRoleLogin(item.role)}
-                    className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-neutral-200 hover:bg-pink-50 hover:border-pink-200 transition-colors text-right disabled:opacity-50"
-                  >
-                    <div className={`w-10 h-10 rounded-xl bg-${item.color}-50 flex items-center justify-center shrink-0`}>
-                      <div className={`w-5 h-5 rounded-full bg-${item.color}-200`} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-neutral-900">{item.label}</p>
-                      <p className="text-xs text-neutral-400">{item.desc}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
+              <RoleOptions
+                roles={step === "choose-role" ? availableRoles : (["creator", "brand"] as AppRole[])}
+                busy={loading}
+                onPick={(role) => (step === "choose-role" ? handleChooseRole(role) : handleAdminRoleLogin(role))}
+              />
               <button type="button" onClick={() => { setStep("phone"); setAdminPhone(""); setAdminPassword(""); }}
                 className="w-full mt-4 text-sm text-neutral-400 hover:text-neutral-600">
                 חזרה להתחברות רגילה

@@ -91,7 +91,12 @@ export default function BrandDiscoverPage() {
       swrFetch<{ products?: BrandProduct[] }>("/api/products?brand=me", (d) =>
         setProducts((d.products || []).filter((p) => p.status === "active"))
       ),
-      swrFetch<{ profile?: { total_credits?: number; used_credits?: number } }>("/api/profile", (d) => {
+      swrFetch<{ role?: string; user?: { type?: string }; profile?: { total_credits?: number; used_credits?: number } }>("/api/profile", (d) => {
+        // Brand home — a session signed in as a creator belongs on the feed
+        if ((d.role || d.user?.type) === "creator") {
+          router.replace("/feed");
+          return;
+        }
         const total = d.profile?.total_credits || 0;
         const used = d.profile?.used_credits || 0;
         setCredits({ total, remaining: Math.max(0, total - used) });

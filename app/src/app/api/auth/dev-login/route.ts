@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { devLoginEnabled, resolveDevRole } from "@/lib/authz";
 import { checkRateLimit, rateLimitedResponse, clientIp, RATE_LIMITS } from "@/lib/rate-limit";
+import { setActiveRoleCookie } from "@/lib/active-role";
 
 // Test-account login for non-production environments only.
 // It never touches real accounts: only synthetic accounts flagged `dev_account` are created or signed in,
@@ -153,7 +154,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "שגיאה בכניסה לחשבון הבדיקה" }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, role, redirect: config.redirect });
+    const response = NextResponse.json({ success: true, role, redirect: config.redirect });
+    setActiveRoleCookie(response, config.type);
+    return response;
   } catch (err) {
     console.error("[dev-login] error:", err);
     return NextResponse.json({ error: "שגיאה בכניסת בדיקה" }, { status: 500 });

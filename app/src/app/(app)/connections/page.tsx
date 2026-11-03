@@ -157,8 +157,8 @@ function ConnectionsPageInner() {
   }, [applyConnections]);
 
   useEffect(() => {
-    swrFetch<{ user?: { type?: string }; profile?: { portfolio_count?: number } }>("/api/profile", (data) => {
-      if (data.user?.type === "creator") {
+    swrFetch<{ user?: { type?: string }; role?: string; profile?: { portfolio_count?: number } }>("/api/profile", (data) => {
+      if ((data.role || data.user?.type) === "creator") {
         setPortfolioCount(typeof data.profile?.portfolio_count === "number" ? data.profile.portfolio_count : 0);
       }
     });
@@ -498,7 +498,10 @@ function ConnectionsPageInner() {
                             <div className="h-full bg-pink-500 rounded-full transition-all" style={{ width: `${uploadProgress}%` }} />
                           </div>
                         )}
-                        <p className="mt-1 text-[11px] text-neutral-400">עד {MAX_VIDEO_MB}MB · MP4, MOV או WebM</p>
+                        <p className="mt-1 text-[11px] text-neutral-400 leading-relaxed">
+                          <span className="block">פורמטים נתמכים: MP4, MOV, WebM</span>
+                          <span className="block">גודל מקסימלי: {MAX_VIDEO_MB}MB</span>
+                        </p>
                       </div>
                     )}
                   </Card>

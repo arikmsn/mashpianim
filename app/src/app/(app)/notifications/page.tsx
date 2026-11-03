@@ -79,12 +79,14 @@ function formatTime(dateStr: string) {
 
 type ProfileShape = { user?: { type?: string }; role?: string };
 
-// The side the account acts on (creator/brand) plus whether it is an admin (report notifications only)
+// The role this session is signed in as (creator/brand); report notifications only lead into the admin area
+// when the session itself is an admin session
 function viewerFromProfile(data: ProfileShape | undefined): { role: ViewerRole; isAdmin: boolean } {
   if (!data) return { role: null, isAdmin: false };
   const type = data.user?.type;
-  const role = (data.role === "brand" || data.role === "creator" ? data.role : type === "brand" ? "brand" : type ? "creator" : null) as ViewerRole;
-  return { role, isAdmin: type === "admin" };
+  const sessionRole = data.role || (type === "brand" ? "brand" : type ? "creator" : null);
+  const role = (sessionRole === "brand" || sessionRole === "creator" ? sessionRole : null) as ViewerRole;
+  return { role, isAdmin: sessionRole === "admin" };
 }
 
 export default function NotificationsPage() {
