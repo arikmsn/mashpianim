@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 import { checkRateLimit, rateLimitedResponse, clientIp, RATE_LIMITS } from "@/lib/rate-limit";
 
 function getSupabaseAdmin() {
@@ -171,21 +172,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Set a temp password for client-side session creation
-    const tempPassword = crypto.randomUUID();
+    // The session is established here, server-side: a one-time password is set and used once to sign in,
+    // which writes the auth cookies on this response. The password never leaves the server (SEC-09).
+    const oneTimePassword = crypto.randomUUID();
     const { error: pwError } = await supabaseAdmin.auth.admin.updateUserById(
       authUserId,
-      { password: tempPassword }
+      { password: oneTimePassword }
     );
-
     if (pwError) {
       console.error("[verify-otp] setPassword error:", pwError);
-      return NextResponse.json({
-        success: true,
-        userId: authUserId,
-        userType,
-        needsOnboarding,
-      });
+      return NextResponse.json({ error: "שגיאה בפתיחת ההתחברות. נסו שוב" }, { status: 500 });
+    }
+
+    const userClient = await createServerClient();
+    const { error: signInError } = await userClient.auth.signInWithPassword({ email, password: oneTimePassword });
+    if (signInError) {
+      console.error("[verify-otp] sign-in error:", signInError.message);
+      return NextResponse.json({ error: "שגיאה בפתיחת ההתחברות. נסו שוב" }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -193,8 +196,6 @@ export async function POST(request: NextRequest) {
       userId: authUserId,
       userType,
       needsOnboarding,
-      email,
-      tempPassword,
     });
   } catch (err) {
     console.error("[verify-otp] error:", err);

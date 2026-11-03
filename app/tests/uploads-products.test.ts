@@ -93,13 +93,14 @@ describe("product update allowlist (FUNC-02)", () => {
       name: "שרשרת",
       category: "ביוטי",
       brand_id: OTHER,
-      max_creators: 9,
+      applicants_count: 9,
+      max_creators: 4,
       price: "120",
       quantity: null,
       status: "paused",
       description: null,
     });
-    assert.deepEqual(updates, { name: "שרשרת", price: 120, quantity: null, status: "paused", description: null });
+    assert.deepEqual(updates, { name: "שרשרת", price: 120, quantity: null, status: "paused", description: null, max_creators: 4 });
   });
 
   test("numeric fields accept numbers and numeric strings; junk and negatives are dropped; price cannot be cleared", () => {

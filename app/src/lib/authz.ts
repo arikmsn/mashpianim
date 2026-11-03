@@ -89,6 +89,8 @@ export const PUBLIC_PRODUCT_FIELDS = [
   "expiration_date",
   "quantity",
   "max_creators",
+  "occupied",
+  "spots_left",
   "created_at",
   "brand_name",
   "brand_user_id",
@@ -148,9 +150,10 @@ export const PRODUCT_EDITABLE_FIELDS = [
   "expiration_date",
   "quantity",
   "brief",
+  "max_creators",
 ] as const;
 
-const PRODUCT_NUMERIC_FIELDS = new Set(["price", "quantity", "digital_access_duration_days"]);
+const PRODUCT_NUMERIC_FIELDS = new Set(["price", "quantity", "digital_access_duration_days", "max_creators"]);
 
 // Returns only allowed, present keys. Numeric fields accept numbers or numeric strings (null/"" clears the
 // optional ones, never the price); everything else must be a string or null. Unknown keys and other types
@@ -164,11 +167,16 @@ export function pickProductUpdates(input: unknown): Record<string, unknown> {
     if (value === undefined) continue;
     if (PRODUCT_NUMERIC_FIELDS.has(key)) {
       if (value === null || value === "") {
-        if (key !== "price") out[key] = null;
+        if (key !== "price" && key !== "max_creators") out[key] = null;
         continue;
       }
       const n = typeof value === "number" ? value : Number(String(value));
-      if (Number.isFinite(n) && n >= 0) out[key] = key === "price" ? n : Math.floor(n);
+      if (!Number.isFinite(n) || n < 0) continue;
+      if (key === "max_creators") {
+        if (n >= 1) out[key] = Math.min(50, Math.floor(n)); // at least one creator per product
+      } else {
+        out[key] = key === "price" ? n : Math.floor(n);
+      }
     } else if (value === null || typeof value === "string") {
       out[key] = value;
     }

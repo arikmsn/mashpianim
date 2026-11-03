@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { createNotification, createNotificationOnce, logActivity } from "@/lib/notifications";
+import { createNotification, createNotificationOnce, logActivity, notifyConnectionStatusChange } from "@/lib/notifications";
 
 // A reminder of the same kind for the same connection is sent at most once per this many hours
 const WARNING_DEDUPE_HOURS = 48;
@@ -198,7 +198,7 @@ export async function GET(request: NextRequest) {
       id, status, review_deadline, brand_id, creator_id,
       products(name),
       creator_profiles!connections_creator_id_fkey(users(id, full_name)),
-      brand_profiles!connections_brand_id_fkey(users(id, full_name))
+      brand_profiles!connections_brand_id_fkey(shop_name, users(id, full_name))
     `)
     .in("status", ["uploaded", "in_review"])
     .lt("review_deadline", now);
@@ -226,6 +226,20 @@ export async function GET(request: NextRequest) {
         text: "✅ הסרטון אושר אוטומטית בתום תקופת הבדיקה והחיבור הושלם. הצ'אט סגור לקריאה בלבד.",
         is_system: true,
       } as any);
+
+      // Both sides learn the connection completed (same notifications as a manual approval)
+      const creatorUser = conn.creator_profiles?.users;
+      const brandUser = conn.brand_profiles?.users;
+      if (creatorUser && brandUser) {
+        await notifyConnectionStatusChange("completed", {
+          connectionId: conn.id,
+          productName: conn.products?.name || "",
+          creatorName: creatorUser.full_name || "יוצר",
+          brandName: conn.brand_profiles?.shop_name || brandUser.full_name || "עסק",
+          creatorUserId: creatorUser.id,
+          brandUserId: brandUser.id,
+        });
+      }
 
       await logActivity({
         action: "auto_complete_review_overdue",

@@ -1,6 +1,15 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { isChatOpen, hasChatHistory, canBrandReview } from "../src/lib/connection-flow.ts";
+import {
+  isChatOpen,
+  hasChatHistory,
+  canBrandReview,
+  isOccupyingStatus,
+  normalizeMaxCreators,
+  spotsLeft,
+  DEFAULT_MAX_CREATORS,
+} from "../src/lib/connection-flow.ts";
+import { mapMatchError } from "../src/lib/match-errors.ts";
 import { buildBriefMessage } from "../src/lib/brief.ts";
 import { pickProductUpdates, toPublicProduct } from "../src/lib/authz.ts";
 
@@ -54,6 +63,46 @@ describe("brief message", () => {
   test("blank brief falls back to the template; digital products are labelled", () => {
     assert.match(buildBriefMessage({ ...base, brief: "   " }), /\(העסק ישלים\)/);
     assert.match(buildBriefMessage({ name: "קורס", price: 99, product_type: "digital" }), /₪99 · דיגיטלי/);
+  });
+});
+
+describe("creator slots per product (BRAND-01)", () => {
+  test("every status from the match on occupies a slot; hearts and closed-without-match don't", () => {
+    for (const s of ["approved", "shipped", "delivered", "filming", "uploaded", "in_review", "revision_requested", "completed"]) {
+      assert.equal(isOccupyingStatus(s), true, s);
+    }
+    for (const s of ["pending", "cancelled", "rejected", null]) assert.equal(isOccupyingStatus(s), false, String(s));
+  });
+
+  test("max_creators falls back to the default and is clamped to 1–50", () => {
+    assert.equal(normalizeMaxCreators(undefined), DEFAULT_MAX_CREATORS);
+    assert.equal(normalizeMaxCreators("abc"), DEFAULT_MAX_CREATORS);
+    assert.equal(normalizeMaxCreators(0), DEFAULT_MAX_CREATORS);
+    assert.equal(normalizeMaxCreators("5"), 5);
+    assert.equal(normalizeMaxCreators(7.9), 7);
+    assert.equal(normalizeMaxCreators(999), 50);
+  });
+
+  test("spots left never goes negative", () => {
+    assert.equal(spotsLeft(3, 0), 3);
+    assert.equal(spotsLeft(3, 2), 1);
+    assert.equal(spotsLeft(3, 3), 0);
+    assert.equal(spotsLeft(3, 9), 0);
+    assert.equal(spotsLeft(null, 1), DEFAULT_MAX_CREATORS - 1);
+  });
+
+  test("the database refusal maps to a 409", () => {
+    const r = mapMatchError("P0001: PRODUCT_FULL");
+    assert.equal(r.status, 409);
+    assert.match(r.error, /מלא/);
+  });
+
+  test("brands edit max_creators within 1–50; 0 and junk are dropped", () => {
+    assert.deepEqual(pickProductUpdates({ max_creators: "4" }), { max_creators: 4 });
+    assert.deepEqual(pickProductUpdates({ max_creators: 0 }), {});
+    assert.deepEqual(pickProductUpdates({ max_creators: 500 }), { max_creators: 50 });
+    assert.deepEqual(pickProductUpdates({ max_creators: null }), {});
+    assert.equal(toPublicProduct({ id: "1", max_creators: 3, spots_left: 2, occupied: 1 }).spots_left, 2);
   });
 });
 

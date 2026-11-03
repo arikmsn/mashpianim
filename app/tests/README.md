@@ -97,4 +97,14 @@ Scripted runs: send Hebrew bodies from a UTF-8 shell (PowerShell `-Encoding utf8
 | 43 | Chat closes with the connection | after `completed` (or `cancelled` after a match): `POST /api/connections/<id>` `{text}` | 400 `code: chat_closed`; `/messages` still lists the conversation, shows the closing system message and no composer |
 | 44 | Brief at match | brand creates a product with `brief`; creator and brand heart | second system message = header + the brand's brief + format lines, no `(העסק ישלים)`; `GET /api/products/<id>` as a creator has no `brief` |
 | 45 | Portfolio takedown (MOD-01) | admin: `/admin/moderation` → תיקי עבודות → הסרה (`PUT /api/admin/moderation {videoId, action:'reject'}`) | video `status='rejected'`; hidden from brands (`GET /api/videos?portfolio=<creator>`), visible to the creator with a badge; not counted for the 5-video gate (`portfolio_gate` shows the lower count); creator gets a notification; שחזור restores it |
-| 46 | Review deadline auto-approve | an `uploaded` connection whose `review_deadline` passed, then the cron runs | warning once, then after 3 more days `completed` + videos approved + closing system message |
+| 46 | Review deadline auto-approve | an `uploaded` connection whose `review_deadline` passed, then the cron runs | warning once, then after 3 more days `completed` + videos approved + closing system message; both parties get the `connection_completed` notification |
+
+## Batch 6 checks (BRAND-01, SEC-09, onboarding)
+
+| # | Check | Steps | Expected |
+|---|---|---|---|
+| 47 | Creator slots on a product | brand sets `max_creators` on a product (form field or `PUT {max_creators}`); creators and brand list products | feed items carry `occupied`/`spots_left`; a product with `spots_left = 0` disappears from `?status=active` for creators but stays in `?brand=me` with `matched_count` |
+| 48 | Full product refuses hearts and matches | with `occupied ≥ max_creators`: creator or brand `POST /api/connections` | 409 `code: product_full`; a pending heart that becomes full before the other side answers is refused at match with 409 (`PRODUCT_FULL` from `match_connection()`), credits untouched |
+| 49 | `max_creators` validation | `PUT /api/products/<id>` with `{max_creators: 0}` / `500` / `"4"` | 400 (nothing valid) / clamped to 50 / 4 |
+| 50 | OTP sign-in is server-side (SEC-09) | `POST /api/auth/verify-otp` with a valid code | JSON has `userId`, `userType`, `needsOnboarding` only — no `tempPassword`/`email`; the response sets the `sb-*-auth-token` cookies; `/api/profile` with those cookies is authenticated |
+| 51 | New creator lands on the first upload | finish creator registration | redirected to `/profile?onboarding=1`; the upload modal opens and the URL is cleaned to `/profile` |

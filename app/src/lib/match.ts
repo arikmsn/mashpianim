@@ -119,11 +119,13 @@ export async function performMatch(admin: Admin, connectionId: string, actorUser
     };
   }
 
+  // Credit deduction, the product's creator limit (max_creators) and the status flip are checked and applied
+  // atomically inside match_connection(); PRODUCT_FULL / NO_CREDITS come back as errors.
   const { error: matchError } = await admin.rpc("match_connection", { p_connection_id: connectionId });
   if (matchError) {
     const mapped = mapMatchError(matchError.message);
     if (mapped.status === 500) console.error("[match] match_connection error:", matchError.message);
-    return { ok: false, ...mapped };
+    return { ok: false, ...mapped, code: mapped.status === 409 ? "product_full" : undefined };
   }
 
   const brandName = brandProfile.shop_name || brandUser.full_name || "העסק";

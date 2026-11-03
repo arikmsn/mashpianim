@@ -94,7 +94,7 @@ docs/                           design-research.md (visual references), this fil
 | `users` | `id`, `auth_user_id` (→ auth.users), `type` enum creator/brand/admin, `full_name`, `phone`, `email`, `avatar_url`, `is_active`, `onboarding_completed` | App code always resolves `users.id` from `auth.getUser().id` via `auth_user_id` |
 | `creator_profiles` | `id`, `user_id`, `bio`, `city`, `categories text[]`, `level` enum creator/creator_plus/on_the_radar, `hearts`, `completed_connections`, `tiktok_handle`, `tiktok_followers`, `instagram_handle`, `instagram_followers`, `intro_video_url`, `date_of_birth` | |
 | `brand_profiles` | `id`, `user_id`, `shop_name`, `logo_url`, `category` (legacy single), `categories text[]` (added 2026-11-02, backfilled), `website_url`, `description`, `total_credits`, `used_credits` | remaining credits = total − used |
-| `products` | `id`, `brand_id` (→ brand_profiles.id), `name`, `description`, `price`, `image_url`, `product_type` physical/digital, `digital_access_*`, `shipping_policy`, `shipping_address`, `source_url`, `status` (active/…/deleted), `expiration_date`, `quantity`, `max_creators`, `brief` (brand-written, optional) | **No `category` column** — the feed derives category from the brand's categories. `max_creators` exists but is not enforced. `brief` is private to the brand and is sent to the creator in the chat at match (replaces the fill-in template) |
+| `products` | `id`, `brand_id` (→ brand_profiles.id), `name`, `description`, `price`, `image_url`, `product_type` physical/digital, `digital_access_*`, `shipping_policy`, `shipping_address`, `source_url`, `status` (active/…/deleted), `expiration_date`, `quantity`, `max_creators`, `brief` (brand-written, optional) | **No `category` column** — the feed derives category from the brand's categories. `max_creators` (1–50, default 3) = creator slots; every connection from the match on occupies one, enforced in `match_connection()` and on new hearts. `brief` is private to the brand and is sent to the creator in the chat at match (replaces the fill-in template) |
 | `connections` | `id`, `creator_id` (→ creator_profiles.id), `brand_id` (→ brand_profiles.id), `product_id`, `status` enum (see §1), `initiated_by` text creator/brand (added 2026-11-02), `delivery_type`, `credit_deducted`, `revision_count`, `revision_notes`, `rejection_reason`, timestamps `approved_at/shipped_at/delivered_at/filmed_at/completed_at`, deadlines `ship_deadline/deliver_deadline/film_deadline/review_deadline`, `tracking_number/url`, `digital_access_value/expires_at`, `creator_read_at`, `brand_read_at` | Index on (creator_id, product_id) |
 | `videos` | `id`, `creator_id` (→ **users.id**, not creator_profiles), `connection_id` (NULL = portfolio video), `storage_path`, `url` (signed, refreshed on read), `thumbnail_url` (public URL), `title`, `description`, `status` enum pending/approved/revision_requested/rejected, `is_downloadable`, `download_count`, `approved_at/by` | Portfolio uploads are published immediately as `approved`; an admin can take one down (`rejected`: hidden from brands, not counted for the 5-video gate, creator notified) or restore it from `/admin/moderation`. Deliverables start `pending` and become `approved` + downloadable when the brand completes the connection (or the cron auto-approves) |
 | `messages` | `id`, `connection_id`, `sender_id` (users.id), `text`, `is_system`, `created_at` | Unread = messages after the reader's `*_read_at` on the connection |
@@ -104,7 +104,7 @@ docs/                           design-research.md (visual references), this fil
 
 **Storage buckets:** `videos` (private; policies `auth_users_upload_videos` + `auth_users_read_own_videos` scoped to `portfolio/{auth.uid()}/`; limit 150 MB, MIME mp4/quicktime/webm/x-m4v/3gpp), `images` (private, service role only; 5 MB, JPEG/PNG/WebP), `thumbnails` (**public**, authenticated upload to `portfolio/{auth.uid()}/`, 2 MB, images only). Videos are uploaded **directly from the browser** to Supabase Storage with a progress bar (`lib/storage-upload.ts`, XHR to the Storage REST endpoint; Vercel's 4.5 MB body limit makes server-side upload impossible), then `/api/videos/save-portfolio` or `/api/videos/save-connection` records metadata. **Plan limit:** the Supabase organization is on the Free plan — 50 MB per file and 1 GB total; the 150 MB product cap (`MAX_VIDEO_MB` in `lib/uploads.ts`, ≈ 2 minutes of 1080p) only takes effect after upgrading to Pro and raising the project upload limit in Dashboard → Storage → Settings.
 
-Migrations were applied via the Supabase MCP (`apply_migration`); recent ones: `add_video_storage_policies_for_auth_users`, `add_brand_categories_array`, `add_connections_initiated_by`, `add_public_thumbnails_bucket`, `rls_hardening` + `revoke_maintain_from_client_roles` (2026-11-02, saved in the repo as `app/supabase/migrations/007_rls_hardening.sql` and `008_revoke_maintain.sql`), `rate_limits_settings_storage` (2026-11-03, `009_rate_limits_settings_storage.sql`: `rate_limits` table + `rate_limit_hit()`, bucket limits, `match_connection()` reads `shipping_days`), `review_flow_moderation_brief` (2026-11-03, `010_review_flow_moderation_brief.sql`: `video_status.rejected`, `products.brief`, `search_path` on helper functions, `creator_profiles`/`brand_profiles` SELECT limited to owner/admin). See `app/supabase/migrations/README.md`. 007 removed every write policy for the client roles, revoked their INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER (008: MAINTAIN) table privileges, added `UNIQUE(users.auth_user_id)`, `UNIQUE(users.phone)`, a partial unique index `connections(creator_id, product_id)` over non-closed statuses, a `brand_profiles` credits CHECK (`0 ≤ used ≤ total`), and the `match_connection(uuid)` function. Database-level regression checks are listed in `app/tests/README.md`.
+Migrations were applied via the Supabase MCP (`apply_migration`); recent ones: `add_video_storage_policies_for_auth_users`, `add_brand_categories_array`, `add_connections_initiated_by`, `add_public_thumbnails_bucket`, `rls_hardening` + `revoke_maintain_from_client_roles` (2026-11-02, saved in the repo as `app/supabase/migrations/007_rls_hardening.sql` and `008_revoke_maintain.sql`), `rate_limits_settings_storage` (2026-11-03, `009_rate_limits_settings_storage.sql`: `rate_limits` table + `rate_limit_hit()`, bucket limits, `match_connection()` reads `shipping_days`), `review_flow_moderation_brief` (2026-11-03, `010_review_flow_moderation_brief.sql`: `video_status.rejected`, `products.brief`, `search_path` on helper functions, `creator_profiles`/`brand_profiles` SELECT limited to owner/admin), `max_creators` (2026-11-03, `011_max_creators.sql`: CHECK 1–50, default 3, `match_connection()` raises `PRODUCT_FULL`). See `app/supabase/migrations/README.md`. 007 removed every write policy for the client roles, revoked their INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER (008: MAINTAIN) table privileges, added `UNIQUE(users.auth_user_id)`, `UNIQUE(users.phone)`, a partial unique index `connections(creator_id, product_id)` over non-closed statuses, a `brand_profiles` credits CHECK (`0 ≤ used ≤ total`), and the `match_connection(uuid)` function. Database-level regression checks are listed in `app/tests/README.md`.
 
 ## 5. API routes (all under `app/src/app/api`)
 
@@ -112,14 +112,14 @@ Pattern in every route: `createServerClient()` → `auth.getUser()` for identity
 
 | Route | Methods | Purpose |
 | --- | --- | --- |
-| `auth/send-otp`, `auth/verify-otp` | POST | WhatsApp OTP login/registration (creates Supabase auth user + `users` row). Rate limited: 3 codes per phone / 10 per IP per 10 min; 10 verifications per phone / 30 per IP per 10 min (429 + `Retry-After`, `code: rate_limited`) |
+| `auth/send-otp`, `auth/verify-otp` | POST | WhatsApp OTP login/registration (creates the Supabase auth user; `verify-otp` signs the user in **server-side** — auth cookies on the response, no password in the JSON — the client then calls `refreshAuth()` and navigates). Rate limited: 3 codes per phone / 10 per IP per 10 min; 10 verifications per phone / 30 per IP per 10 min (429 + `Retry-After`, `code: rate_limited`) |
 | `auth/register` | POST | completes profile (creator or brand) after OTP; 10 per IP per hour |
 | `auth/user-type` | GET | role lookup for routing |
 | `auth/dev-login` | POST | **non-production only** (404 in Vercel production; local/preview production builds need `ALLOW_DEV_LOGIN=true`). Gate = `ADMIN_LOGIN_PHONE`+`ADMIN_LOGIN_PASSWORD`; signs in the synthetic `creator` / `brand` test accounts (flagged `dev_account`) server-side; 10 attempts per IP per 15 min |
 | `profile` | GET, PUT | own user + profile; creator GET includes `portfolio_count` |
 | `profile/upload-avatar` | POST | avatar/logo to `images` bucket, 365-day signed URL; ≤ 5 MB, type decided by magic bytes (JPEG/PNG/WebP) |
 | `profiles/[userId]` | GET | **public** profile of a creator (portfolio with signed URLs + thumbnails, socials, stats) or brand (active products, stats). Never returns phone/email |
-| `products` | GET, POST | list (`?status=active`, `?brand=me`, `?brand_id=`) — returns `brand_name`, `brand_user_id`, `categories`, `logo_url`; create |
+| `products` | GET, POST | list (`?status=active`, `?brand=me`, `?brand_id=`) — returns `brand_name`, `brand_user_id`, `categories`, `logo_url`, `max_creators`, `occupied`, `spots_left` (+ `matched_count` for the owner); creators never see products whose slots are all taken; create (accepts `brief`, `max_creators`) |
 | `products/[id]` | GET, PUT, DELETE | |
 | `products/upload-image` | POST | product image to `images` bucket; ≤ 5 MB, type decided by magic bytes |
 | `creators` | GET | brand/admin only — ranked creator gallery with portfolio count, poster, preview video, relation to this brand, `fit` flag |
@@ -160,24 +160,24 @@ Earlier work: OTP auth, registration, feed, products, connections pipeline with 
 ## 8. What is missing / known gaps (prioritized)
 
 **Product (this week per spec)**
-1. Onboarding "portfolio 0/5" screen in registration — today the gate lives only on the profile/feed banners.
-2. Brief editing by the brand *before* sending a heart — today `buildBriefMessage` posts a template with blank fields at match time.
+1. ~~Onboarding "portfolio 0/5" screen in registration~~ — done 2026-11-03 (Batch 6): a new creator lands on `/profile?onboarding=1`, which opens the first upload; the feed/profile banners keep the 0/5 progress.
+2. ~~Brief editing by the brand~~ — done 2026-11-03 (Batch 5): `products.brief`, sent at match instead of the template.
 3. Ranking signals beyond category/portfolio/completions (city, followers, response time) in `/api/creators` and the feed.
-4. Supabase Pro ($25/mo) before video egress exceeds the free 5 GB/month.
+4. Supabase Pro ($25/mo): needed for the 150 MB video cap and before storage/egress exceed the free tier.
 
 **Product (this month)**
-5. Enforce `products.max_creators` as "number of videos per product" and show it.
-6. Auto-close chat 7 days after video approval (decision pending: after approval vs after upload).
+5. ~~Enforce `products.max_creators`~~ — done 2026-11-03 (Batch 6): editable in the product form (1–50, default 3); the feed hides full products and shows `occupied/max`; new hearts and `match_connection()` refuse a full product (`product_full` / `PRODUCT_FULL`).
+6. ~~Auto-close chat~~ — decided and done 2026-11-03 (Batch 5): the chat closes when the connection completes (brand approval or auto-approval), history stays readable.
 7. Cardcom payments (adapter stub exists); until then admin grants credits.
-8. Admin moderation of portfolio videos (currently auto-approved; `videos.status` supports it).
+8. ~~Admin moderation of portfolio videos~~ — done 2026-11-03 (Batch 5): takedown/restore in `/admin/moderation`.
 
 **Technical debt / risks**
 9. ~~`POST /api/videos` (connection video upload) streams the file through the serverless function~~ — fixed 2026-11-03 (Batch 3): the connections page uploads straight to Storage under `portfolio/<uid>/connections/<connectionId>/` and calls `POST /api/videos/save-connection`; the old `POST /api/videos` remains only as a small-file fallback with corrected authorization.
 10. Old portfolio videos have no `thumbnail_url` (only ones uploaded after `9bc40c1` do). A one-off backfill needs ffmpeg (e.g. a Render worker) or re-upload.
 11. Vercel Hobby: cron once/day; move to Pro for `*/15 * * * *` and commercial terms. `CRON_SECRET` must exist in Production (could not be verified via API).
-12. `brand/products/page.tsx` still sends a `category` field that the `products` table does not have (ignored by the API).
-13. `app/src/app/auth/callback/route.ts` and Google env vars are dead code after removing Google login.
-14. No automated tests. Manual testing requires a real WhatsApp OTP, or the hidden admin login (tap the login title 5×) which can impersonate test creator/brand accounts (`api/auth/dev-login`).
+12. ~~`brand/products/page.tsx` sends a `category` field~~ — removed 2026-11-03 (Batch 5).
+13. ~~`app/src/app/auth/callback/route.ts` is dead code~~ — removed 2026-11-03 (Batch 6). The `GOOGLE_CLIENT_ID/SECRET` env vars can be deleted from Vercel (owner).
+14. Automated tests: `npm test` (65 unit tests, see `app/tests/README.md`). Manual flows need a real WhatsApp OTP or the non-production dev-login (`creator` / `brand` test accounts). Since Batch 6 `verify-otp` signs the user in server-side (cookies) and no longer returns a password.
 15. Message read-receipts are per connection (`*_read_at`), not per message.
 16. The admin "moderation/content" pages were not reviewed in this round.
 

@@ -23,6 +23,25 @@ export function hasChatHistory(conn: { status: unknown; approved_at?: string | n
   return typeof conn.status === "string" && (CLOSED_STATUSES as readonly string[]).includes(conn.status) && !!conn.approved_at;
 }
 
+// Connections that occupy one of a product's creator slots (max_creators): everything from the match on
+export const OCCUPYING_STATUSES = [...CHAT_OPEN_STATUSES, "completed"] as const;
+
+export function isOccupyingStatus(status: unknown): boolean {
+  return typeof status === "string" && (OCCUPYING_STATUSES as readonly string[]).includes(status);
+}
+
+export const DEFAULT_MAX_CREATORS = 3;
+
+export function normalizeMaxCreators(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(String(value ?? "").trim());
+  if (!Number.isFinite(n) || n < 1) return DEFAULT_MAX_CREATORS;
+  return Math.min(50, Math.floor(n));
+}
+
+export function spotsLeft(maxCreators: unknown, occupied: number): number {
+  return Math.max(0, normalizeMaxCreators(maxCreators) - Math.max(0, occupied || 0));
+}
+
 // The brand reviews a deliverable as soon as it is uploaded; the admin step (in_review) is optional (FLOW-01)
 export const BRAND_REVIEW_STATUSES = ["uploaded", "in_review"] as const;
 

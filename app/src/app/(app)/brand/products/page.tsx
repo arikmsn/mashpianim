@@ -15,6 +15,7 @@ interface Product {
   shippingPolicy: string;
   sourceUrl: string | null;
   applicantsCount: number;
+  maxCreators: number;
   createdAt: string;
   productType: "physical" | "digital";
   digitalAccessType: string | null;
@@ -70,6 +71,7 @@ export default function BrandProductsPage() {
     digitalAccessDurationDays: "",
     expirationDate: "",
     quantity: "",
+    maxCreators: "3",
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
 
@@ -94,7 +96,8 @@ export default function BrandProductsPage() {
               brief: (p.brief as string) || "",
               shippingPolicy: (p.shipping_policy as string) || "free",
               sourceUrl: (p.source_url as string) || null,
-              applicantsCount: (p.applicants_count as number) || 0,
+              applicantsCount: (p.matched_count as number) || 0,
+              maxCreators: (p.max_creators as number) || 3,
               createdAt: (p.created_at as string) || "",
               productType: (p.product_type as string) || "physical",
               digitalAccessType: (p.digital_access_type as string) || null,
@@ -116,7 +119,7 @@ export default function BrandProductsPage() {
   }
 
   function resetForm() {
-    setFormData({ name: "", description: "", price: "", brief: "", imageUrl: "", shippingPolicy: "free", sourceUrl: "", productType: "physical", digitalAccessType: "", digitalAccessInstructions: "", digitalAccessDurationDays: "", expirationDate: "", quantity: "" });
+    setFormData({ name: "", description: "", price: "", brief: "", imageUrl: "", shippingPolicy: "free", sourceUrl: "", productType: "physical", digitalAccessType: "", digitalAccessInstructions: "", digitalAccessDurationDays: "", expirationDate: "", quantity: "", maxCreators: "3" });
     setImageFile(null);
     setEditingProduct(null);
   }
@@ -141,6 +144,7 @@ export default function BrandProductsPage() {
       digitalAccessDurationDays: product.digitalAccessDurationDays ? String(product.digitalAccessDurationDays) : "",
       expirationDate: product.expirationDate || "",
       quantity: product.quantity ? String(product.quantity) : "",
+      maxCreators: String(product.maxCreators || 3),
     });
     setImageFile(null);
     setEditingProduct(product);
@@ -186,6 +190,7 @@ export default function BrandProductsPage() {
         digital_access_duration_days: formData.productType === "digital" && formData.digitalAccessDurationDays ? Number(formData.digitalAccessDurationDays) : null,
         expiration_date: formData.expirationDate || null,
         quantity: formData.quantity ? Number(formData.quantity) : null,
+        max_creators: Math.min(50, Math.max(1, Number(formData.maxCreators) || 3)),
       };
 
       if (editingProduct) {
@@ -214,6 +219,7 @@ export default function BrandProductsPage() {
                     digitalAccessDurationDays: (body.digital_access_duration_days as number) || null,
                     expirationDate: (body.expiration_date as string) || null,
                     quantity: (body.quantity as number) || null,
+                    maxCreators: (body.max_creators as number) || 3,
                   }
                 : p
             )
@@ -242,6 +248,7 @@ export default function BrandProductsPage() {
               shippingPolicy: body.shipping_policy as string,
               sourceUrl: body.source_url as string | null,
               applicantsCount: 0,
+              maxCreators: (body.max_creators as number) || 3,
               createdAt: new Date().toISOString(),
               productType: (body.product_type as "physical" | "digital") || "physical",
               digitalAccessType: (body.digital_access_type as string) || null,
@@ -365,7 +372,7 @@ export default function BrandProductsPage() {
                           </div>
                           <div className="flex items-center gap-3 text-xs text-neutral-400 mb-2">
                             <span>₪{product.price}</span>
-                            <span>👥 {product.applicantsCount} בקשות</span>
+                            <span>👥 {product.applicantsCount}/{product.maxCreators} יוצרים</span>
                             <span>{product.productType === "digital" ? "📱 דיגיטלי" : shippingLabels[product.shippingPolicy] || product.shippingPolicy}</span>
                           </div>
                           <div className="flex gap-2">
@@ -567,6 +574,18 @@ export default function BrandProductsPage() {
                 onChange={(e) => setFormData((p) => ({ ...p, quantity: e.target.value }))}
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">מספר יוצרים למוצר</label>
+            <Input
+              type="number"
+              min={1}
+              max={50}
+              value={formData.maxCreators}
+              onChange={(e) => setFormData((p) => ({ ...p, maxCreators: e.target.value }))}
+            />
+            <p className="text-xs text-neutral-400 mt-1">כמה סרטונים (יוצרים) תרצו למוצר הזה. כל מאטץ&apos; תופס מקום אחד וקרדיט אחד; כשהמקומות נגמרים המוצר יורד מהפיד.</p>
           </div>
 
           <div>

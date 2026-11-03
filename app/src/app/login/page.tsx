@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { clearCache } from "@/lib/client-cache";
+import { refreshAuth } from "@/hooks/use-auth";
 import { useToast } from "@/components/ui";
 
 export default function LoginPage() {
@@ -69,16 +70,8 @@ function LoginContent() {
       // A new session must never see the previous user's cached responses
       clearCache();
 
-      // Create Supabase session
-      if (data.email && data.tempPassword) {
-        const { error: sessionError } = await supabase.auth.signInWithPassword({
-          email: data.email,
-          password: data.tempPassword,
-        });
-        if (sessionError) {
-          console.error("[login] session error:", sessionError);
-        }
-      }
+      // The server already signed us in (auth cookies on the response); refresh the auth store from them
+      await refreshAuth();
 
       if (data.needsOnboarding) {
         router.push(`/register?verified=1&userId=${data.userId}&phone=${encodeURIComponent(formattedPhone)}`);

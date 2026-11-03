@@ -650,6 +650,17 @@ export default function ProfilePage() {
     }
   }, [userType]);
 
+  // Right after registration (/profile?onboarding=1) a creator lands on the first upload
+  useEffect(() => {
+    if (userType !== "creator" || typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("onboarding") !== "1") return;
+    const timer = setTimeout(() => {
+      setShowUploadModal(true);
+      window.history.replaceState(null, "", "/profile");
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [userType]);
+
   const handleUploadVideo = async () => {
     if (!selectedFile) {
       toast("בחרו קובץ וידאו", "error");

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { toPublicProduct } from "@/lib/authz";
+import { OCCUPYING_STATUSES, normalizeMaxCreators, spotsLeft } from "@/lib/connection-flow";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -82,22 +83,44 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "שגיאה בטעינת מוצרים" }, { status: 500 });
   }
 
-  const products = (data || []).map((p: any) => {
-    const brandCats: string[] = Array.isArray(p.brand_profiles?.categories) && p.brand_profiles.categories.length > 0
-      ? p.brand_profiles.categories
-      : [p.brand_profiles?.category].filter(Boolean);
-    const row = { ...p };
-    delete row.brand_profiles;
-    const shaped = {
-      ...row,
-      brand_name: p.brand_profiles?.shop_name || "",
-      brand_user_id: p.brand_profiles?.user_id || null,
-      category: brandCats[0] || "",
-      categories: brandCats,
-      logo_url: p.brand_profiles?.logo_url || null,
-    };
-    return privileged ? shaped : toPublicProduct(shaped);
-  });
+  // How many creator slots each product has used (every status from the match on counts) — BRAND-01
+  const productIds = (data || []).map((p: any) => p.id);
+  const occupiedByProduct = new Map<string, number>();
+  if (productIds.length > 0) {
+    const { data: occ } = await admin
+      .from("connections")
+      .select("product_id")
+      .in("product_id", productIds)
+      .in("status", [...OCCUPYING_STATUSES]);
+    for (const c of (occ || []) as any[]) {
+      occupiedByProduct.set(c.product_id, (occupiedByProduct.get(c.product_id) || 0) + 1);
+    }
+  }
+
+  const products = (data || [])
+    .map((p: any) => {
+      const brandCats: string[] = Array.isArray(p.brand_profiles?.categories) && p.brand_profiles.categories.length > 0
+        ? p.brand_profiles.categories
+        : [p.brand_profiles?.category].filter(Boolean);
+      const row = { ...p };
+      delete row.brand_profiles;
+      const occupied = occupiedByProduct.get(p.id) || 0;
+      const shaped = {
+        ...row,
+        max_creators: normalizeMaxCreators(p.max_creators),
+        occupied,
+        spots_left: spotsLeft(p.max_creators, occupied),
+        matched_count: occupied,
+        brand_name: p.brand_profiles?.shop_name || "",
+        brand_user_id: p.brand_profiles?.user_id || null,
+        category: brandCats[0] || "",
+        categories: brandCats,
+        logo_url: p.brand_profiles?.logo_url || null,
+      };
+      return privileged ? shaped : toPublicProduct(shaped);
+    })
+    // Creators browsing the feed don't see products whose creator slots are all taken
+    .filter((p: any) => privileged || (p.spots_left as number) > 0);
 
   return NextResponse.json({ products });
 }
@@ -148,7 +171,7 @@ export async function POST(request: NextRequest) {
     name, description, price, image_url,
     shipping_policy, shipping_address, source_url,
     product_type, digital_access_type, digital_access_instructions, digital_access_duration_days,
-    expiration_date, quantity, brief,
+    expiration_date, quantity, brief, max_creators,
   } = body;
 
   if (!name || !price) {
@@ -179,6 +202,8 @@ export async function POST(request: NextRequest) {
       quantity: quantity || null,
       // Brand-written brief sent to the creator when a match opens (optional)
       brief: typeof brief === "string" && brief.trim() ? brief.trim() : null,
+      // How many creators may be matched with this product (1–50, default 3)
+      max_creators: normalizeMaxCreators(max_creators),
     } as any)
     .select()
     .single();

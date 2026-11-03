@@ -6,8 +6,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/components/ui";
-import { createClient } from "@/lib/supabase/client";
 import { clearCache } from "@/lib/client-cache";
+import { refreshAuth } from "@/hooks/use-auth";
 
 type UserType = "creator" | "brand" | null;
 
@@ -139,7 +139,6 @@ function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { 
   });
   const router = useRouter();
   const { toast } = useToast();
-  const supabase = createClient();
 
   function updateForm(field: string, value: string | string[] | boolean) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -196,7 +195,9 @@ function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { 
 
       toast("נרשמתם בהצלחה! 🎉", "success");
       clearCache();
-      router.push("/feed");
+      // The session was set server-side; refresh the auth store, then land on the first upload
+      await refreshAuth();
+      router.push("/profile?onboarding=1");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "שגיאה בהרשמה";
       toast(msg, "error");
@@ -216,11 +217,7 @@ function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { 
       const verifyData = await verifyRes.json();
       if (!verifyRes.ok) throw new Error(verifyData.error);
 
-      // Create session
-      if (verifyData.email && verifyData.tempPassword) {
-        await supabase.auth.signInWithPassword({ email: verifyData.email, password: verifyData.tempPassword });
-      }
-
+      // The server signed us in (auth cookies on the response); the register call below rides on them
       await registerProfile(verifyData.userId);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "שגיאה בהרשמה";
@@ -431,7 +428,6 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
   });
   const router = useRouter();
   const { toast } = useToast();
-  const supabase = createClient();
 
   function updateForm(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -479,6 +475,7 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
 
       toast("נרשמתם בהצלחה! 🎉", "success");
       clearCache();
+      await refreshAuth();
       router.push("/brand");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "שגיאה בהרשמה";
@@ -499,10 +496,7 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
       const verifyData = await verifyRes.json();
       if (!verifyRes.ok) throw new Error(verifyData.error);
 
-      if (verifyData.email && verifyData.tempPassword) {
-        await supabase.auth.signInWithPassword({ email: verifyData.email, password: verifyData.tempPassword });
-      }
-
+      // The server signed us in (auth cookies on the response); the register call below rides on them
       await registerProfile(verifyData.userId);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "שגיאה בהרשמה";

@@ -6,6 +6,7 @@ import { logActivity } from "@/lib/notifications";
 import { performMatch, countPortfolioVideos, portfolioGateError, MIN_PORTFOLIO_VIDEOS, notifyHeartSent, notifyBrandOfHeart } from "@/lib/match";
 import { isUniqueViolation } from "@/lib/match-errors";
 import { getTimelineSettings } from "@/lib/settings";
+import { OCCUPYING_STATUSES, spotsLeft } from "@/lib/connection-flow";
 
 function getAdminClient() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -161,12 +162,26 @@ export async function POST(request: NextRequest) {
 
   const { data: product } = await admin
     .from("products")
-    .select("id, brand_id, status, name, product_type, brand_profiles(id, user_id, shop_name, users(id, full_name, phone))")
+    .select("id, brand_id, status, name, product_type, max_creators, brand_profiles(id, user_id, shop_name, users(id, full_name, phone))")
     .eq("id", product_id)
     .single();
 
   if (!product || (product as any).status !== "active") {
     return NextResponse.json({ error: "מוצר לא זמין" }, { status: 404 });
+  }
+
+  // No new hearts once the product's creator slots are all taken (BRAND-01); the match itself is
+  // re-checked atomically in match_connection()
+  const { count: occupied } = await admin
+    .from("connections")
+    .select("id", { count: "exact", head: true })
+    .eq("product_id", product_id)
+    .in("status", [...OCCUPYING_STATUSES]);
+  if (spotsLeft((product as any).max_creators, occupied || 0) === 0) {
+    return NextResponse.json(
+      { error: "המוצר כבר מלא — כל מקומות היוצרים למוצר הזה תפוסים.", code: "product_full" },
+      { status: 409 }
+    );
   }
   const brandProfile = (product as any).brand_profiles;
   const brandUser = brandProfile?.users;

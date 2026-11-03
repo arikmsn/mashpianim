@@ -310,7 +310,7 @@ export default function FeedPage() {
         description: (p.description as string) || "",
         requirements: (p.requirements as string) || "סרטון UGC",
         deadline: (p.film_deadline_days as number) || 10,
-        applicants: (p.applicants_count as number) || 0,
+        applicants: (p.occupied as number) || 0,
         maxCreators: (p.max_creators as number) || 3,
       }))
     );

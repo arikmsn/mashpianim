@@ -42,6 +42,15 @@ function start() {
   });
 }
 
+// Re-reads the session from the auth cookies (after a server-side sign-in) and notifies subscribers,
+// so pages can navigate with the router instead of reloading the whole app.
+export async function refreshAuth(): Promise<void> {
+  if (!isClientConfigured()) return;
+  const { data: { session } } = await createClient().auth.getSession();
+  syncCacheOwner(session?.user?.id ?? null);
+  emit({ user: session?.user ?? null, loading: false });
+}
+
 function subscribe(listener: () => void) {
   listeners.add(listener);
   start();

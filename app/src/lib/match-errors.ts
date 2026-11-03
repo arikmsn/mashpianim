@@ -7,6 +7,9 @@ export function mapMatchError(message: string | null | undefined): { error: stri
   if (m.includes("CONNECTION_NOT_PENDING")) {
     return { error: "החיבור כבר לא ממתין", status: 400 };
   }
+  if (m.includes("PRODUCT_FULL")) {
+    return { error: "המוצר כבר מלא — כל מקומות היוצרים למוצר הזה תפוסים.", status: 409 };
+  }
   if (m.includes("CONNECTION_NOT_FOUND") || m.includes("BRAND_NOT_FOUND")) {
     return { error: "חיבור לא נמצא", status: 404 };
   }
