@@ -108,3 +108,20 @@ Scripted runs: send Hebrew bodies from a UTF-8 shell (PowerShell `-Encoding utf8
 | 49 | `max_creators` validation | `PUT /api/products/<id>` with `{max_creators: 0}` / `500` / `"4"` | 400 (nothing valid) / clamped to 50 / 4 |
 | 50 | OTP sign-in is server-side (SEC-09) | `POST /api/auth/verify-otp` with a valid code | JSON has `userId`, `userType`, `needsOnboarding` only — no `tempPassword`/`email`; the response sets the `sb-*-auth-token` cookies; `/api/profile` with those cookies is authenticated |
 | 51 | New creator lands on the first upload | finish creator registration | redirected to `/profile?onboarding=1`; the upload modal opens and the URL is cleaned to `/profile` |
+
+## Release QA run — 2026-11-03 (browser, local production build)
+
+How it was run: `npm run build` then `npm start -- -p 3100` from `app/` with the env passed to the process only (dev-login gate `ADMIN_LOGIN_PHONE`/`ADMIN_LOGIN_PASSWORD` set to local-only values, `NODE_ENV=production`, `ALLOW_DEV_LOGIN=true`), against the live database using only the two QA accounts. The hidden gate opens with 5 taps on the login title; the gate values and `CRON_SECRET` used here are not the production ones.
+
+| Journey | Result | Checks |
+|---|---|---|
+| Creator: gate login → feed heart → profile upload modal (50 MB hint, oversize file rejected with the message) → chat send → closed chat is read-only → notifications mark-read → logout | pass | 36, 43 |
+| Brand: gate login → creator gallery → product create / edit / delete via the form (brief, `max_creators`) → approve heart (match, credit 7/10) → ship with tracking | pass | 44, 47 |
+| Creator confirms delivery → uploads the deliverable with progress (`uploaded`) | pass | 36, 40 |
+| Brand requests a revision with notes (1/2 shown) → creator sees the notes and re-uploads → brand approves → `completed`, both videos `approved`, closing message, notifications to both | pass | 40, 41, 42 |
+| Brand sends a chat message on an active connection | pass | — |
+| Dev-login rate limit after 10 attempts / 15 min | 429 shown as expected | 32 |
+| WhatsApp OTP registration / login | **not run locally** (needs GreenAPI keys) — owner smoke test after deploy | 30, 50, 51 |
+| Admin moderation / settings | **not run** (no admin test account by design) — owner after deploy, or temporarily promote a QA account | 29, 38, 39, 45 |
+
+Observations (not blockers, listed in `docs/STATUS.md` B5): completion approves the superseded deliverable as well; product delete has no confirmation; the 429 copy says "a minute".
