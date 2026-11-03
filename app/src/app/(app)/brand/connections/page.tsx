@@ -8,6 +8,7 @@ import { ConnectionTimeline, PublicProfileContent } from "@/components/features"
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch } from "@/lib/client-cache";
 import { activeDeadlineField, canBrandReview } from "@/lib/connection-flow";
+import { toDirectImageUrl } from "@/lib/images";
 
 interface Connection {
   id: string;
@@ -189,7 +190,7 @@ function BrandConnectionsPageInner() {
           creatorName: (c as any).creator_profiles?.users?.full_name || (c as any).creator?.full_name || "יוצר/ת",
           creatorAvatar: (c as any).creator_profiles?.users?.avatar_url || null,
           productName: (c as any).products?.name || "מוצר",
-          productImage: (c as any).products?.image_url || null,
+          productImage: toDirectImageUrl((c as any).products?.image_url),
           productType: ((c as any).products?.product_type as "physical" | "digital") || (c.delivery_type as "physical" | "digital") || "physical",
           status: c.status as string,
           createdAt: c.created_at as string,

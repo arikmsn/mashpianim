@@ -22,9 +22,15 @@ describe("notification deep links", () => {
     assert.equal(notificationHref({ type: "match", data: null }, "brand"), "/messages");
   });
 
-  test("in-app reports: admins go to the feedback screen, reporters to their profile", () => {
-    assert.equal(notificationHref({ type: "feedback_received", data: { feedbackId: "f" } }, "admin"), "/admin/feedback");
-    assert.equal(notificationHref({ type: "feedback_received", data: { feedbackId: "f" } }, "creator"), null);
+  test("an admin acting as a creator never lands in the admin area for connection events", () => {
+    assert.equal(notificationHref({ type: "heart_received", data }, "creator", true), "/products/p1");
+    assert.equal(notificationHref({ type: "video_uploaded", data }, "brand", true), "/brand/connections?open=c1");
+    assert.equal(notificationHref({ type: "match", data }, "creator", true), "/messages?connection=c1");
+  });
+
+  test("in-app reports: only admins go to the feedback screen, reporters to their profile", () => {
+    assert.equal(notificationHref({ type: "feedback_received", data: { feedbackId: "f" } }, "creator", true), "/admin/feedback");
+    assert.equal(notificationHref({ type: "feedback_received", data: { feedbackId: "f" } }, "creator", false), null);
     assert.equal(notificationHref({ type: "feedback_updated", data: { feedbackId: "f" } }, "brand"), "/profile");
   });
 

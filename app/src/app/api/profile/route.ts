@@ -68,8 +68,10 @@ export async function GET() {
       .eq("creator_id", userData.id)
       .is("connection_id", null);
 
+    // `role` = the side this account acts on in the app (admins act as creators here)
     return NextResponse.json({
       user: userData,
+      role: "creator",
       profile: { ...((rawProfile as any) || {}), portfolio_count: portfolioCount || 0 },
     });
   } else if (userData.type === "brand") {
@@ -81,11 +83,12 @@ export async function GET() {
 
     return NextResponse.json({
       user: userData,
+      role: "brand",
       profile: rawProfile || {},
     });
   }
 
-  return NextResponse.json({ user: userData, profile: {} });
+  return NextResponse.json({ user: userData, role: "creator", profile: {} });
 }
 
 export async function PUT(req: Request) {

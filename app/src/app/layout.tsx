@@ -14,6 +14,9 @@ export const metadata: Metadata = {
     "הפלטפורמה הישראלית לחיבור יוצרי תוכן UGC עם מותגים ועסקים. קבלו מוצרים בחינם בתמורה לסרטונים אותנטיים. הצטרפו עכשיו!",
   manifest: "/manifest.json",
   metadataBase: new URL("https://www.mashpian.online"),
+  // Google Drive / Googleusercontent refuse hotlinked images when a Referer is sent; nothing in the app
+  // needs outgoing referrers, so none are sent (same-origin API calls are unaffected)
+  referrer: "no-referrer",
   openGraph: {
     type: "website",
     locale: "he_IL",

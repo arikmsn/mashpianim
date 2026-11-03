@@ -82,7 +82,9 @@ app/src/
     client-cache.ts             swrFetch/fetchJson/readCache (stale-while-revalidate for GET APIs; one in-flight request per URL, 2 s freshness window) + UNREAD_EVENT bus
     video-thumbnail.ts          browser-side poster generation from a video File
     notifications.ts            createNotification(), notificationData(connectionId, productId), logActivity(), notifyConnectionStatusChange()
-    notification-links.ts       notificationHref(row, role): where a tapped notification goes (product page / connection card / modal / chat)
+    notification-links.ts       notificationHref(row, role, isAdmin): where a tapped notification goes (product page / connection card / modal / chat)
+    viewer.ts                   resolveViewer(): the side an account acts on (admins act as the creator/brand behind their own profiles) — user-facing routes scope to it, never "admin sees all"
+    images.ts                   toDirectImageUrl(): Google Drive links → embeddable thumbnail url (the root layout also sets referrer: no-referrer — Google refuses hotlinked Drive images with a Referer)
     connection-flow.ts          lifecycle rules + journey timeline (FLOW_STEPS, flowNextAction, activeDeadlineField) shared by API and pages
     admin-auth.ts               verifyAdmin(), isSupabaseConfigured()
     moderation/chat-filter.ts   blocks phone/email/links in chat

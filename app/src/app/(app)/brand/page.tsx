@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, Badge, Button, Card, Modal, useToast } from "@/components/ui";
 import { ProfileModal } from "@/components/features";
 import { swrFetch, fetchJson } from "@/lib/client-cache";
+import { toDirectImageUrl } from "@/lib/images";
 import { createClient } from "@/lib/supabase/client";
 
 interface CreatorCard {
@@ -460,7 +461,7 @@ export default function BrandDiscoverPage() {
                   }`}
                 >
                   {p.image_url ? (
-                    <img src={p.image_url} alt={p.name} className="w-12 h-12 rounded-lg object-cover" />
+                    <img src={toDirectImageUrl(p.image_url) || ""} alt={p.name} className="w-12 h-12 rounded-lg object-cover" />
                   ) : (
                     <div className="w-12 h-12 rounded-lg bg-neutral-100 flex items-center justify-center">{p.product_type === "digital" ? "📱" : "📦"}</div>
                   )}

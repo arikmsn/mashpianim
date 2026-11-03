@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { resolveViewer } from "@/lib/viewer";
 
 function getAdminClient() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -21,43 +22,22 @@ export async function GET() {
     return NextResponse.json({ count: 0 });
   }
 
-  const { data: dbUser } = await admin
-    .from("users")
-    .select("id, type")
-    .eq("auth_user_id", user.id)
-    .single();
-
-  if (!dbUser) {
+  // The side this account acts on (admins act as the creator/brand behind the account)
+  const viewer = await resolveViewer(admin, user.id);
+  if (!viewer) {
     return NextResponse.json({ count: 0 });
   }
 
-  const userType = (dbUser as any).type;
-  const userId = (dbUser as any).id;
-  const readColumn = userType === "brand" ? "brand_read_at" : "creator_read_at";
-
-  let profileId: string | null = null;
-  if (userType === "creator") {
-    const { data: cp } = await admin
-      .from("creator_profiles")
-      .select("id")
-      .eq("user_id", userId)
-      .single();
-    profileId = cp ? (cp as any).id : null;
-  } else if (userType === "brand") {
-    const { data: bp } = await admin
-      .from("brand_profiles")
-      .select("id")
-      .eq("user_id", userId)
-      .single();
-    profileId = bp ? (bp as any).id : null;
-  }
+  const userId = viewer.userId;
+  const readColumn = viewer.role === "brand" ? "brand_read_at" : "creator_read_at";
+  const profileId = viewer.role === "brand" ? viewer.brandProfileId : viewer.creatorProfileId;
 
   if (!profileId) {
     return NextResponse.json({ count: 0 });
   }
 
   const activeStatuses = ["approved", "shipped", "delivered", "filming", "uploaded", "in_review", "revision_requested"];
-  const idColumn = userType === "brand" ? "brand_id" : "creator_id";
+  const idColumn = viewer.role === "brand" ? "brand_id" : "creator_id";
 
   const { data: connections } = await admin
     .from("connections")

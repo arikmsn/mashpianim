@@ -1,20 +1,24 @@
 // Where a notification takes the user when tapped (pure, unit-tested).
 // Notification `data` carries `connectionId` (always, for connection events) and `productId` (newer rows).
+//
+// `role` is the side the account acts on in the app (creator or brand) — for admins too: an admin with a
+// creator profile is a creator here. Only report notifications ever lead into the admin area, and only
+// for admins (`isAdmin`).
 
 export type NotificationLike = { type: string; data?: Record<string, unknown> | null };
-export type ViewerRole = "creator" | "brand" | "admin" | null | undefined;
+export type ViewerRole = "creator" | "brand" | null | undefined;
 
 function str(value: unknown): string | null {
   return typeof value === "string" && value ? value : null;
 }
 
-export function notificationHref(n: NotificationLike, role: ViewerRole): string | null {
+export function notificationHref(n: NotificationLike, role: ViewerRole, isAdmin = false): string | null {
   const connectionId = str(n.data?.connectionId);
   const productId = str(n.data?.productId);
 
-  if (n.type === "portfolio_video_removed") return "/profile";
-  if (n.type === "feedback_received") return role === "admin" ? "/admin/feedback" : null;
+  if (n.type === "feedback_received") return isAdmin ? "/admin/feedback" : null;
   if (n.type === "feedback_updated") return "/profile";
+  if (n.type === "portfolio_video_removed") return "/profile";
 
   if (n.type === "match" || n.type === "new_message") {
     return connectionId ? `/messages?connection=${connectionId}` : "/messages";
@@ -29,10 +33,6 @@ export function notificationHref(n: NotificationLike, role: ViewerRole): string 
     // to the connections list, which highlights the card
     if (productId) return `/products/${productId}`;
     return connectionId ? `/connections?open=${connectionId}` : null;
-  }
-
-  if (role === "admin") {
-    return connectionId ? "/admin/content" : null;
   }
 
   return null;

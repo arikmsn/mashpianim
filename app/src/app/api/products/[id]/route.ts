@@ -76,9 +76,10 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     ? shaped
     : { ...toPublicProduct(shaped), ...(viewer?.type === "creator" ? { brief: row.brief ?? null } : {}) };
 
-  // The viewing creator's own connection for this product (open one first, else the latest closed one)
+  // The viewing creator's own connection for this product (open one first, else the latest closed one).
+  // Admins act as creators in the app, so their own creator profile is looked up too.
   let connection: Record<string, unknown> | null = null;
-  if (viewer?.type === "creator") {
+  if (viewer?.type === "creator" || viewer?.type === "admin") {
     const { data: cp } = await admin
       .from("creator_profiles")
       .select("id")

@@ -9,6 +9,7 @@ import { ProfileModal } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch, emitUnreadChanged } from "@/lib/client-cache";
+import { toDirectImageUrl } from "@/lib/images";
 import { isChatOpen, hasChatHistory } from "@/lib/connection-flow";
 
 interface Conversation {
@@ -105,7 +106,7 @@ function MessagesContent() {
           time: lastAt ? formatTime(lastAt) : "",
           unread: (c.unread_count as number) || 0,
           product: (prod?.name as string) || null,
-          productImage: (prod?.image_url as string) || null,
+          productImage: toDirectImageUrl(prod?.image_url as string | null),
           status: (c.status as string) || "",
           closed: !isChatOpen(c.status),
         };

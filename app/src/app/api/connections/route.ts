@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/admin-auth";
 import { logActivity } from "@/lib/notifications";
+import { resolveViewer } from "@/lib/viewer";
 import { performMatch, countPortfolioVideos, portfolioGateError, MIN_PORTFOLIO_VIDEOS, notifyHeartSent, notifyBrandOfHeart } from "@/lib/match";
 import { isUniqueViolation } from "@/lib/match-errors";
 import { getTimelineSettings } from "@/lib/settings";
@@ -31,17 +32,19 @@ export async function GET() {
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 
-  const { data: dbUser } = await admin
-    .from("users")
-    .select("id, type")
-    .eq("auth_user_id", user.id)
-    .single();
-
-  if (!dbUser) {
+  const viewer = await resolveViewer(admin, user.id);
+  if (!viewer) {
     return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 404 });
   }
 
-  let query = admin
+  // Always the viewer's own connections — an admin acts as the creator/brand behind the account here;
+  // platform-wide views live under /api/admin
+  const ownProfileId = viewer.role === "brand" ? viewer.brandProfileId : viewer.creatorProfileId;
+  if (!ownProfileId) {
+    return NextResponse.json({ connections: [], settings: { max_revisions: (await getTimelineSettings(admin)).max_revisions } });
+  }
+
+  const { data, error } = await admin
     .from("connections")
     .select(`
       *,
@@ -49,40 +52,16 @@ export async function GET() {
       creator_profiles!connections_creator_id_fkey(user_id, users(full_name, avatar_url)),
       brand_profiles!connections_brand_id_fkey(user_id, shop_name, logo_url, users(full_name, avatar_url))
     `)
+    .eq(viewer.role === "brand" ? "brand_id" : "creator_id", ownProfileId)
     .order("created_at", { ascending: false });
-
-  const userType = (dbUser as any).type;
-
-  if (userType === "creator") {
-    const { data: cp } = await admin
-      .from("creator_profiles")
-      .select("id")
-      .eq("user_id", (dbUser as any).id)
-      .single();
-    if (cp) {
-      query = query.eq("creator_id", (cp as any).id);
-    }
-  } else if (userType === "brand") {
-    const { data: bp } = await admin
-      .from("brand_profiles")
-      .select("id")
-      .eq("user_id", (dbUser as any).id)
-      .single();
-    if (bp) {
-      query = query.eq("brand_id", (bp as any).id);
-    }
-  }
-  // admin sees all
-
-  const { data, error } = await query;
 
   if (error) {
     console.error("[connections] list error:", error);
     return NextResponse.json({ error: "שגיאה בטעינת חיבורים" }, { status: 500 });
   }
 
-  const userId = (dbUser as any).id;
-  const readColumn = userType === "brand" ? "brand_read_at" : "creator_read_at";
+  const userId = viewer.userId;
+  const readColumn = viewer.role === "brand" ? "brand_read_at" : "creator_read_at";
 
   // Enrich with unread count and last message — one query for all connections
   const connIds = (data || []).map((c: any) => c.id);

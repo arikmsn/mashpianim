@@ -30,6 +30,8 @@ const typeIcons: Record<string, string> = {
   filming_deadline_warning: "⏰",
   review_deadline_warning: "⏰",
   portfolio_video_removed: "⚠️",
+  feedback_received: "📨",
+  feedback_updated: "📬",
   new_message: "💬",
   system: "🔔",
 };
@@ -54,6 +56,8 @@ const typeColors: Record<string, string> = {
   connection_cancelled: "bg-neutral-100 text-neutral-500",
   connection_auto_cancelled: "bg-neutral-100 text-neutral-500",
   portfolio_video_removed: "bg-red-50 text-red-500",
+  feedback_received: "bg-blue-50 text-blue-600",
+  feedback_updated: "bg-blue-50 text-blue-600",
   new_message: "bg-pink-50 text-pink-500",
   system: "bg-neutral-50 text-neutral-500",
 };
@@ -73,21 +77,27 @@ function formatTime(dateStr: string) {
   return `לפני ${diffDays} ימים`;
 }
 
+type ProfileShape = { user?: { type?: string }; role?: string };
+
+// The side the account acts on (creator/brand) plus whether it is an admin (report notifications only)
+function viewerFromProfile(data: ProfileShape | undefined): { role: ViewerRole; isAdmin: boolean } {
+  if (!data) return { role: null, isAdmin: false };
+  const type = data.user?.type;
+  const role = (data.role === "brand" || data.role === "creator" ? data.role : type === "brand" ? "brand" : type ? "creator" : null) as ViewerRole;
+  return { role, isAdmin: type === "admin" };
+}
+
 export default function NotificationsPage() {
   const { notifications, loaded, markAsRead, markAllRead } = useNotifications();
   const router = useRouter();
-  const [role, setRole] = useState<ViewerRole>(
-    () => (readCache<{ user?: { type?: string } }>("/api/profile")?.user?.type as ViewerRole) || null
-  );
+  const [viewer, setViewer] = useState(() => viewerFromProfile(readCache<ProfileShape>("/api/profile")));
   // Rows that were unread when the screen opened keep their highlight for this visit, even though
   // opening the screen marks everything as read (that is what clears the bell badge everywhere)
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const markedRef = useRef(false);
 
   useEffect(() => {
-    swrFetch<{ user?: { type?: string } }>("/api/profile", (data) => {
-      if (data.user?.type) setRole(data.user.type as ViewerRole);
-    });
+    swrFetch<ProfileShape>("/api/profile", (data) => setViewer(viewerFromProfile(data)));
   }, []);
 
   useEffect(() => {
@@ -104,11 +114,11 @@ export default function NotificationsPage() {
 
   function open(n: AppNotification) {
     if (!n.read) markAsRead(n.id);
-    const href = notificationHref(n, role);
+    const href = notificationHref(n, viewer.role, viewer.isAdmin);
     if (href) router.push(href);
   }
 
-  const backHref = role === "brand" ? "/brand" : "/feed";
+  const backHref = viewer.role === "brand" ? "/brand" : "/feed";
 
   return (
     <main className="min-h-screen bg-background pb-20">
@@ -148,7 +158,7 @@ export default function NotificationsPage() {
         ) : (
           notifications.map((notification, index) => {
             const isNew = newIds.has(notification.id) || !notification.read;
-            const href = notificationHref(notification, role);
+            const href = notificationHref(notification, viewer.role, viewer.isAdmin);
             return (
               <motion.button
                 key={notification.id}

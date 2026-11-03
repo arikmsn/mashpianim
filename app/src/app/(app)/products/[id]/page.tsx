@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { swrFetch, fetchJson } from "@/lib/client-cache";
 import { FORMAT_LINES } from "@/lib/brief";
 import { activeDeadlineField, hasChatHistory } from "@/lib/connection-flow";
+import { toDirectImageUrl } from "@/lib/images";
 import { MAX_VIDEO_MB } from "@/lib/uploads";
 
 const MIN_PORTFOLIO = 5;
@@ -69,12 +70,6 @@ const STATUS_BADGE: Record<string, { label: string; variant: BadgeProps["variant
   cancelled: { label: "בוטל", variant: "danger" },
   rejected: { label: "נדחה", variant: "danger" },
 };
-
-function toDirectImageUrl(url: string | null): string | null {
-  if (!url) return null;
-  const driveMatch = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
-  return driveMatch ? `https://drive.google.com/uc?export=view&id=${driveMatch[1]}` : url;
-}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (

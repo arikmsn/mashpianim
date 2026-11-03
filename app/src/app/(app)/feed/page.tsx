@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useNotifications } from "@/hooks/use-notifications";
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch, fetchJson } from "@/lib/client-cache";
+import { toDirectImageUrl } from "@/lib/images";
 
 // Filter chips: "for you" (the creator's categories + anything already in motion), everything, then categories
 const FOR_YOU = "בשבילך";
@@ -36,15 +37,6 @@ const registrationToFeedMap: Record<string, string> = {
   "חיות מחמד": "כללי",
   "אחר": "כללי",
 };
-
-function toDirectImageUrl(url: string | null): string | null {
-  if (!url) return null;
-  const driveMatch = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
-  if (driveMatch) {
-    return `https://drive.google.com/uc?export=view&id=${driveMatch[1]}`;
-  }
-  return url;
-}
 
 interface Product {
   id: string;
@@ -132,7 +124,7 @@ function ProductCard({
   const matched = !!relation && relation.status !== "pending";
 
   return (
-    <Card hover padding="none" className="overflow-hidden relative">
+    <Card hover padding="none" className="overflow-hidden relative h-full flex flex-col">
       {pendingFromBrand && (
         <div className="absolute top-3 right-3 z-10 ig-gradient-bg text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">
           💗 סימנו אותך
@@ -168,7 +160,9 @@ function ProductCard({
           </div>
         )}
       </button>
-      <div className="p-4">
+      {/* Body is a column: the description keeps two lines of height and the footer sits at the bottom,
+          so every card in the grid has the same height whatever the text length */}
+      <div className="p-4 flex flex-col flex-1">
         <div className="flex items-start justify-between mb-2">
           <button
             type="button"
@@ -189,7 +183,7 @@ function ProductCard({
           </Badge>
         </div>
         {locked ? (
-          <div className="relative mb-3">
+          <div className="relative mb-3 min-h-[2.5rem]">
             <p className="text-sm text-neutral-600 line-clamp-2 blur-sm select-none" aria-hidden="true">
               {product.description || "פרטי המוצר, הדרישות והבריף יופיעו כאן"}
             </p>
@@ -202,14 +196,14 @@ function ProductCard({
             </button>
           </div>
         ) : (
-          <p className="text-sm text-neutral-600 mb-3 line-clamp-2">
-            {product.description}
+          <p className="text-sm text-neutral-600 mb-3 line-clamp-2 min-h-[2.5rem]">
+            {product.description || "העסק לא הוסיף תיאור — הפרטים והבריף בדף המוצר"}
           </p>
         )}
         <div className="flex items-center gap-2 mb-3 text-xs text-neutral-400">
           <span>📋 {product.requirements}</span>
         </div>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mt-auto">
           <div className="flex items-center gap-3 text-xs text-neutral-400">
             <span>👥 {product.applicants}/{product.maxCreators}</span>
             <span>⏱ {product.deadline} ימים</span>
@@ -617,6 +611,7 @@ export default function FeedPage() {
                 <motion.div
                   key={product.id}
                   layout
+                  className="h-full"
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
