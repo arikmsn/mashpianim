@@ -153,7 +153,7 @@ export async function performMatch(admin: Admin, connectionId: string, actorUser
     .from("connections")
     .select(`
       id, status, brand_id, creator_id, credit_deducted, initiated_by,
-      products(id, name, price, description, product_type, brief,
+      products(id, name, price, description, product_type, brief, brief_data,
         brand_profiles(id, user_id, shop_name, users(id, full_name, phone))),
       creator_profiles!connections_creator_id_fkey(user_id, users(id, full_name, phone))
     `)
@@ -213,6 +213,7 @@ export async function performMatch(admin: Admin, connectionId: string, actorUser
         product_type: product?.product_type,
         description: product?.description,
         brief: product?.brief,
+        brief_data: product?.brief_data,
       }),
       is_system: true,
     },

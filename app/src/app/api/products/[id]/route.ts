@@ -88,7 +88,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       const { data: conns } = await admin
         .from("connections")
         .select(
-          "id, status, initiated_by, delivery_type, tracking_number, tracking_url, digital_access_value, revision_notes, revision_count, approved_at, shipped_at, delivered_at, filmed_at, completed_at, ship_deadline, deliver_deadline, film_deadline, review_deadline, created_at"
+          "id, status, initiated_by, mutual_at, delivery_type, tracking_number, tracking_url, digital_access_value, revision_notes, revision_count, approved_at, shipped_at, delivered_at, filmed_at, completed_at, ship_deadline, deliver_deadline, film_deadline, review_deadline, created_at"
         )
         .eq("creator_id", (cp as any).id)
         .eq("product_id", id)

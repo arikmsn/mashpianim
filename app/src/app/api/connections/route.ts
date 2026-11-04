@@ -317,5 +317,5 @@ export async function POST(request: NextRequest) {
     details: { product_id, product_name: (product as any).name, initiatedBy },
   });
 
-  return NextResponse.json({ connection, matched: false }, { status: 201 });
+  return NextResponse.json({ connection, matched: false, mutual: false }, { status: 201 });
 }
