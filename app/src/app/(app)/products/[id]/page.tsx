@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Avatar, Badge, Button, Card, Modal, useToast, type BadgeProps } from "@/components/ui";
+import { Avatar, Badge, Button, Card, ImageLightbox, Modal, useToast, type BadgeProps } from "@/components/ui";
 import { ConnectionTimeline, ProfileModal } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { useDeliverableUpload } from "@/hooks/use-deliverable-upload";
@@ -100,6 +100,7 @@ export default function ProductPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [gateOpen, setGateOpen] = useState(false);
   const [viewBrand, setViewBrand] = useState(false);
+  const [zoomImage, setZoomImage] = useState(false);
 
   const url = id ? `/api/products/${id}` : null;
 
@@ -275,9 +276,10 @@ export default function ProductPage() {
           {/* Hero */}
           <Card padding="none" className="overflow-hidden">
             {image ? (
-              <div className="h-56 bg-neutral-50">
+              <button type="button" onClick={() => setZoomImage(true)} className="block w-full h-56 bg-neutral-50 cursor-zoom-in" aria-label="הצגת התמונה במסך מלא">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={image} alt={product.name} className="w-full h-full object-cover" />
-              </div>
+              </button>
             ) : (
               <div className="h-40 bg-gradient-to-br from-pink-200 to-purple-200 flex items-center justify-center">
                 <span className="text-6xl opacity-50">📦</span>
@@ -490,6 +492,7 @@ export default function ProductPage() {
         </div>
       )}
 
+      {zoomImage && image && product && <ImageLightbox src={image} alt={product.name} onClose={() => setZoomImage(false)} />}
       <ProfileModal userId={viewBrand ? product?.brand_user_id || null : null} onClose={() => setViewBrand(false)} title="פרופיל העסק" />
 
       <Modal open={gateOpen} onClose={() => setGateOpen(false)} size="sm">

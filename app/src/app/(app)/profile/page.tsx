@@ -7,7 +7,7 @@ import { Avatar, Badge, Button, Card, Modal, Input, Textarea, FilePicker, useToa
 import { FeedbackModal, RoleSwitchModal, roleLabel, type AppRole } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
-import { swrFetch, clearCache } from "@/lib/client-cache";
+import { swrFetch, clearCache, readCache, writeCache, fetchJson } from "@/lib/client-cache";
 import { generateVideoThumbnail } from "@/lib/video-thumbnail";
 import { uploadToStorage } from "@/lib/storage-upload";
 import { videoFileProblem, MAX_VIDEO_MB } from "@/lib/uploads";
@@ -126,10 +126,10 @@ function LogoutConfirmModal({
 
 function getMilestones(videoCount: number) {
   return [
-    { count: 5, label: "5 סרטונים", achieved: videoCount >= 5 },
-    { count: 10, label: "10 סרטונים", achieved: videoCount >= 10 },
-    { count: 25, label: "25 סרטונים", achieved: videoCount >= 25 },
-    { count: 50, label: "50 סרטונים", achieved: videoCount >= 50 },
+    { count: 5, label: "5 סרטונים לעסקים", achieved: videoCount >= 5 },
+    { count: 10, label: "10 סרטונים לעסקים", achieved: videoCount >= 10 },
+    { count: 25, label: "25 סרטונים לעסקים", achieved: videoCount >= 25 },
+    { count: 50, label: "50 סרטונים לעסקים", achieved: videoCount >= 50 },
   ];
 }
 
@@ -759,7 +759,16 @@ export default function ProfilePage() {
       if (res.ok) {
         const data = await res.json();
         toast("הסרטון הועלה בהצלחה!", "success");
-        setPortfolioVideos((prev) => [data.video, ...prev]);
+        const nextVideos = [data.video, ...portfolioVideos];
+        setPortfolioVideos(nextVideos);
+        // Every cached copy of the count moves with the upload — the feed gate and the product pages read it
+        writeCache("/api/videos?portfolio=me", { videos: nextVideos });
+        const cachedProfile = readCache<{ profile?: Record<string, unknown> }>("/api/profile");
+        if (cachedProfile?.profile) {
+          writeCache("/api/profile", { ...cachedProfile, profile: { ...cachedProfile.profile, portfolio_count: nextVideos.length } });
+        }
+        setProfile((prev) => (prev ? { ...prev, stats: { ...prev.stats, portfolio: nextVideos.length } } : prev));
+        fetchJson("/api/profile");
         setShowUploadModal(false);
         setSelectedFile(null);
         setUploadTitle("");
@@ -1213,24 +1222,28 @@ export default function ProfilePage() {
         )}
 
         {activeTab === "badges" && (
-          <div className="grid grid-cols-2 gap-3">
-            {milestones.map((m) => (
-              <Card
-                key={m.count}
-                padding="md"
-                className={m.achieved ? "" : "opacity-40"}
-              >
+          <div className="space-y-3">
+            <p className="text-xs text-neutral-500 bg-neutral-50 rounded-xl px-3 py-2">
+              ההישגים נספרים לפי <span className="font-medium text-neutral-700">סרטונים שאושרו על ידי עסקים</span> ({videoCount} עד עכשיו). תיק העבודות הוא הישג נפרד.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <Card padding="md" className={portfolioVideos.length >= 5 ? "" : "opacity-40"}>
                 <div className="text-center">
-                  <span className="text-3xl block mb-2">
-                    {m.achieved ? "🏆" : "🔒"}
-                  </span>
-                  <p className="text-sm font-medium">{m.label}</p>
-                  <p className="text-xs text-neutral-400 mt-1">
-                    {m.achieved ? "הושלם!" : "בתהליך"}
-                  </p>
+                  <span className="text-3xl block mb-2">{portfolioVideos.length >= 5 ? "🏆" : "🔒"}</span>
+                  <p className="text-sm font-medium">תיק עבודות מלא</p>
+                  <p className="text-xs text-neutral-400 mt-1">{Math.min(portfolioVideos.length, 5)}/5 סרטונים בתיק</p>
                 </div>
               </Card>
-            ))}
+              {milestones.map((m) => (
+                <Card key={m.count} padding="md" className={m.achieved ? "" : "opacity-40"}>
+                  <div className="text-center">
+                    <span className="text-3xl block mb-2">{m.achieved ? "🏆" : "🔒"}</span>
+                    <p className="text-sm font-medium">{m.label}</p>
+                    <p className="text-xs text-neutral-400 mt-1">{m.achieved ? "הושלם!" : `${Math.min(videoCount, m.count)}/${m.count} סרטונים לעסקים`}</p>
+                  </div>
+                </Card>
+              ))}
+            </div>
           </div>
         )}
 

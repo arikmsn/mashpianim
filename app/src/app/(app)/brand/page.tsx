@@ -519,17 +519,17 @@ export default function BrandDiscoverPage() {
                   type="button"
                   onClick={prev}
                   aria-label="הקודם"
-                  className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/80 text-neutral-700 shadow flex items-center justify-center text-lg hover:bg-white"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/80 text-neutral-700 shadow flex items-center justify-center hover:bg-white"
                 >
-                  ›
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6" /></svg>
                 </button>
                 <button
                   type="button"
                   onClick={next}
                   aria-label="הבא"
-                  className="absolute left-1 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/80 text-neutral-700 shadow flex items-center justify-center text-lg hover:bg-white"
+                  className="absolute left-1 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/80 text-neutral-700 shadow flex items-center justify-center hover:bg-white"
                 >
-                  ‹
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
                 </button>
               </>
             )}

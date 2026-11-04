@@ -102,7 +102,7 @@ export function BriefCard({
       </div>
       <button type="button" onClick={() => setOpen(true)} className="w-full border-t border-neutral-100 px-4 py-2.5 text-sm font-bold text-pink-600 text-right flex items-center justify-between">
         לבריף המלא
-        <span className="text-pink-400">‹</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-pink-400"><path d="M15 18l-6-6 6-6" /></svg>
       </button>
       {approved ? (
         <div className="bg-pink-500 text-white text-xs font-bold text-center py-1.5">אישרת את הבריף</div>

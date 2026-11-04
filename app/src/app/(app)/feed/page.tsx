@@ -64,11 +64,27 @@ function relationLabel(r: Relation): { text: string; tone: string } {
   return { text: "🎉 פעיל", tone: "bg-emerald-600" };
 }
 
+// Chevrons as SVG: the ‹ › characters are bidi-mirrored in RTL text and ended up pointing the wrong way
+function ChevronRight() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9 18l6-6-6-6" />
+    </svg>
+  );
+}
+function ChevronLeft() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M15 18l-6-6 6-6" />
+    </svg>
+  );
+}
+
 function FeedSkeleton() {
   return (
-    <div className="max-w-2xl mx-auto px-4 py-4">
-      <div className="aspect-[3/4] max-h-[560px] rounded-3xl bg-pink-100 animate-pulse" />
-      <div className="flex justify-center gap-5 mt-4">
+    <div className="flex-1 min-h-0 flex flex-col">
+      <div className="flex-1 min-h-0 rounded-3xl bg-pink-100 animate-pulse" />
+      <div className="flex justify-center gap-5 pt-3">
         {[1, 2, 3].map((i) => <div key={i} className="w-14 h-14 rounded-full bg-neutral-100 animate-pulse" />)}
       </div>
     </div>
@@ -207,12 +223,12 @@ export default function FeedPage() {
   const availableCategories = useMemo(() => {
     const counts = new Map<string, number>();
     for (const p of products) counts.set(p.category || "כללי", (counts.get(p.category || "כללי") || 0) + 1);
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([cat]) => cat);
   }, [products]);
   const availableRegions = useMemo(() => {
     const counts = new Map<string, number>();
     for (const p of products) if (p.region) counts.set(p.region, (counts.get(p.region) || 0) + 1);
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([region]) => region);
   }, [products]);
   const activeFilterCount = categoryFilter.length + regionFilter.length + (typeFilter ? 1 : 0);
 
@@ -243,6 +259,15 @@ export default function FeedPage() {
     return byId >= 0 ? byId : Math.min(index, deck.length - 1);
   })();
   const current = deck[currentIndex];
+  const currentProductId = current?.id ?? null;
+
+  // The details page of the card on screen is fetched ahead of the tap: the route shell (Next prefetch) and
+  // the product payload (client cache), so "פרטים" opens instantly instead of waiting on two round trips
+  useEffect(() => {
+    if (!currentProductId || !user) return;
+    router.prefetch(`/products/${currentProductId}`);
+    swrFetch(`/api/products/${currentProductId}`, () => {});
+  }, [currentProductId, user, router]);
 
   function goTo(nextIndex: number, dir: 1 | -1) {
     if (deck.length === 0) return;
@@ -264,7 +289,7 @@ export default function FeedPage() {
     setIndex(currentIndex);
   }
 
-  // ❤️ — a heart on the product (needs the 5-video portfolio)
+  // ❤️ — a heart on the product (needs the 5-video portfolio: the gate modal explains and leads to the upload)
   async function heart(product: Product) {
     if (!user) {
       router.push("/login?redirect=/feed");
@@ -377,13 +402,15 @@ export default function FeedPage() {
   }
 
   const toggleIn = (list: string[], value: string) => (list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
+  const detailsHref = current ? `/products/${current.id}` : "/feed";
 
   return (
-    <main className="min-h-screen bg-background pb-24">
+    // One screen, no page scroll (Tinder-like): header, the strip, the card, the three buttons — all inside the viewport
+    <main className="h-[calc(100dvh-5rem)] flex flex-col bg-background overflow-hidden">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-neutral-100">
-        <div className="max-w-2xl mx-auto px-4 py-3">
-          <div className="flex items-center gap-2 mb-3">
+      <header className="shrink-0 z-30 bg-white/80 backdrop-blur-xl border-b border-neutral-100">
+        <div className="max-w-2xl mx-auto px-4 py-2.5">
+          <div className="flex items-center gap-2 mb-2.5">
             <div className="flex-1 relative">
               <input
                 type="text"
@@ -406,9 +433,7 @@ export default function FeedPage() {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
               </svg>
-              {activeFilterCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-pink-500 text-white text-[10px] flex items-center justify-center font-bold ring-2 ring-white">{activeFilterCount}</span>
-              )}
+              {activeFilterCount > 0 && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-pink-500 ring-2 ring-white" aria-hidden="true" />}
             </button>
             <Link href="/notifications" className="relative p-2.5 rounded-xl bg-neutral-50 border border-neutral-100 text-neutral-500 hover:bg-neutral-100 transition-colors" aria-label="התראות">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -442,88 +467,76 @@ export default function FeedPage() {
         </div>
       </header>
 
-      <div className="max-w-2xl mx-auto px-4 py-4">
+      <div className="flex-1 min-h-0 w-full max-w-2xl mx-auto px-4 pt-3 pb-1 flex flex-col">
         {ready && brandHearts > 0 && (
           <button
             type="button"
             onClick={() => router.push("/connections")}
-            className="w-full text-right ig-gradient-bg text-white rounded-2xl p-3 mb-4 flex items-center gap-3 shadow-md"
+            className="shrink-0 w-full text-right ig-gradient-bg text-white rounded-2xl px-3 py-2 mb-3 flex items-center gap-3 shadow-md"
           >
-            <span className="text-2xl">💗</span>
+            <span className="text-xl">💗</span>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold">{brandHearts === 1 ? "עסק אחד מתעניין בך!" : `${brandHearts} עסקים מתעניינים בך!`}</p>
-              <p className="text-xs text-white/90">{locked ? "השלימו 5 סרטונים בתיק כדי לאשר" : "אשרו בחיבורים ← העסק יאשר סופית ויפתח צ'אט"}</p>
+              <p className="text-sm font-bold truncate">{brandHearts === 1 ? "עסק אחד מתעניין בך!" : `${brandHearts} עסקים מתעניינים בך!`}</p>
+              <p className="text-[11px] text-white/90 truncate">{locked ? "השלימו 5 סרטונים בתיק כדי לאשר" : "אשרו בחיבורים ← העסק יאשר סופית ויפתח צ'אט"}</p>
             </div>
-            <span className="text-sm font-medium">לצפייה ›</span>
-          </button>
-        )}
-        {ready && locked && (
-          <button
-            type="button"
-            onClick={() => router.push("/profile")}
-            className="w-full text-right bg-amber-50 border border-amber-200 rounded-2xl p-3 mb-4 flex items-center gap-3"
-          >
-            <span className="text-2xl">🎬</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-amber-800">תיק העבודות: {portfolioCount}/{MIN_PORTFOLIO}</p>
-              <p className="text-xs text-amber-700">העלו עוד {MIN_PORTFOLIO - (portfolioCount || 0)} סרטונים כדי לסמן לב ולפתוח פרטי מוצרים</p>
-            </div>
-            <span className="text-amber-600 text-sm font-medium">להעלאה ›</span>
+            <span className="text-sm font-medium whitespace-nowrap">לצפייה ›</span>
           </button>
         )}
 
         {!ready ? (
           <FeedSkeleton />
         ) : view === "mine" ? (
-          picks.length === 0 ? (
-            <div className="text-center py-20 text-neutral-400">
-              <span className="text-4xl block mb-4">❤️</span>
-              <p>עדיין לא סימנת לב לאף מוצר</p>
-              <p className="text-xs mt-1">לב מהקרוסלה יופיע כאן</p>
-              <Button variant="secondary" size="sm" rounded className="mt-4" onClick={() => setView("all")}>לכל המוצרים</Button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              {picks.map((r) => {
-                const label = relationLabel(r);
-                const canCancel = r.status === "pending" && r.initiatedBy === "creator" && !r.mutualAt;
-                return (
-                  <div key={r.connectionId} className="relative rounded-2xl overflow-hidden bg-white border border-neutral-100 shadow-sm">
-                    <button type="button" onClick={() => router.push(`/products/${r.product.id}`)} className="block w-full text-right">
-                      {r.product.image ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={r.product.image} alt={r.product.name} loading="lazy" className="w-full aspect-square object-cover" />
-                      ) : (
-                        <div className={`w-full aspect-square bg-gradient-to-br ${placeholderFor(r.product.id)} flex items-center justify-center`}>
-                          <span className="text-4xl opacity-50">📦</span>
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-4 px-4 pb-4">
+            {picks.length === 0 ? (
+              <div className="text-center py-20 text-neutral-400">
+                <span className="text-4xl block mb-4">❤️</span>
+                <p>עדיין לא סימנת לב לאף מוצר</p>
+                <p className="text-xs mt-1">לב מהקרוסלה יופיע כאן</p>
+                <Button variant="secondary" size="sm" rounded className="mt-4" onClick={() => setView("all")}>לכל המוצרים</Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {picks.map((r) => {
+                  const label = relationLabel(r);
+                  const canCancel = r.status === "pending" && r.initiatedBy === "creator" && !r.mutualAt;
+                  return (
+                    <div key={r.connectionId} className="relative rounded-2xl overflow-hidden bg-white border border-neutral-100 shadow-sm">
+                      <Link href={`/products/${r.product.id}`} className="block w-full text-right">
+                        {r.product.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={r.product.image} alt={r.product.name} loading="lazy" className="w-full aspect-square object-cover" />
+                        ) : (
+                          <div className={`w-full aspect-square bg-gradient-to-br ${placeholderFor(r.product.id)} flex items-center justify-center`}>
+                            <span className="text-4xl opacity-50">📦</span>
+                          </div>
+                        )}
+                        <div className="p-2.5">
+                          <p className="text-sm font-bold truncate">{r.product.name}</p>
+                          <p className="text-xs text-neutral-500 truncate">{r.product.brand} · ₪{r.product.value}</p>
+                          <span className={`inline-block mt-1.5 text-[10px] font-bold text-white px-2 py-0.5 rounded-full ${label.tone}`}>{label.text}</span>
                         </div>
+                      </Link>
+                      {/* Lit heart = a product you already chose */}
+                      <span className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 shadow flex items-center justify-center text-base" aria-label="סימנת לב">❤️</span>
+                      {canCancel && (
+                        <button
+                          type="button"
+                          onClick={() => cancelHeart(r)}
+                          disabled={busy === r.connectionId}
+                          className="absolute top-2 left-2 px-2 py-1 rounded-full bg-white/90 text-[10px] text-neutral-500 shadow hover:text-red-500 disabled:opacity-50"
+                        >
+                          ביטול הלב
+                        </button>
                       )}
-                      <div className="p-2.5">
-                        <p className="text-sm font-bold truncate">{r.product.name}</p>
-                        <p className="text-xs text-neutral-500 truncate">{r.product.brand} · ₪{r.product.value}</p>
-                        <span className={`inline-block mt-1.5 text-[10px] font-bold text-white px-2 py-0.5 rounded-full ${label.tone}`}>{label.text}</span>
-                      </div>
-                    </button>
-                    {/* Lit heart = a product you already chose */}
-                    <span className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 shadow flex items-center justify-center text-base" aria-label="סימנת לב">❤️</span>
-                    {canCancel && (
-                      <button
-                        type="button"
-                        onClick={() => cancelHeart(r)}
-                        disabled={busy === r.connectionId}
-                        className="absolute top-2 left-2 px-2 py-1 rounded-full bg-white/90 text-[10px] text-neutral-500 shadow hover:text-red-500 disabled:opacity-50"
-                      >
-                        ביטול הלב
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         ) : current ? (
           <>
-            <div className="relative">
+            <div className="relative flex-1 min-h-0">
               <AnimatePresence mode="wait" initial={false} custom={direction}>
                 <motion.div
                   key={current.id}
@@ -537,42 +550,46 @@ export default function FeedPage() {
                   dragElastic={0.6}
                   onDragStart={() => { dragging.current = true; }}
                   onDragEnd={onDragEnd}
-                  className="relative rounded-3xl overflow-hidden bg-white shadow-xl border border-neutral-100 touch-pan-y select-none"
+                  className="absolute inset-0 rounded-3xl overflow-hidden bg-white shadow-xl border border-neutral-100 touch-pan-y select-none flex flex-col"
                 >
-                  <button type="button" onClick={() => { if (!dragging.current) router.push(`/products/${current.id}`); }} className="block w-full text-right">
+                  <Link
+                    href={detailsHref}
+                    prefetch
+                    draggable={false}
+                    onClick={(e) => { if (dragging.current) e.preventDefault(); }}
+                    className="relative block flex-1 min-h-[120px]"
+                  >
                     {current.image ? (
-                      <div className="h-72 bg-neutral-50">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={current.image} alt={current.name} className="w-full h-full object-cover pointer-events-none" />
-                      </div>
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={current.image} alt={current.name} draggable={false} className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
                     ) : (
-                      <div className={`h-72 bg-gradient-to-br ${placeholderFor(current.id)} flex items-center justify-center`}>
+                      <div className={`absolute inset-0 bg-gradient-to-br ${placeholderFor(current.id)} flex items-center justify-center`}>
                         <span className="text-6xl opacity-50">📦</span>
                       </div>
                     )}
-                  </button>
-                  <div className="absolute top-3 right-3 flex flex-wrap gap-1.5">
-                    {ownFeedCategories.includes(current.category) && (
-                      <span className="bg-white/90 text-pink-600 text-xs font-bold px-2.5 py-1 rounded-full">✨ מתאים לך</span>
-                    )}
-                    {current.categoryLabel && <span className="bg-black/50 text-white text-xs px-2.5 py-1 rounded-full">{current.categoryLabel}</span>}
-                    {current.region && <span className="bg-black/50 text-white text-xs px-2.5 py-1 rounded-full">📍 {current.region}</span>}
-                  </div>
-                  <div className="p-4 space-y-2">
+                    <div className="absolute top-3 right-3 flex flex-wrap gap-1.5">
+                      {ownFeedCategories.includes(current.category) && (
+                        <span className="bg-white/90 text-pink-600 text-xs font-bold px-2.5 py-1 rounded-full">✨ מתאים לך</span>
+                      )}
+                      {current.categoryLabel && <span className="bg-black/50 text-white text-xs px-2.5 py-1 rounded-full">{current.categoryLabel}</span>}
+                      {current.region && <span className="bg-black/50 text-white text-xs px-2.5 py-1 rounded-full">📍 {current.region}</span>}
+                    </div>
+                  </Link>
+                  <div className="shrink-0 p-3.5 space-y-1.5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <h2 className="text-lg font-bold text-neutral-900 truncate">{current.name}</h2>
-                        <button type="button" onClick={() => router.push(`/products/${current.id}`)} className="flex items-center gap-2 mt-1 text-sm text-neutral-500">
+                        <h2 className="text-lg font-bold text-neutral-900 truncate leading-tight">{current.name}</h2>
+                        <Link href={detailsHref} prefetch className="flex items-center gap-2 mt-1 text-sm text-neutral-500">
                           <Avatar src={current.brandAvatar} name={current.brand} size="sm" />
                           <span className="truncate">{current.brand}</span>
-                        </button>
+                        </Link>
                       </div>
                       <Badge variant="pink" size="lg">₪{current.value}</Badge>
                     </div>
                     {locked ? (
-                      <p className="text-sm text-neutral-400">🔒 {MIN_PORTFOLIO} סרטונים בתיק פותחים את פרטי המוצר והבריף</p>
+                      <p className="text-sm text-neutral-400 line-clamp-2">🔒 {MIN_PORTFOLIO} סרטונים בתיק פותחים את פרטי המוצר והבריף</p>
                     ) : (
-                      <p className="text-sm text-neutral-600 line-clamp-3 min-h-[3.75rem]">{current.description || "העסק לא הוסיף תיאור — הפרטים והבריף בדף המוצר"}</p>
+                      <p className="text-sm text-neutral-600 line-clamp-2">{current.description || "העסק לא הוסיף תיאור — הפרטים והבריף בדף המוצר"}</p>
                     )}
                     <p className="text-xs text-neutral-400">
                       {current.productType === "digital" ? "📱 מוצר דיגיטלי" : "📦 מוצר פיזי"} · ⏱ {current.deadline} ימים לצילום
@@ -582,13 +599,17 @@ export default function FeedPage() {
               </AnimatePresence>
               {deck.length > 1 && (
                 <>
-                  <button type="button" onClick={prev} aria-label="הקודם" className="absolute right-1 top-28 w-9 h-9 rounded-full bg-white/85 text-neutral-700 shadow flex items-center justify-center text-lg hover:bg-white">›</button>
-                  <button type="button" onClick={next} aria-label="הבא" className="absolute left-1 top-28 w-9 h-9 rounded-full bg-white/85 text-neutral-700 shadow flex items-center justify-center text-lg hover:bg-white">‹</button>
+                  <button type="button" onClick={prev} aria-label="הקודם" className="absolute right-1 top-1/3 w-9 h-9 rounded-full bg-white/85 text-neutral-700 shadow flex items-center justify-center hover:bg-white">
+                    <ChevronRight />
+                  </button>
+                  <button type="button" onClick={next} aria-label="הבא" className="absolute left-1 top-1/3 w-9 h-9 rounded-full bg-white/85 text-neutral-700 shadow flex items-center justify-center hover:bg-white">
+                    <ChevronLeft />
+                  </button>
                 </>
               )}
             </div>
 
-            <div className="flex items-center justify-center gap-5 mt-4">
+            <div className="shrink-0 flex items-center justify-center gap-5 pt-3">
               <button
                 type="button"
                 onClick={() => pass(current)}
@@ -604,25 +625,25 @@ export default function FeedPage() {
                 onClick={() => heart(current)}
                 disabled={busy === current.id}
                 aria-label="מעוניין/ת"
-                className="w-20 h-20 rounded-full shadow-lg flex items-center justify-center text-4xl active:scale-95 transition-all ig-gradient-bg text-white disabled:opacity-60"
+                className="w-[4.5rem] h-[4.5rem] rounded-full shadow-lg flex items-center justify-center text-4xl active:scale-95 transition-all ig-gradient-bg text-white disabled:opacity-60"
               >
                 {locked ? "🔒" : "❤️"}
               </button>
-              <button
-                type="button"
-                onClick={() => router.push(`/products/${current.id}`)}
+              <Link
+                href={detailsHref}
+                prefetch
                 aria-label="פרטים"
                 className="w-14 h-14 rounded-full bg-white border border-neutral-200 shadow-md flex items-center justify-center text-xs font-bold text-neutral-600 hover:bg-neutral-50 active:scale-95 transition-all"
               >
                 פרטים
-              </button>
+              </Link>
             </div>
-            <p className="text-center text-[11px] text-neutral-400 mt-2">
+            <p className="shrink-0 text-center text-[11px] text-neutral-400 pt-1.5">
               החליקו כדי לדפדף · ❤️ מעוניין/ת · ✕ לא מעוניין/ת · {currentIndex + 1}/{deck.length}
             </p>
           </>
         ) : (
-          <div className="text-center py-16 text-neutral-400 bg-white rounded-3xl border border-neutral-100">
+          <div className="flex-1 min-h-0 flex flex-col items-center justify-center text-center text-neutral-400 bg-white rounded-3xl border border-neutral-100 px-4">
             <span className="text-4xl block mb-3">🎉</span>
             <p className="font-medium text-neutral-600">{activeFilterCount > 0 || query ? "אין מוצרים שמתאימים לסינון" : "עברת על כל המוצרים"}</p>
             <p className="text-xs mt-1">{activeFilterCount > 0 || query ? "נסו סינון אחר" : "מוצרים חדשים מצטרפים כל הזמן — חזרו מחר"}</p>
@@ -638,13 +659,13 @@ export default function FeedPage() {
         )}
       </div>
 
-      {/* Full filter: categories and regions that have products, product type */}
+      {/* Full filter: categories and regions that have products, product type (no counts — the deck is what it is) */}
       <Modal open={filtersOpen} onClose={() => setFiltersOpen(false)} title="סינון" size="md">
         <div className="space-y-5">
           <div>
             <p className="text-sm font-bold text-neutral-900 mb-2">קטגוריות</p>
             <div className="flex flex-wrap gap-2">
-              {availableCategories.map(([cat, count]) => {
+              {availableCategories.map((cat) => {
                 const active = categoryFilter.includes(cat);
                 return (
                   <button
@@ -654,7 +675,7 @@ export default function FeedPage() {
                     onClick={() => setCategoryFilter((prev) => toggleIn(prev, cat))}
                     className={`px-3 py-1.5 rounded-full text-sm border transition-all ${active ? "bg-pink-500 border-pink-500 text-white" : "bg-neutral-50 border-neutral-200 text-neutral-600"}`}
                   >
-                    {cat} <span className={active ? "text-white/80" : "text-neutral-400"}>({count})</span>
+                    {cat}
                   </button>
                 );
               })}
@@ -667,7 +688,7 @@ export default function FeedPage() {
               <p className="text-xs text-neutral-400">העסקים עדיין לא ציינו אזור</p>
             ) : (
               <div className="flex flex-wrap gap-2">
-                {availableRegions.map(([region, count]) => {
+                {availableRegions.map((region) => {
                   const active = regionFilter.includes(region);
                   return (
                     <button
@@ -677,7 +698,7 @@ export default function FeedPage() {
                       onClick={() => setRegionFilter((prev) => toggleIn(prev, region))}
                       className={`px-3 py-1.5 rounded-full text-sm border transition-all ${active ? "bg-pink-500 border-pink-500 text-white" : "bg-neutral-50 border-neutral-200 text-neutral-600"}`}
                     >
-                      📍 {region} <span className={active ? "text-white/80" : "text-neutral-400"}>({count})</span>
+                      📍 {region}
                     </button>
                   );
                 })}
@@ -704,25 +725,27 @@ export default function FeedPage() {
             </div>
           </div>
           <div className="flex gap-2 pt-1">
-            <Button fullWidth onClick={() => { setFiltersOpen(false); setIndex(0); setCurrentId(null); }}>הצגת {deck.length} מוצרים</Button>
+            <Button fullWidth onClick={() => { setFiltersOpen(false); setIndex(0); setCurrentId(null); }}>הצגת המוצרים</Button>
             <Button variant="ghost" onClick={() => { setCategoryFilter([]); setRegionFilter([]); setTypeFilter(""); }}>ניקוי</Button>
           </div>
         </div>
       </Modal>
 
+      {/* The 5-video gate, explained where the tap happened, with the way to the upload */}
       <Modal open={gateOpen} onClose={() => setGateOpen(false)} size="sm">
         <div className="text-center space-y-4">
           <span className="text-4xl block">🎬</span>
           <div>
-            <h3 className="text-lg font-bold">עוד {Math.max(0, MIN_PORTFOLIO - (portfolioCount || 0))} סרטונים ואת/ה בפנים</h3>
+            <h3 className="text-lg font-bold">כדי לסמן לב צריך {MIN_PORTFOLIO} סרטונים בתיק העבודות</h3>
             <p className="text-sm text-neutral-500 mt-1">
-              תיק העבודות: {portfolioCount || 0}/{MIN_PORTFOLIO}. עסקים בוחרים יוצרים לפי התיק — {MIN_PORTFOLIO} סרטונים פותחים לבבות, פרטי מוצרים וצ&apos;אט.
+              יש לך {portfolioCount || 0}/{MIN_PORTFOLIO}. עסקים בוחרים יוצרים לפי התיק — עוד {Math.max(0, MIN_PORTFOLIO - (portfolioCount || 0))} סרטונים ואת/ה בפנים.
             </p>
           </div>
           <div className="h-2 bg-neutral-100 rounded-full overflow-hidden">
             <div className="h-full bg-pink-500 rounded-full" style={{ width: `${Math.min(100, ((portfolioCount || 0) / MIN_PORTFOLIO) * 100)}%` }} />
           </div>
-          <Button fullWidth onClick={() => router.push("/profile")}>להעלאת סרטונים</Button>
+          <Button fullWidth onClick={() => router.push("/profile?onboarding=1")}>🎬 להעלאת סרטון</Button>
+          <button type="button" onClick={() => setGateOpen(false)} className="text-sm text-neutral-400">אחר כך</button>
         </div>
       </Modal>
     </main>

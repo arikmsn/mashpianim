@@ -136,4 +136,4 @@ function Avatar({ src, name = "", size = "md", className, expandable = false }: 
   );
 }
 
-export { Avatar, type AvatarProps };
+export { Avatar, ImageLightbox, type AvatarProps };
