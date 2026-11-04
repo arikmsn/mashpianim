@@ -40,7 +40,7 @@ export async function GET() {
     ? brand.categories
     : [brand?.category].filter(Boolean);
 
-  const [{ data: creators }, { data: videos }, { data: relations }] = await Promise.all([
+  const [{ data: creators }, { data: videos }, { data: relations }, { data: passes }] = await Promise.all([
     admin
       .from("users")
       .select("id, full_name, avatar_url, created_at, creator_profiles(id, bio, city, categories, level, completed_connections, tiktok_followers, instagram_followers, tiktok_handle, instagram_handle)")
@@ -58,11 +58,16 @@ export async function GET() {
     brand?.id
       ? admin
           .from("connections")
-          .select("id, creator_id, product_id, status, initiated_by, created_at, products(name)")
+          .select("id, creator_id, product_id, status, initiated_by, mutual_at, created_at, products(name)")
           .eq("brand_id", brand.id)
           .order("created_at", { ascending: false })
       : Promise.resolve({ data: [] as any[] }),
+    // Creators this brand skipped ("X") never come back to its gallery
+    brand?.id
+      ? admin.from("brand_passes").select("creator_id").eq("brand_id", brand.id)
+      : Promise.resolve({ data: [] as any[] }),
   ]);
+  const passed = new Set(((passes || []) as { creator_id: string }[]).map((p) => p.creator_id));
 
   const byCreator = new Map<string, { count: number; first: any }>();
   for (const v of (videos || []) as any[]) {
@@ -83,7 +88,10 @@ export async function GET() {
     cats.some((c) => brandCats.some((b) => b === normalize(c) || b.startsWith(normalize(c)) || normalize(c).startsWith(b)));
 
   const list = await Promise.all(
-    ((creators || []) as any[]).map(async (u) => {
+    ((creators || []) as any[]).filter((u) => {
+      const cp = Array.isArray(u.creator_profiles) ? u.creator_profiles[0] : u.creator_profiles;
+      return !(cp?.id && passed.has(cp.id));
+    }).map(async (u) => {
       const cp = Array.isArray(u.creator_profiles) ? u.creator_profiles[0] : u.creator_profiles;
       const port = byCreator.get(u.id) || { count: 0, first: null };
       let previewVideo: string | null = null;
@@ -127,7 +135,14 @@ export async function GET() {
         previewPoster: port.first?.thumbnail_url || null,
         previewTitle: port.first?.title || null,
         relation: rel
-          ? { connectionId: rel.id, status: rel.status, initiatedBy: rel.initiated_by || "creator", productId: rel.product_id, productName: rel.products?.name || "" }
+          ? {
+              connectionId: rel.id,
+              status: rel.status,
+              initiatedBy: rel.initiated_by || "creator",
+              mutualAt: rel.mutual_at || null,
+              productId: rel.product_id,
+              productName: rel.products?.name || "",
+            }
           : null,
         fit: overlaps(categories),
         score,

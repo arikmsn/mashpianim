@@ -5,10 +5,10 @@ import { isSupabaseConfigured } from "@/lib/admin-auth";
 import { logActivity } from "@/lib/notifications";
 import { resolveViewer } from "@/lib/viewer";
 import { readActiveRole } from "@/lib/active-role";
-import { performMatch, countPortfolioVideos, portfolioGateError, MIN_PORTFOLIO_VIDEOS, notifyHeartSent, notifyBrandOfHeart } from "@/lib/match";
+import { markMutual, countPortfolioVideos, portfolioGateError, MIN_PORTFOLIO_VIDEOS, notifyHeartSent, notifyBrandOfHeart } from "@/lib/match";
 import { isUniqueViolation } from "@/lib/match-errors";
 import { getTimelineSettings } from "@/lib/settings";
-import { OCCUPYING_STATUSES, spotsLeft } from "@/lib/connection-flow";
+import { OCCUPYING_STATUSES, isProductFull } from "@/lib/connection-flow";
 
 function getAdminClient() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -151,14 +151,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "מוצר לא זמין" }, { status: 404 });
   }
 
-  // No new hearts once the product's creator slots are all taken (BRAND-01); the match itself is
-  // re-checked atomically in match_connection()
+  // No new hearts once a product with a creator limit is full (BRAND-01); products without a limit (the
+  // default since 2026-11-04) never fill up. The match itself is re-checked atomically in match_connection()
   const { count: occupied } = await admin
     .from("connections")
     .select("id", { count: "exact", head: true })
     .eq("product_id", product_id)
     .in("status", [...OCCUPYING_STATUSES]);
-  if (spotsLeft((product as any).max_creators, occupied || 0) === 0) {
+  if (isProductFull((product as any).max_creators, occupied || 0)) {
     return NextResponse.json(
       { error: "המוצר כבר מלא — כל מקומות היוצרים למוצר הזה תפוסים.", code: "product_full" },
       { status: 409 }
@@ -184,15 +184,7 @@ export async function POST(request: NextRequest) {
     if (!creator_user_id) {
       return NextResponse.json({ error: "מזהה יוצר חסר" }, { status: 400 });
     }
-    // A brand without credits cannot start hearts: the creator would approve into a match that can never
-    // open (QA 16). Approving a creator's heart is still checked atomically in match_connection().
-    const remainingCredits = (Number(brandProfile.total_credits) || 0) - (Number(brandProfile.used_credits) || 0);
-    if (remainingCredits <= 0) {
-      return NextResponse.json(
-        { error: "אין סרטונים נותרים בחבילה — כדי לשלוח לבבות צריך לרכוש סרטונים", code: "no_credits" },
-        { status: 403 }
-      );
-    }
+    // Hearts are free on both sides; the credit is charged when the brand confirms the match (match_connection)
     const { data: cp } = await admin
       .from("creator_profiles")
       .select("id, user_id, users(id, full_name, phone)")
@@ -239,7 +231,7 @@ export async function POST(request: NextRequest) {
 
   const { data: existing } = await admin
     .from("connections")
-    .select("id, status, initiated_by")
+    .select("id, status, initiated_by, mutual_at")
     .eq("creator_id", creatorProfileId)
     .eq("product_id", product_id)
     .not("status", "in", '("cancelled","rejected","completed")')
@@ -249,20 +241,24 @@ export async function POST(request: NextRequest) {
 
   if (existing) {
     const ex = existing as any;
-    // The other side already sent a heart on this product → this heart completes the match
+    // The other side already sent a heart on this product → both hearted. The connection stays pending
+    // until the brand confirms it (that is the paid step), see markMutual()
     if (ex.status === "pending" && (ex.initiated_by || "creator") !== initiatedBy) {
-      const result = await performMatch(admin, ex.id, me.id);
+      if (ex.mutual_at) {
+        return NextResponse.json({ error: "כבר יש מאטץ' — ממתינים לאישור העסק", code: "already_mutual" }, { status: 409 });
+      }
+      const result = await markMutual(admin, ex.id, initiatedBy);
       if (!result.ok) {
-        return NextResponse.json({ error: result.error, code: result.code }, { status: result.status });
+        return NextResponse.json({ error: result.error }, { status: result.status });
       }
       await logActivity({
         actorId: me.id,
-        action: "connection_matched",
+        action: "connection_mutual",
         entityType: "connection",
         entityId: ex.id,
         details: { product_id, product_name: (product as any).name, initiatedBy },
       });
-      return NextResponse.json({ connection: { id: ex.id, status: "approved" }, matched: true });
+      return NextResponse.json({ connection: { id: ex.id, status: "pending", mutual: true }, matched: false, mutual: true });
     }
     return NextResponse.json(
       { error: initiatedBy === "brand" ? "כבר שלחתם לב ליוצר/ת על המוצר הזה" : "כבר סימנת לב למוצר הזה" },

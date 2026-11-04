@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     capacity: "unknown" as string, capacity_alerts: 0,
   };
 
-  // 0. Hearts left unanswered for 7 days expire
+  // 0. One-sided hearts left unanswered for 7 days expire (mutual pairs wait for the brand, see step 0b)
   const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
   const { data: staleHearts } = await supabase
     .from("connections")
@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
       brand_profiles!connections_brand_id_fkey(users(id))
     `)
     .eq("status", "pending")
+    .is("mutual_at", null)
     .lt("created_at", sevenDaysAgo);
 
   for (const conn of (staleHearts || []) as any[]) {
@@ -66,6 +67,32 @@ export async function GET(request: NextRequest) {
     }
     await logActivity({ action: "heart_expired", entityType: "connection", entityId: conn.id });
     results.expired++;
+  }
+
+  // 0b. Mutual pairs the brand has not confirmed for 3 days → a reminder to the brand (once per 48 h)
+  const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString();
+  const { data: waitingMatches } = await supabase
+    .from("connections")
+    .select(`
+      id, mutual_at,
+      products(name),
+      creator_profiles!connections_creator_id_fkey(users(id, full_name)),
+      brand_profiles!connections_brand_id_fkey(users(id))
+    `)
+    .eq("status", "pending")
+    .not("mutual_at", "is", null)
+    .lt("mutual_at", threeDaysAgo);
+  for (const conn of (waitingMatches || []) as any[]) {
+    const brandUser = conn.brand_profiles?.users;
+    if (!brandUser) continue;
+    const created = await createNotificationOnce({
+      userId: brandUser.id,
+      type: "match_ready_reminder",
+      title: "מאטץ' ממתין לאישורכם",
+      body: `${conn.creator_profiles?.users?.full_name || "יוצר/ת"} מחכה לכם על "${conn.products?.name || ""}". אשרו את החיבור כדי לפתוח צ'אט ולהתחיל.`,
+      data: notificationData(conn.id, null, "brand"),
+    }, WARNING_DEDUPE_HOURS);
+    if (created) results.warnings++; else results.skipped_duplicates++;
   }
 
   // 1. Ship deadline passed (approved but not shipped in 7 days) → warn at 5d, cancel at 14d

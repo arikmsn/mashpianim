@@ -83,6 +83,69 @@ export async function notifyBrandOfHeart(params: {
 
 type MatchResult = { ok: true } | { ok: false; error: string; status: number; code?: string };
 
+// Both sides hearted: the connection stays pending with mutual_at set until the brand confirms (and pays).
+// `actor` is the side that just completed the pair — the other side is told, and the brand is always asked
+// to confirm.
+export async function markMutual(
+  admin: Admin,
+  connectionId: string,
+  actor: "creator" | "brand"
+): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+  const { data: raw } = await admin
+    .from("connections")
+    .select(`
+      id, status, mutual_at, product_id,
+      products(id, name, brand_profiles(id, user_id, shop_name, users(id, full_name, phone))),
+      creator_profiles!connections_creator_id_fkey(user_id, users(id, full_name, phone))
+    `)
+    .eq("id", connectionId)
+    .single();
+  const conn = raw as any;
+  if (!conn) return { ok: false, error: "חיבור לא נמצא", status: 404 };
+  if (conn.status !== "pending") return { ok: false, error: "החיבור כבר לא ממתין", status: 400 };
+  if (conn.mutual_at) return { ok: false, error: "כבר יש מאטץ' — ממתינים לאישור העסק", status: 400 };
+
+  const { error } = await admin.from("connections").update({ mutual_at: new Date().toISOString() } as any).eq("id", connectionId);
+  if (error) {
+    console.error("[match] mutual update error:", error.message);
+    return { ok: false, error: "שגיאה בעדכון", status: 500 };
+  }
+
+  const product = conn.products;
+  const brandProfile = product?.brand_profiles;
+  const brandUser = brandProfile?.users;
+  const creatorUser = conn.creator_profiles?.users;
+  const brandName = brandProfile?.shop_name || brandUser?.full_name || "העסק";
+  const creatorName = creatorUser?.full_name || "היוצר/ת";
+  const productName = product?.name || "המוצר";
+
+  if (brandUser) {
+    await createNotification({
+      userId: brandUser.id,
+      type: "match_ready",
+      title: "🎉 יש מאטץ'! אשרו את החיבור",
+      body: `${creatorName} ואתם סימנתם זה את זה על "${productName}". אשרו את החיבור כדי לפתוח צ'אט ולשלוח את המוצר (סרטון אחד מהחבילה).`,
+      data: notificationData(connectionId, product?.id, "brand"),
+    });
+    if (actor === "creator") {
+      await sendWhatsApp(
+        brandUser.phone,
+        `🎉 *יש מאטץ'!*\n\n${creatorName} אישר/ה לעבוד איתכם על *${productName}*.\nאשרו את החיבור כדי לפתוח את הצ'אט:\n${APP_URL}/brand/connections?tab=match`
+      );
+    }
+  }
+  if (creatorUser && actor === "brand") {
+    await createNotification({
+      userId: creatorUser.id,
+      type: "heart_back",
+      title: "💗 העסק סימן אותך בחזרה!",
+      body: `${brandName} סימנו אותך בחזרה על "${productName}". ברגע שיאשרו את החיבור ייפתח הצ'אט.`,
+      data: notificationData(connectionId, product?.id, "creator"),
+    });
+  }
+  return { ok: true };
+}
+
 // Turns a pending heart into a match: the credit deduction and the status change happen atomically in the
 // match_connection() database function (row locks, single transaction); this then opens the chat and notifies.
 export async function performMatch(admin: Admin, connectionId: string, actorUserId: string): Promise<MatchResult> {

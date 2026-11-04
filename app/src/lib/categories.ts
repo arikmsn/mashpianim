@@ -56,3 +56,20 @@ export function resolveProductCategory(picked: unknown, brandCategories: unknown
   }
   return DEFAULT_CATEGORY;
 }
+
+// Free-text category label the brand may type instead of picking from the list ("אחר"). It is shown on
+// cards and the product page; the feed chips still use the mapped `category` (custom → "כללי").
+export const CUSTOM_CATEGORY_MAX = 40;
+
+export function cleanCustomCategory(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.replace(/\s+/g, " ").trim().slice(0, CUSTOM_CATEGORY_MAX);
+  if (!text) return null;
+  // A typed value that is one of the feed categories is just that category
+  return isProductCategory(text) ? null : text;
+}
+
+export function displayCategory(category: unknown, custom: unknown): string {
+  if (typeof custom === "string" && custom.trim()) return custom.trim();
+  return typeof category === "string" ? category : "";
+}

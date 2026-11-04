@@ -70,12 +70,19 @@ function BottomNav() {
     () => (readCache<{ role?: string }>("/api/profile")?.role as "creator" | "brand" | "admin" | undefined) || null
   );
   const [unreadMessages, setUnreadMessages] = useState(0);
+  // Hearts that wait for this side (brand: creators who chose it + matches to confirm; creator: brand hearts)
+  const [pendingHearts, setPendingHearts] = useState(0);
   const fetchedRef = useRef(false);
 
   const fetchUnread = useCallback(async () => {
     // fetchJson collapses the mount / route-change / focus triggers that fire together into one request
     const data = await fetchJson<{ count?: number }>("/api/messages/unread");
     if (data) setUnreadMessages(data.count || 0);
+  }, []);
+
+  const fetchHearts = useCallback(async () => {
+    const data = await fetchJson<{ actionable?: number }>("/api/connections/counts");
+    if (data) setPendingHearts(data.actionable || 0);
   }, []);
 
   useEffect(() => {
@@ -91,9 +98,10 @@ function BottomNav() {
     });
 
     fetchUnread();
-  }, [user, fetchUnread]);
+    fetchHearts();
+  }, [user, fetchUnread, fetchHearts]);
 
-  // Realtime: update badge on new messages
+  // Realtime: update badges on new messages and on hearts / matches
   useEffect(() => {
     if (!user) return;
 
@@ -107,19 +115,23 @@ function BottomNav() {
           fetchUnread();
         }
       )
+      .on("postgres_changes", { event: "*", schema: "public", table: "connections" }, () => {
+        fetchHearts();
+      })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, fetchUnread]);
+  }, [user, fetchUnread, fetchHearts]);
 
-  // Also refresh when navigating away from messages (user may have read them)
+  // Also refresh when navigating away from messages (user may have read them); hearts on every screen change
   useEffect(() => {
     if (user && !pathname.startsWith("/messages")) {
       fetchUnread();
     }
-  }, [pathname, user, fetchUnread]);
+    if (user) fetchHearts();
+  }, [pathname, user, fetchUnread, fetchHearts]);
 
   // Instant badge updates from the messages screen, and a refresh when the app regains focus
   useEffect(() => {
@@ -154,7 +166,7 @@ function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/80 backdrop-blur-xl border-t border-neutral-100 pb-[env(safe-area-inset-bottom)]">
       <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
         {navItems.map((item) => {
-          const badge = item.href === "/messages" ? unreadMessages : (item.badge || 0);
+          const badge = item.href === "/messages" ? unreadMessages : item.href.endsWith("/connections") ? pendingHearts : (item.badge || 0);
           return (
             <Link
               key={item.href}

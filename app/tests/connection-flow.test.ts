@@ -7,10 +7,13 @@ import {
   isOccupyingStatus,
   normalizeMaxCreators,
   spotsLeft,
-  DEFAULT_MAX_CREATORS,
+  isProductFull,
+  brandBucket,
+  heartState,
+  flowNextAction,
 } from "../src/lib/connection-flow.ts";
 import { mapMatchError } from "../src/lib/match-errors.ts";
-import { buildBriefMessage } from "../src/lib/brief.ts";
+import { buildBriefMessage, sanitizeBriefData, briefDataLines, hasBriefContent } from "../src/lib/brief.ts";
 import { pickProductUpdates, toPublicProduct } from "../src/lib/authz.ts";
 
 describe("chat lifecycle", () => {
@@ -74,21 +77,25 @@ describe("creator slots per product (BRAND-01)", () => {
     for (const s of ["pending", "cancelled", "rejected", null]) assert.equal(isOccupyingStatus(s), false, String(s));
   });
 
-  test("max_creators falls back to the default and is clamped to 1–50", () => {
-    assert.equal(normalizeMaxCreators(undefined), DEFAULT_MAX_CREATORS);
-    assert.equal(normalizeMaxCreators("abc"), DEFAULT_MAX_CREATORS);
-    assert.equal(normalizeMaxCreators(0), DEFAULT_MAX_CREATORS);
+  test("max_creators is optional: null/junk = no limit, numbers are clamped to 1–50", () => {
+    assert.equal(normalizeMaxCreators(undefined), null);
+    assert.equal(normalizeMaxCreators(null), null);
+    assert.equal(normalizeMaxCreators("abc"), null);
+    assert.equal(normalizeMaxCreators(0), null);
     assert.equal(normalizeMaxCreators("5"), 5);
     assert.equal(normalizeMaxCreators(7.9), 7);
     assert.equal(normalizeMaxCreators(999), 50);
   });
 
-  test("spots left never goes negative", () => {
+  test("spots left never goes negative; no limit reads as null and is never full", () => {
     assert.equal(spotsLeft(3, 0), 3);
     assert.equal(spotsLeft(3, 2), 1);
     assert.equal(spotsLeft(3, 3), 0);
     assert.equal(spotsLeft(3, 9), 0);
-    assert.equal(spotsLeft(null, 1), DEFAULT_MAX_CREATORS - 1);
+    assert.equal(spotsLeft(null, 1), null);
+    assert.equal(isProductFull(3, 3), true);
+    assert.equal(isProductFull(3, 2), false);
+    assert.equal(isProductFull(null, 500), false);
   });
 
   test("the database refusal maps to a 409", () => {
@@ -97,12 +104,95 @@ describe("creator slots per product (BRAND-01)", () => {
     assert.match(r.error, /מלא/);
   });
 
-  test("brands edit max_creators within 1–50; 0 and junk are dropped", () => {
+  test("brands edit max_creators within 1–50; null clears the limit; 0 and junk are dropped", () => {
     assert.deepEqual(pickProductUpdates({ max_creators: "4" }), { max_creators: 4 });
     assert.deepEqual(pickProductUpdates({ max_creators: 0 }), {});
     assert.deepEqual(pickProductUpdates({ max_creators: 500 }), { max_creators: 50 });
-    assert.deepEqual(pickProductUpdates({ max_creators: null }), {});
+    assert.deepEqual(pickProductUpdates({ max_creators: null }), { max_creators: null });
     assert.equal(toPublicProduct({ id: "1", max_creators: 3, spots_left: 2, occupied: 1 }).spots_left, 2);
+  });
+});
+
+describe("hearts, mutual hearts and the brand's lists (2026-11-04)", () => {
+  test("pending hearts fall into the three brand lists, the rest into active / done", () => {
+    assert.equal(brandBucket({ status: "pending", initiated_by: "creator" }), "chose_you");
+    assert.equal(brandBucket({ status: "pending", initiated_by: "brand" }), "my_list");
+    assert.equal(brandBucket({ status: "pending", initiated_by: "creator", mutual_at: "2026-11-04T10:00:00Z" }), "match");
+    assert.equal(brandBucket({ status: "pending", initiated_by: "brand", mutual_at: "2026-11-04T10:00:00Z" }), "match");
+    for (const s of ["approved", "shipped", "delivered", "filming", "uploaded", "in_review", "revision_requested"]) {
+      assert.equal(brandBucket({ status: s }), "active", s);
+    }
+    for (const s of ["completed", "cancelled", "rejected"]) assert.equal(brandBucket({ status: s }), "done", s);
+  });
+
+  test("each side knows whether a heart waits on it", () => {
+    assert.equal(heartState({ initiated_by: "creator" }, "brand"), "needs_me");
+    assert.equal(heartState({ initiated_by: "creator" }, "creator"), "waiting_other");
+    assert.equal(heartState({ initiated_by: "brand" }, "creator"), "needs_me");
+    assert.equal(heartState({ initiated_by: "brand", mutual_at: "x" }, "brand"), "match");
+  });
+
+  test("the next-action line explains the mutual state to both sides", () => {
+    const brand = flowNextAction("pending", "brand", { initiatedBy: "creator", mutual: true });
+    assert.equal(brand.mine, true);
+    assert.match(brand.text, /אשרו את החיבור/);
+    const creator = flowNextAction("pending", "creator", { initiatedBy: "brand", mutual: true });
+    assert.equal(creator.mine, false);
+    assert.match(creator.text, /אישור הסופי של העסק/);
+    assert.match(flowNextAction("pending", "brand", { initiatedBy: "creator" }).text, /לב בחזרה/);
+  });
+});
+
+describe("structured brief (migration 015)", () => {
+  test("only known sections and options survive; empty input clears", () => {
+    const data = sanitizeBriefData({
+      types: ["אנבוקסינג", "לא קיים", 7],
+      length: ["30–60 שנ'"],
+      bogus: ["x"],
+      messages: "  להגיד שהמוצר ללא סוכר  ",
+    });
+    assert.deepEqual(data, { types: ["אנבוקסינג"], length: ["30–60 שנ'"], messages: "להגיד שהמוצר ללא סוכר" });
+    assert.equal(sanitizeBriefData({ types: [], messages: "   " }), null);
+    assert.equal(sanitizeBriefData("text"), null);
+    assert.equal(sanitizeBriefData(null), null);
+  });
+
+  test("renders one line per section plus the key messages", () => {
+    const lines = briefDataLines({ types: ["אנבוקסינג", "שימוש / הדגמה"], platforms: ["TikTok"], messages: "בלי סוכר" });
+    assert.deepEqual(lines, ["סוג הסרטון: אנבוקסינג, שימוש / הדגמה", "פלטפורמת יעד: TikTok", "מסרים מרכזיים:", "בלי סוכר"]);
+    assert.equal(hasBriefContent(null, ""), false);
+    assert.equal(hasBriefContent(null, "הערה"), true);
+    assert.equal(hasBriefContent({ types: ["אנבוקסינג"] }, null), true);
+  });
+
+  test("the chat message carries the structured brief and the notes; a chosen format replaces the default line", () => {
+    const text = buildBriefMessage({
+      name: "סרום",
+      price: 120,
+      product_type: "physical",
+      brief: "בלי מוזיקה",
+      brief_data: { types: ["אנבוקסינג"], length: ["60–90 שנ'"] },
+    });
+    assert.match(text, /סוג הסרטון: אנבוקסינג/);
+    assert.match(text, /אורך הסרטון: 60–90 שנ'/);
+    assert.match(text, /הערות מהעסק:\nבלי מוזיקה/);
+    assert.doesNotMatch(text, /פורמט: וידאו 15–45/);
+    assert.match(text, /זכויות שימוש/);
+    // no picks at all → the old template
+    assert.match(buildBriefMessage({ name: "x", brief_data: { types: [] } }), /(העסק ישלים)/);
+  });
+
+  test("brands edit brief_data and a custom category through the allowlist", () => {
+    assert.deepEqual(pickProductUpdates({ brief_data: { types: ["אנבוקסינג"], junk: 1 } }), { brief_data: { types: ["אנבוקסינג"] } });
+    assert.deepEqual(pickProductUpdates({ brief_data: null }), { brief_data: null });
+    assert.deepEqual(pickProductUpdates({ brief_data: "text" }), {});
+    assert.deepEqual(pickProductUpdates({ category_custom: "  מוצרי   טבע  " }), { category_custom: "מוצרי טבע" });
+    assert.deepEqual(pickProductUpdates({ category_custom: "" }), { category_custom: null });
+    // a typed value that is a feed category is not a custom label
+    assert.deepEqual(pickProductUpdates({ category_custom: "ביוטי" }), { category_custom: null });
+    // the shop link never reaches creators
+    assert.equal("source_url" in toPublicProduct({ id: "1", source_url: "https://shop" }), false);
+    assert.equal(toPublicProduct({ id: "1", category_custom: "מוצרי טבע" }).category_custom, "מוצרי טבע");
   });
 });
 

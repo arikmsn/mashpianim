@@ -39,6 +39,7 @@ interface Connection {
   brandAvatar: string | null;
   brandUserId: string | null;
   initiatedBy: "creator" | "brand";
+  mutualAt: string | null;
   status: string;
   daysLeft: number | null;
   // The deadline that applies to the current step (ship / deliver / film / review)
@@ -70,6 +71,7 @@ function mapConnection(c: Record<string, unknown>): Connection {
     brandAvatar: (c as any).brand_profiles?.logo_url || (c as any).brand_profiles?.users?.avatar_url || null,
     brandUserId: (c as any).brand_profiles?.user_id || null,
     initiatedBy: (c as any).initiated_by === "brand" ? "brand" : "creator",
+    mutualAt: (c.mutual_at as string) || null,
     status,
     daysLeft,
     activeDeadline: deadlineField ? ((c[deadlineField] as string) || null) : null,
@@ -182,8 +184,9 @@ function ConnectionsPageInner() {
       if (res.ok) {
         setConnections((prev) => prev.map((c) => (c.id === connectionId ? { ...c, status } : c)));
         if (status === "approved") {
-          toast("🎉 יש מאטץ'! הצ'אט נפתח", "success");
-          router.push(`/messages?connection=${connectionId}`);
+          // The creator's yes makes the pair mutual; the chat opens when the brand confirms
+          setConnections((prev) => prev.map((c) => (c.id === connectionId ? { ...c, status: "pending", mutualAt: new Date().toISOString() } : c)));
+          toast("🎉 יש מאטץ'! העסק יאשר את החיבור ואז ייפתח הצ'אט", "success");
         } else if (status === "rejected") {
           toast("דחית את הלב. העסק יעודכן.", "info");
         } else {
@@ -309,7 +312,9 @@ function ConnectionsPageInner() {
           <>
             {filtered.map((conn) => {
               const status =
-                conn.status === "pending" && conn.initiatedBy === "brand"
+                conn.status === "pending" && conn.mutualAt
+                  ? { label: "🎉 מאטץ' — ממתין לאישור העסק", variant: "success" as const }
+                  : conn.status === "pending" && conn.initiatedBy === "brand"
                   ? { label: "💗 סימנו אותך", variant: "pink" as const }
                   : conn.status === "pending"
                     ? { label: "❤️ לב נשלח — ממתין לעסק", variant: "default" as const }
@@ -406,7 +411,9 @@ function ConnectionsPageInner() {
 
                     {conn.status === "pending" && (
                       <div className="mt-3 pt-3 border-t border-neutral-100">
-                        {conn.initiatedBy === "brand" ? (
+                        {conn.mutualAt ? (
+                          <p className="text-xs text-emerald-700">🎉 שניכם סימנתם לב. העסק מאשר את החיבור הסופי ואז נפתח הצ&apos;אט — נעדכן אותך.</p>
+                        ) : conn.initiatedBy === "brand" ? (
                           <>
                             <p className="text-sm text-pink-600 font-medium mb-2">
                               💗 {conn.brand} מתעניינים בך למוצר הזה
@@ -419,7 +426,7 @@ function ConnectionsPageInner() {
                                 loading={respondingId === conn.id}
                                 onClick={(e) => { e.stopPropagation(); respond(conn.id, "approved"); }}
                               >
-                                {locked ? "🔒 " : "💗 "}אישור — מאטץ&apos;
+                                {locked ? "🔒 " : "💗 "}כן, מעוניין/ת
                               </Button>
                               <Button
                                 size="sm"

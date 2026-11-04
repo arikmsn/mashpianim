@@ -10,6 +10,9 @@ import { readCache, swrFetch } from "@/lib/client-cache";
 
 const typeIcons: Record<string, string> = {
   heart_received: "💗",
+  heart_back: "💗",
+  match_ready: "🎉",
+  match_ready_reminder: "⏰",
   match: "🎉",
   heart_declined: "💔",
   heart_withdrawn: "↩️",
@@ -38,6 +41,9 @@ const typeIcons: Record<string, string> = {
 
 const typeColors: Record<string, string> = {
   heart_received: "bg-pink-50 text-pink-500",
+  heart_back: "bg-pink-50 text-pink-500",
+  match_ready: "bg-emerald-50 text-emerald-600",
+  match_ready_reminder: "bg-emerald-50 text-emerald-600",
   match: "bg-emerald-50 text-emerald-600",
   connection_approved: "bg-green-50 text-green-600",
   connection_completed: "bg-emerald-50 text-emerald-600",

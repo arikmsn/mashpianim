@@ -6,7 +6,7 @@ import { filterContactInfo } from "@/lib/moderation/chat-filter";
 import { notifyConnectionStatusChange, logActivity, createNotification, notificationData } from "@/lib/notifications";
 import { resolveViewer } from "@/lib/viewer";
 import { readActiveRole } from "@/lib/active-role";
-import { performMatch, countPortfolioVideos, portfolioGateError, MIN_PORTFOLIO_VIDEOS } from "@/lib/match";
+import { performMatch, markMutual, countPortfolioVideos, portfolioGateError, MIN_PORTFOLIO_VIDEOS } from "@/lib/match";
 import { isConnectionParticipant } from "@/lib/authz";
 import { getTimelineSettings } from "@/lib/settings";
 import { isChatOpen } from "@/lib/connection-flow";
@@ -80,8 +80,9 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
 // State machine: which transitions are valid and who can trigger them
 const validTransitions: Record<string, { targets: string[]; allowedRoles: string[] }> = {
-  // pending = a heart from one side; who may answer/cancel is resolved per connection below
-  pending:             { targets: ["approved", "rejected", "cancelled"], allowedRoles: ["brand", "creator", "admin"] },
+  // pending = a heart from one side (or both, mutual_at set); who may answer/confirm/cancel is resolved per
+  // connection below. "mutual" is the other side's heart back; "approved" is the brand's paid confirmation.
+  pending:             { targets: ["mutual", "approved", "rejected", "cancelled"], allowedRoles: ["brand", "creator", "admin"] },
   approved:            { targets: ["shipped", "cancelled"], allowedRoles: ["brand", "admin"] },
   shipped:             { targets: ["delivered", "cancelled"], allowedRoles: ["creator", "admin"] },
   delivered:           { targets: ["filming"], allowedRoles: ["creator", "admin"] },
@@ -180,21 +181,48 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "אין הרשאה לחיבור זה" }, { status: 403 });
   }
 
-  // Hearts: only the other side can answer, only the sender can withdraw
+  // Hearts. One-sided: only the other side answers (heart back = "mutual"; a creator's "approved" means the
+  // same), only the sender withdraws. Mutual: the brand confirms ("approved", paid), either side may cancel.
+  const isMutual = !!(connection as any).mutual_at;
   if (currentStatus === "pending" && userType !== "admin") {
     const responder = initiatedBy === "brand" ? "creator" : "brand";
-    if (newStatus === "cancelled" && userType !== initiatedBy) {
-      return NextResponse.json({ error: "רק מי ששלח את הלב יכול לבטל אותו" }, { status: 403 });
+    if (isMutual) {
+      if (newStatus === "mutual") {
+        return NextResponse.json({ error: "כבר יש מאטץ' — ממתינים לאישור העסק" }, { status: 400 });
+      }
+      if (newStatus === "approved" && userType !== "brand") {
+        return NextResponse.json({ error: "העסק מאשר את החיבור הסופי" }, { status: 403 });
+      }
+    } else {
+      if (newStatus === "cancelled" && userType !== initiatedBy) {
+        return NextResponse.json({ error: "רק מי ששלח את הלב יכול לבטל אותו" }, { status: 403 });
+      }
+      if ((newStatus === "mutual" || newStatus === "approved" || newStatus === "rejected") && userType !== responder) {
+        return NextResponse.json({ error: "ממתינים לתשובת הצד השני" }, { status: 403 });
+      }
     }
-    if ((newStatus === "approved" || newStatus === "rejected") && userType !== responder) {
-      return NextResponse.json({ error: "ממתינים לתשובת הצד השני" }, { status: 403 });
-    }
-    if (newStatus === "approved" && userType === "creator") {
+    if ((newStatus === "mutual" || newStatus === "approved") && userType === "creator") {
       const count = await countPortfolioVideos(admin, (dbUser as any).id);
       if (count < MIN_PORTFOLIO_VIDEOS) {
         return NextResponse.json({ error: portfolioGateError(count), code: "portfolio_gate", count }, { status: 403 });
       }
     }
+  }
+
+  // A creator saying yes to a brand's heart completes the pair; the brand still confirms afterwards
+  if (currentStatus === "pending" && newStatus === "mutual" || (currentStatus === "pending" && newStatus === "approved" && userType === "creator")) {
+    const result = await markMutual(admin, id, userType === "creator" ? "creator" : "brand");
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
+    await logActivity({
+      actorId: (dbUser as any).id,
+      action: "connection_mutual",
+      entityType: "connection",
+      entityId: id,
+      details: { initiatedBy, by: userType },
+    });
+    return NextResponse.json({ success: true, status: "pending", mutual: true });
   }
 
   // Deadlines and the revision limit come from the admin settings (FLOW-02)
@@ -370,13 +398,16 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       data: notificationData(id, productId, "brand"),
     });
   } else if (newStatus === "cancelled" && currentStatus === "pending" && creatorUser && brandUser) {
-    const target = initiatedBy === "brand" ? creatorUser : brandUser;
+    // The side that did not act hears about it (on a mutual pair that is whoever is not the actor)
+    const actorIsBrand = userType === "brand";
+    const target = isMutual ? (actorIsBrand ? creatorUser : brandUser) : initiatedBy === "brand" ? creatorUser : brandUser;
+    const targetRole = target === creatorUser ? "creator" : "brand";
     await createNotification({
       userId: (target as any).id,
       type: "heart_withdrawn",
-      title: "לב בוטל",
-      body: `הלב למוצר "${product?.name || ""}" בוטל על ידי הצד השני.`,
-      data: notificationData(id, productId, initiatedBy === "brand" ? "creator" : "brand"),
+      title: isMutual ? "המאטץ' בוטל" : "לב בוטל",
+      body: `${isMutual ? "המאטץ'" : "הלב"} למוצר "${product?.name || ""}" בוטל על ידי הצד השני.`,
+      data: notificationData(id, productId, targetRole),
     });
   } else if (creatorUser && brandUser) {
     await notifyConnectionStatusChange(newStatus, {

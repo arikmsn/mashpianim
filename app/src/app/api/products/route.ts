@@ -5,7 +5,8 @@ import { toPublicProduct } from "@/lib/authz";
 import { OCCUPYING_STATUSES, normalizeMaxCreators, spotsLeft } from "@/lib/connection-flow";
 import { resolveViewer } from "@/lib/viewer";
 import { readActiveRole } from "@/lib/active-role";
-import { resolveProductCategory } from "@/lib/categories";
+import { resolveProductCategory, cleanCustomCategory } from "@/lib/categories";
+import { sanitizeBriefData } from "@/lib/brief";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -115,15 +116,18 @@ export async function GET(request: NextRequest) {
         brand_user_id: p.brand_profiles?.user_id || null,
         // The product's own category (migration 013); older rows without one fall back to the brand's
         category: p.category || brandCats[0] || "",
+        category_custom: p.category_custom || null,
         categories: p.category ? [p.category] : brandCats,
         logo_url: p.brand_profiles?.logo_url || null,
       };
       if (privileged) return shaped;
       // Signed-in creators also get the brand's brief (shown on the product page); anonymous callers don't
-      return viewer?.type === "creator" ? { ...toPublicProduct(shaped), brief: p.brief ?? null } : toPublicProduct(shaped);
+      return viewer?.type === "creator"
+        ? { ...toPublicProduct(shaped), brief: p.brief ?? null, brief_data: p.brief_data ?? null }
+        : toPublicProduct(shaped);
     })
-    // Creators browsing the feed don't see products whose creator slots are all taken
-    .filter((p: any) => privileged || (p.spots_left as number) > 0);
+    // Creators browsing the feed don't see products whose creator limit is reached (no limit = always shown)
+    .filter((p: any) => privileged || p.spots_left === null || (p.spots_left as number) > 0);
 
   return NextResponse.json({ products });
 }
@@ -169,9 +173,9 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const {
     name, description, price, image_url,
-    shipping_policy, shipping_address, source_url,
+    shipping_policy, shipping_address,
     product_type, digital_access_type, digital_access_instructions, digital_access_duration_days,
-    expiration_date, quantity, brief, max_creators, category,
+    brief, brief_data, category, category_custom,
   } = body;
 
   // Product category: the brand's pick if valid, else the brand's own first category, else "כללי"
@@ -198,19 +202,18 @@ export async function POST(request: NextRequest) {
       image_url: image_url || null,
       shipping_policy: shipping_policy || "free",
       shipping_address: shipping_address || null,
-      source_url: source_url || null,
       status: "active",
       product_type: product_type || "physical",
       digital_access_type: product_type === "digital" ? digital_access_type : null,
       digital_access_instructions: product_type === "digital" ? (digital_access_instructions || null) : null,
       digital_access_duration_days: product_type === "digital" ? (digital_access_duration_days || null) : null,
-      expiration_date: expiration_date || null,
-      quantity: quantity || null,
-      // Brand-written brief sent to the creator when a match opens (optional)
+      // Brand-written notes + structured picks sent to the creator when a match opens (both optional)
       brief: typeof brief === "string" && brief.trim() ? brief.trim() : null,
-      // How many creators may be matched with this product (1–50, default 3)
-      max_creators: normalizeMaxCreators(max_creators),
+      brief_data: sanitizeBriefData(brief_data),
+      // No creator limit: the brand decides per match whom to confirm (2026-11-04)
+      max_creators: null,
       category: resolveProductCategory(category, brandCategories),
+      category_custom: cleanCustomCategory(category_custom),
     } as any)
     .select()
     .single();

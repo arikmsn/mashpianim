@@ -1,5 +1,7 @@
 // Pure rules of the connection lifecycle shared by API routes and pages (no framework imports, unit-tested).
 
+export type FlowRole = "creator" | "brand";
+
 // Chat is open from the match until the connection closes
 export const CHAT_OPEN_STATUSES = [
   "approved",
@@ -30,16 +32,58 @@ export function isOccupyingStatus(status: unknown): boolean {
   return typeof status === "string" && (OCCUPYING_STATUSES as readonly string[]).includes(status);
 }
 
-export const DEFAULT_MAX_CREATORS = 3;
-
-export function normalizeMaxCreators(value: unknown): number {
-  const n = typeof value === "number" ? value : Number(String(value ?? "").trim());
-  if (!Number.isFinite(n) || n < 1) return DEFAULT_MAX_CREATORS;
+// A product's creator limit is optional since 2026-11-04: null = no limit, the brand decides per match
+export function normalizeMaxCreators(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = typeof value === "number" ? value : Number(String(value).trim());
+  if (!Number.isFinite(n) || n < 1) return null;
   return Math.min(50, Math.floor(n));
 }
 
-export function spotsLeft(maxCreators: unknown, occupied: number): number {
-  return Math.max(0, normalizeMaxCreators(maxCreators) - Math.max(0, occupied || 0));
+// null = unlimited
+export function spotsLeft(maxCreators: unknown, occupied: number): number | null {
+  const max = normalizeMaxCreators(maxCreators);
+  if (max === null) return null;
+  return Math.max(0, max - Math.max(0, occupied || 0));
+}
+
+export function isProductFull(maxCreators: unknown, occupied: number): boolean {
+  const left = spotsLeft(maxCreators, occupied);
+  return left !== null && left <= 0;
+}
+
+// --- Hearts and the brand's lists -------------------------------------------------------------------
+// A connection starts as a heart (pending). Both sides hearting = a match waiting for the brand's
+// confirmation (mutual_at set, status still pending). The brand confirming (match_connection) deducts
+// one credit, sets approved and opens the chat.
+
+export type BrandBucket = "chose_you" | "my_list" | "match" | "active" | "done";
+
+export const BRAND_BUCKETS: { id: BrandBucket; label: string; empty: string }[] = [
+  { id: "chose_you", label: "בחרו בך", empty: "עדיין אף יוצר/ת לא סימן/ה אתכם — הוסיפו מוצרים ושלחו לבבות" },
+  { id: "my_list", label: "הרשימה שלי", empty: "אין לבבות שממתינים לתשובת היוצרים" },
+  { id: "match", label: "מאטץ'", empty: "אין מאטצ'ים שממתינים לאישורכם" },
+  { id: "active", label: "פעילים", empty: "אין חיבורים פעילים" },
+  { id: "done", label: "הסתיימו", empty: "אין חיבורים שהסתיימו" },
+];
+
+export function brandBucket(conn: { status: unknown; initiated_by?: unknown; mutual_at?: unknown }): BrandBucket {
+  const status = typeof conn.status === "string" ? conn.status : "";
+  if (status === "pending") {
+    if (conn.mutual_at) return "match";
+    return conn.initiated_by === "brand" ? "my_list" : "chose_you";
+  }
+  if ((CHAT_OPEN_STATUSES as readonly string[]).includes(status)) return "active";
+  return "done";
+}
+
+// What a pending heart means for the viewer; "match" = both hearted, the brand confirms
+export type HeartState = "waiting_other" | "needs_me" | "match";
+
+export function heartState(conn: { initiated_by?: unknown; mutual_at?: unknown }, role: FlowRole): HeartState {
+  if (conn.mutual_at) return "match";
+  const mine = (conn.initiated_by === "brand" ? "brand" : "creator") === role;
+  return mine ? "waiting_other" : "needs_me";
 }
 
 // The brand reviews a deliverable as soon as it is uploaded; the admin step (in_review) is optional (FLOW-01)
@@ -77,26 +121,29 @@ export function flowStepIndex(status: unknown): number {
   return STEP_BY_STATUS[status] ?? -1;
 }
 
-export type FlowRole = "creator" | "brand";
-
 // One line per side saying what happens next; `mine` = this side has to act
 export function flowNextAction(
   status: unknown,
   role: FlowRole,
-  opts: { initiatedBy?: string | null; deliveryType?: string | null } = {}
+  opts: { initiatedBy?: string | null; deliveryType?: string | null; mutual?: boolean } = {}
 ): { text: string; mine: boolean } {
   const digital = opts.deliveryType === "digital";
   const s = typeof status === "string" ? status : "";
   switch (s) {
     case "pending":
+      if (opts.mutual) {
+        return role === "creator"
+          ? { text: "יש מאטץ'! ממתינים לאישור הסופי של העסק", mine: false }
+          : { text: "יש מאטץ' — אשרו את החיבור כדי להתחיל (סרטון אחד מהחבילה)", mine: true };
+      }
       if (opts.initiatedBy === "brand") {
         return role === "creator"
-          ? { text: "העסק סימן אתכם — אשרו כדי לפתוח מאטץ'", mine: true }
-          : { text: "ממתינים לאישור היוצר/ת", mine: false };
+          ? { text: "העסק סימן אתכם — אשרו אם מתאים לכם", mine: true }
+          : { text: "ממתינים לתשובת היוצר/ת", mine: false };
       }
       return role === "creator"
         ? { text: "הלב נשלח — ממתינים לתשובת העסק", mine: false }
-        : { text: "היוצר/ת מעוניין/ת — אשרו כדי לפתוח מאטץ'", mine: true };
+        : { text: "היוצר/ת בחר/ה בכם — סמנו לב בחזרה", mine: true };
     case "approved":
       return role === "brand"
         ? { text: digital ? "שלחו את פרטי הגישה" : "שלחו את המוצר ועדכנו מספר מעקב", mine: true }

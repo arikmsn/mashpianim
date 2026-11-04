@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, Badge, Button, Modal, Input, Textarea, FilePicker, useToast } from "@/components/ui";
-import { PRODUCT_CATEGORIES } from "@/lib/categories";
-import { formatDateHe } from "@/lib/dates";
+import { PRODUCT_CATEGORIES, CUSTOM_CATEGORY_MAX, displayCategory } from "@/lib/categories";
+import { BRIEF_SECTIONS, hasBriefContent, type BriefData } from "@/lib/brief";
 
 interface Product {
   id: string;
@@ -14,23 +15,41 @@ interface Product {
   imageUrl: string | null;
   status: "active" | "paused";
   category: string;
+  categoryCustom: string | null;
   brief: string;
+  briefData: BriefData | null;
   shippingPolicy: string;
-  sourceUrl: string | null;
   applicantsCount: number;
-  maxCreators: number;
   createdAt: string;
   productType: "physical" | "digital";
   digitalAccessType: string | null;
   digitalAccessInstructions: string | null;
   digitalAccessDurationDays: number | null;
-  expirationDate: string | null;
-  quantity: number | null;
 }
 
 const shippingLabels: Record<string, string> = {
   free: "משלוח חינם",
   pickup: "איסוף עצמי",
+};
+
+const OTHER = "אחר";
+// The product form asks only for the general brief direction; the full brief has its own screen
+const briefTypes = BRIEF_SECTIONS[0];
+
+const emptyForm = {
+  name: "",
+  description: "",
+  price: "",
+  brief: "",
+  briefTypes: [] as string[],
+  imageUrl: "",
+  shippingPolicy: "free",
+  category: "",
+  categoryCustom: "",
+  productType: "physical" as "physical" | "digital",
+  digitalAccessType: "",
+  digitalAccessInstructions: "",
+  digitalAccessDurationDays: "",
 };
 
 function ProductsSkeleton() {
@@ -52,7 +71,30 @@ function ProductsSkeleton() {
   );
 }
 
+function mapProduct(p: Record<string, unknown>): Product {
+  return {
+    id: p.id as string,
+    name: p.name as string,
+    description: (p.description as string) || "",
+    price: Number(p.price) || 0,
+    imageUrl: (p.image_url as string) || null,
+    status: ((p.status as string) || "active") as "active" | "paused",
+    brief: (p.brief as string) || "",
+    briefData: (p.brief_data as BriefData) || null,
+    shippingPolicy: (p.shipping_policy as string) || "free",
+    category: (p.category as string) || "",
+    categoryCustom: (p.category_custom as string) || null,
+    applicantsCount: (p.matched_count as number) || 0,
+    createdAt: (p.created_at as string) || "",
+    productType: ((p.product_type as string) || "physical") as "physical" | "digital",
+    digitalAccessType: (p.digital_access_type as string) || null,
+    digitalAccessInstructions: (p.digital_access_instructions as string) || null,
+    digitalAccessDurationDays: (p.digital_access_duration_days as number) || null,
+  };
+}
+
 export default function BrandProductsPage() {
+  const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -61,24 +103,11 @@ export default function BrandProductsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
+  // After a new product is saved: offer the full brief screen
+  const [briefPromptFor, setBriefPromptFor] = useState<Product | null>(null);
   const { toast } = useToast();
 
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    price: "",
-    brief: "",
-    imageUrl: "",
-    shippingPolicy: "free", category: "",
-    sourceUrl: "",
-    productType: "physical" as "physical" | "digital",
-    digitalAccessType: "",
-    digitalAccessInstructions: "",
-    digitalAccessDurationDays: "",
-    expirationDate: "",
-    quantity: "",
-    maxCreators: "3",
-  });
+  const [formData, setFormData] = useState({ ...emptyForm });
   const [imageFile, setImageFile] = useState<File | null>(null);
 
   useEffect(() => {
@@ -91,29 +120,7 @@ export default function BrandProductsPage() {
       if (res.ok) {
         const data = await res.json();
         if (data.products && data.products.length > 0) {
-          setProducts(
-            data.products.map((p: Record<string, unknown>) => ({
-              id: p.id as string,
-              name: p.name as string,
-              description: (p.description as string) || "",
-              price: Number(p.price) || 0,
-              imageUrl: (p.image_url as string) || null,
-              status: (p.status as string) || "active",
-              brief: (p.brief as string) || "",
-              shippingPolicy: (p.shipping_policy as string) || "free",
-              category: (p.category as string) || "",
-              sourceUrl: (p.source_url as string) || null,
-              applicantsCount: (p.matched_count as number) || 0,
-              maxCreators: (p.max_creators as number) || 3,
-              createdAt: (p.created_at as string) || "",
-              productType: (p.product_type as string) || "physical",
-              digitalAccessType: (p.digital_access_type as string) || null,
-              digitalAccessInstructions: (p.digital_access_instructions as string) || null,
-              digitalAccessDurationDays: (p.digital_access_duration_days as number) || null,
-              expirationDate: (p.expiration_date as string) || null,
-              quantity: (p.quantity as number) || null,
-            }))
-          );
+          setProducts(data.products.map((p: Record<string, unknown>) => mapProduct(p)));
           setLoading(false);
           return;
         }
@@ -126,7 +133,7 @@ export default function BrandProductsPage() {
   }
 
   function resetForm() {
-    setFormData({ name: "", description: "", price: "", brief: "", imageUrl: "", shippingPolicy: "free", category: "", sourceUrl: "", productType: "physical", digitalAccessType: "", digitalAccessInstructions: "", digitalAccessDurationDays: "", expirationDate: "", quantity: "", maxCreators: "3" });
+    setFormData({ ...emptyForm, briefTypes: [] });
     setImageFile(null);
     setEditingProduct(null);
   }
@@ -142,17 +149,15 @@ export default function BrandProductsPage() {
       description: product.description,
       price: String(product.price),
       brief: product.brief || "",
+      briefTypes: Array.isArray(product.briefData?.types) ? product.briefData.types : [],
       imageUrl: product.imageUrl || "",
       shippingPolicy: product.shippingPolicy,
-      category: product.category || "",
-      sourceUrl: product.sourceUrl || "",
+      category: product.categoryCustom ? OTHER : product.category || "",
+      categoryCustom: product.categoryCustom || "",
       productType: product.productType || "physical",
       digitalAccessType: product.digitalAccessType || "",
       digitalAccessInstructions: product.digitalAccessInstructions || "",
       digitalAccessDurationDays: product.digitalAccessDurationDays ? String(product.digitalAccessDurationDays) : "",
-      expirationDate: product.expirationDate || "",
-      quantity: product.quantity ? String(product.quantity) : "",
-      maxCreators: String(product.maxCreators || 3),
     });
     setImageFile(null);
     setEditingProduct(product);
@@ -161,7 +166,11 @@ export default function BrandProductsPage() {
 
   async function handleSubmit() {
     if (!formData.name.trim() || !formData.price) {
-      toast("שם ומחיר חובה", "error");
+      toast("שם ושווי מוצר חובה", "error");
+      return;
+    }
+    if (formData.category === OTHER && !formData.categoryCustom.trim()) {
+      toast("כתבו את הקטגוריה האחרת או בחרו מהרשימה", "error");
       return;
     }
 
@@ -184,23 +193,25 @@ export default function BrandProductsPage() {
         }
       }
 
+      const isOther = formData.category === OTHER;
+      // Only the "type" section is edited here; the other brief sections live on the brief screen and are kept
+      const existingData: BriefData = editingProduct?.briefData ? { ...editingProduct.briefData } : {};
+      const briefData: BriefData = { ...existingData, types: formData.briefTypes };
+      if (formData.briefTypes.length === 0) delete briefData.types;
       const body: Record<string, unknown> = {
         name: formData.name.trim(),
         description: formData.description.trim(),
         price: Number(formData.price),
         brief: formData.brief.trim() || null,
+        brief_data: Object.keys(briefData).length > 0 ? briefData : null,
         image_url: imageUrl,
         shipping_policy: formData.shippingPolicy,
-        // Empty = let the server pick the brand's own category
-        ...(formData.category ? { category: formData.category } : {}),
-        source_url: formData.sourceUrl.trim() || null,
+        // "אחר" = the general feed bucket plus the brand's own label; empty = the server picks the brand's category
+        ...(isOther ? { category: "כללי", category_custom: formData.categoryCustom.trim() } : formData.category ? { category: formData.category, category_custom: null } : { category_custom: null }),
         product_type: formData.productType,
         digital_access_type: formData.productType === "digital" ? formData.digitalAccessType || null : null,
         digital_access_instructions: formData.productType === "digital" ? formData.digitalAccessInstructions.trim() || null : null,
         digital_access_duration_days: formData.productType === "digital" && formData.digitalAccessDurationDays ? Number(formData.digitalAccessDurationDays) : null,
-        expiration_date: formData.expirationDate || null,
-        quantity: formData.quantity ? Number(formData.quantity) : null,
-        max_creators: Math.min(50, Math.max(1, Number(formData.maxCreators) || 3)),
       };
 
       if (editingProduct) {
@@ -220,17 +231,15 @@ export default function BrandProductsPage() {
                     description: body.description as string,
                     price: body.price as number,
                     brief: (body.brief as string) || "",
+                    briefData: (body.brief_data as BriefData) || null,
                     imageUrl: (body.image_url as string) || null,
                     shippingPolicy: body.shipping_policy as string,
                     category: (body.category as string) || p.category,
-                    sourceUrl: (body.source_url as string) || null,
+                    categoryCustom: (body.category_custom as string) || null,
                     productType: (body.product_type as "physical" | "digital") || "physical",
                     digitalAccessType: (body.digital_access_type as string) || null,
                     digitalAccessInstructions: (body.digital_access_instructions as string) || null,
                     digitalAccessDurationDays: (body.digital_access_duration_days as number) || null,
-                    expirationDate: (body.expiration_date as string) || null,
-                    quantity: (body.quantity as number) || null,
-                    maxCreators: (body.max_creators as number) || 3,
                   }
                 : p
             )
@@ -246,31 +255,28 @@ export default function BrandProductsPage() {
         });
         if (res.ok) {
           const data = await res.json();
+          const created: Product = {
+            id: data.product?.id || `local-${Date.now()}`,
+            name: body.name as string,
+            description: body.description as string,
+            price: body.price as number,
+            imageUrl: body.image_url as string | null,
+            status: "active",
+            brief: (body.brief as string) || "",
+            briefData: (body.brief_data as BriefData) || null,
+            shippingPolicy: body.shipping_policy as string,
+            category: (data.product?.category as string) || (body.category as string) || "",
+            categoryCustom: (data.product?.category_custom as string) || (body.category_custom as string) || null,
+            applicantsCount: 0,
+            createdAt: new Date().toISOString(),
+            productType: (body.product_type as "physical" | "digital") || "physical",
+            digitalAccessType: (body.digital_access_type as string) || null,
+            digitalAccessInstructions: (body.digital_access_instructions as string) || null,
+            digitalAccessDurationDays: (body.digital_access_duration_days as number) || null,
+          };
           toast("המוצר נוסף בהצלחה!", "success");
-          setProducts((prev) => [
-            {
-              id: data.product?.id || `local-${Date.now()}`,
-              name: body.name as string,
-              description: body.description as string,
-              price: body.price as number,
-              imageUrl: body.image_url as string | null,
-              status: "active",
-              brief: (body.brief as string) || "",
-              shippingPolicy: body.shipping_policy as string,
-              category: (data.product?.category as string) || (body.category as string) || "",
-              sourceUrl: body.source_url as string | null,
-              applicantsCount: 0,
-              maxCreators: (body.max_creators as number) || 3,
-              createdAt: new Date().toISOString(),
-              productType: (body.product_type as "physical" | "digital") || "physical",
-              digitalAccessType: (body.digital_access_type as string) || null,
-              digitalAccessInstructions: (body.digital_access_instructions as string) || null,
-              digitalAccessDurationDays: (body.digital_access_duration_days as number) || null,
-              expirationDate: (body.expiration_date as string) || null,
-              quantity: (body.quantity as number) || null,
-            },
-            ...prev,
-          ]);
+          setProducts((prev) => [created, ...prev]);
+          if (data.product?.id) setBriefPromptFor(created);
         } else {
           const errData = await res.json().catch(() => ({}));
           toast((errData as any).error || "שגיאה בהוספת המוצר", "error");
@@ -300,14 +306,13 @@ export default function BrandProductsPage() {
         toast(newStatus === "active" ? "המוצר הופעל — מופיע שוב ליוצרים" : "המוצר הושהה — לא מוצג ליוצרים עד להפעלה", "success");
       } else {
         const data = await res.json().catch(() => ({}));
-        toast((data as { error?: string }).error || "שגיאה בעדכון סטטוס המוצר", "error");
+        toast((data as any).error || "שגיאה בעדכון הסטטוס", "error");
       }
     } catch {
-      toast("שגיאה בעדכון", "error");
+      toast("שגיאה בעדכון הסטטוס", "error");
     }
   }
 
-  // Runs after the confirmation modal; a product with active connections keeps them (soft delete)
   async function deleteProduct(product: Product) {
     setDeleting(true);
     try {
@@ -318,7 +323,7 @@ export default function BrandProductsPage() {
         setDeleteTarget(null);
       } else {
         const data = await res.json().catch(() => ({}));
-        toast((data as { error?: string }).error || "שגיאה במחיקה", "error");
+        toast((data as any).error || "שגיאה במחיקה", "error");
       }
     } catch {
       toast("שגיאה במחיקה", "error");
@@ -361,6 +366,7 @@ export default function BrandProductsPage() {
             <AnimatePresence>
               {products.map((product, i) => {
                 const colorIdx = i % placeholderColors.length;
+                const hasBrief = hasBriefContent(product.briefData, product.brief);
                 return (
                   <motion.div
                     key={product.id}
@@ -373,6 +379,7 @@ export default function BrandProductsPage() {
                     <Card padding="none" className="overflow-hidden">
                       <div className="flex">
                         {product.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={product.imageUrl}
                             alt={product.name}
@@ -393,31 +400,42 @@ export default function BrandProductsPage() {
                               {product.status === "active" ? "פעיל" : "מושהה"}
                             </Badge>
                           </div>
-                          <div className="flex items-center gap-3 text-xs text-neutral-400 mb-2">
-                            <span>₪{product.price}</span>
-                            <span>👥 {product.applicantsCount}/{product.maxCreators} יוצרים</span>
+                          <div className="flex items-center gap-3 text-xs text-neutral-400 mb-2 flex-wrap">
+                            <span>שווי ₪{product.price}</span>
+                            {product.applicantsCount > 0 && <span>🎬 {product.applicantsCount} {product.applicantsCount === 1 ? "חיבור" : "חיבורים"}</span>}
                             <span>{product.productType === "digital" ? "📱 דיגיטלי" : shippingLabels[product.shippingPolicy] || product.shippingPolicy}</span>
-                            {product.category && <span>🏷️ {product.category}</span>}
+                            {displayCategory(product.category, product.categoryCustom) && <span>🏷️ {displayCategory(product.category, product.categoryCustom)}</span>}
                           </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => openEditModal(product)}
-                              className="text-xs text-pink-500 font-medium"
-                            >
-                              עריכה
-                            </button>
-                            <button
-                              onClick={() => toggleStatus(product)}
-                              className="text-xs text-neutral-500 font-medium"
-                            >
-                              {product.status === "active" ? "השהיה" : "הפעלה"}
-                            </button>
-                            <button
-                              onClick={() => setDeleteTarget(product)}
-                              className="text-xs text-red-500 font-medium"
-                            >
-                              מחיקה
-                            </button>
+                          {/* Everyday actions on the right; pause / delete far left so a thumb never hits them by accident */}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex gap-3">
+                              <button
+                                onClick={() => openEditModal(product)}
+                                className="text-xs text-pink-500 font-medium"
+                              >
+                                עריכה
+                              </button>
+                              <button
+                                onClick={() => router.push(`/brand/products/${product.id}/brief`)}
+                                className={`text-xs font-medium ${hasBrief ? "text-pink-500" : "text-amber-600"}`}
+                              >
+                                {hasBrief ? "בריף" : "בריף ✎ חסר"}
+                              </button>
+                            </div>
+                            <div className="flex gap-2.5">
+                              <button
+                                onClick={() => toggleStatus(product)}
+                                className="text-[11px] text-neutral-400 hover:text-neutral-600 font-medium"
+                              >
+                                {product.status === "active" ? "השהיה" : "הפעלה"}
+                              </button>
+                              <button
+                                onClick={() => setDeleteTarget(product)}
+                                className="text-[11px] text-neutral-400 hover:text-red-500 font-medium"
+                              >
+                                מחיקה
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -450,6 +468,27 @@ export default function BrandProductsPage() {
         </div>
       </Modal>
 
+      {/* A new product is saved — the detailed brief has its own screen */}
+      <Modal open={!!briefPromptFor} onClose={() => setBriefPromptFor(null)} size="sm">
+        <div className="text-center space-y-4">
+          <span className="text-4xl block">📝</span>
+          <div>
+            <h3 className="text-lg font-bold">המוצר נשמר. רוצים למלא בריף מפורט?</h3>
+            <p className="text-sm text-neutral-500 mt-1">
+              אורך, סגנון, מה חייב להופיע, מה לא — היוצרים רואים את זה לפני שהם שולחים לב, וזה מעלה את איכות הסרטונים.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <Button fullWidth onClick={() => { const p = briefPromptFor; setBriefPromptFor(null); if (p) router.push(`/brand/products/${p.id}/brief`); }}>
+              לבריף המפורט
+            </Button>
+            <Button variant="ghost" fullWidth onClick={() => setBriefPromptFor(null)}>
+              אחר כך
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       <Modal
         open={showAddModal}
         onClose={() => { setShowAddModal(false); resetForm(); }}
@@ -476,17 +515,7 @@ export default function BrandProductsPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-1">בריף ליוצר/ת (אופציונלי)</label>
-            <Textarea
-              placeholder="מה חובה להגיד, למי המוצר מתאים, מה לא להראות... נשלח ליוצר/ת בצ'אט ברגע שנפתח מאטץ'"
-              value={formData.brief}
-              onChange={(e) => setFormData((p) => ({ ...p, brief: e.target.value }))}
-            />
-            <p className="text-xs text-neutral-400 mt-1">בלי בריף נשלחת תבנית למילוי בצ&apos;אט.</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-1">מחיר (₪) *</label>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">שווי מוצר (₪) *</label>
             <Input
               type="number"
               placeholder="0"
@@ -526,7 +555,7 @@ export default function BrandProductsPage() {
           <div>
             <label className="block text-sm font-medium text-neutral-700 mb-1">קטגוריה</label>
             <div className="flex flex-wrap gap-2">
-              {PRODUCT_CATEGORIES.map((cat) => {
+              {[...PRODUCT_CATEGORIES, OTHER].map((cat) => {
                 const active = formData.category === cat;
                 return (
                   <button
@@ -540,14 +569,24 @@ export default function BrandProductsPage() {
                         : "bg-neutral-50 border-neutral-200 text-neutral-500"
                     }`}
                   >
-                    {cat}
+                    {cat === OTHER ? "✎ אחר" : cat}
                   </button>
                 );
               })}
             </div>
-            <p className="text-xs text-neutral-400 mt-1">
-              {formData.category ? "הקטגוריה שבה המוצר יופיע בפיד היוצרים" : "לא נבחר — המוצר יוצג תחת הקטגוריה של העסק"}
-            </p>
+            {formData.category === OTHER ? (
+              <Input
+                className="mt-2"
+                placeholder="כתבו קטגוריה משלכם (למשל: מוצרי טבע)"
+                value={formData.categoryCustom}
+                maxLength={CUSTOM_CATEGORY_MAX}
+                onChange={(e) => setFormData((p) => ({ ...p, categoryCustom: e.target.value }))}
+              />
+            ) : (
+              <p className="text-xs text-neutral-400 mt-1">
+                {formData.category ? "הקטגוריה שבה המוצר יופיע בפיד היוצרים" : "לא נבחר — המוצר יוצג תחת הקטגוריה של העסק"}
+              </p>
+            )}
           </div>
 
           {formData.productType === "physical" ? (
@@ -623,53 +662,52 @@ export default function BrandProductsPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1">
-                תאריך תפוגה <span className="text-neutral-400 font-normal">(יום/חודש/שנה)</span>
-              </label>
-              {/* The native picker is labelled by the browser's own language; the chosen date is echoed in Hebrew (QA 17) */}
-              <Input
-                type="date"
-                lang="he-IL"
-                value={formData.expirationDate}
-                onChange={(e) => setFormData((p) => ({ ...p, expirationDate: e.target.value }))}
-                dir="ltr"
-              />
-              {formData.expirationDate && (
-                <p className="text-xs text-neutral-500 mt-1">יפוג ב-{formatDateHe(formData.expirationDate)}</p>
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">{briefTypes.title} <span className="text-neutral-400 font-normal">(כיוון כללי לבריף)</span></label>
+            <div className="flex flex-wrap gap-2">
+              {briefTypes.options.map((option) => {
+                const active = formData.briefTypes.includes(option);
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() =>
+                      setFormData((p) => ({
+                        ...p,
+                        briefTypes: active ? p.briefTypes.filter((o) => o !== option) : [...p.briefTypes, option],
+                      }))
+                    }
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                      active ? "bg-pink-500 border-pink-500 text-white" : "bg-neutral-50 border-neutral-200 text-neutral-500"
+                    }`}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-neutral-400 mt-1">
+              {editingProduct ? (
+                <>
+                  בריף מפורט (אורך, סגנון, מה חייב להופיע) —{" "}
+                  <button type="button" className="text-pink-500 font-medium" onClick={() => { setShowAddModal(false); router.push(`/brand/products/${editingProduct.id}/brief`); }}>
+                    לעריכה במסך הבריף ›
+                  </button>
+                </>
+              ) : (
+                "אחרי השמירה אפשר למלא בריף מפורט במסך נפרד."
               )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1">כמות במלאי</label>
-              <Input
-                type="number"
-                placeholder="ללא הגבלה"
-                value={formData.quantity}
-                onChange={(e) => setFormData((p) => ({ ...p, quantity: e.target.value }))}
-              />
-            </div>
+            </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-1">מספר יוצרים למוצר</label>
-            <Input
-              type="number"
-              min={1}
-              max={50}
-              value={formData.maxCreators}
-              onChange={(e) => setFormData((p) => ({ ...p, maxCreators: e.target.value }))}
-            />
-            <p className="text-xs text-neutral-400 mt-1">כמה סרטונים (יוצרים) תרצו למוצר הזה. כל מאטץ&apos; תופס מקום אחד וקרדיט אחד; כשהמקומות נגמרים המוצר יורד מהפיד.</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-1">קישור למוצר (אופציונלי)</label>
-            <Input
-              type="url"
-              placeholder="https://your-store.com/product"
-              value={formData.sourceUrl}
-              onChange={(e) => setFormData((p) => ({ ...p, sourceUrl: e.target.value }))}
+            <label className="block text-sm font-medium text-neutral-700 mb-1">הערות קצרות ליוצר/ת (אופציונלי)</label>
+            <Textarea
+              placeholder="דגש אחד או שניים — למשל: להראות את הסוגר המגנטי"
+              value={formData.brief}
+              rows={2}
+              onChange={(e) => setFormData((p) => ({ ...p, brief: e.target.value }))}
             />
           </div>
 

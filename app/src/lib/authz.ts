@@ -1,6 +1,7 @@
 // Pure authorization helpers shared by API routes. No framework imports so they can be unit-tested directly.
 // Explicit extension so `node --test` (tests/*.test.ts import this file directly) can resolve it too
-import { isProductCategory } from "./categories.ts";
+import { isProductCategory, cleanCustomCategory } from "./categories.ts";
+import { sanitizeBriefData } from "./brief.ts";
 
 export const ALLOWED_REGISTRATION_TYPES = ["creator", "brand"] as const;
 export type RegistrationType = (typeof ALLOWED_REGISTRATION_TYPES)[number];
@@ -83,7 +84,6 @@ export const PUBLIC_PRODUCT_FIELDS = [
   "price",
   "image_url",
   "shipping_policy",
-  "source_url",
   "status",
   "product_type",
   "digital_access_type",
@@ -97,6 +97,7 @@ export const PUBLIC_PRODUCT_FIELDS = [
   "brand_name",
   "brand_user_id",
   "category",
+  "category_custom",
   "categories",
   "logo_url",
 ] as const;
@@ -152,8 +153,10 @@ export const PRODUCT_EDITABLE_FIELDS = [
   "expiration_date",
   "quantity",
   "brief",
+  "brief_data",
   "max_creators",
   "category",
+  "category_custom",
 ] as const;
 
 const PRODUCT_NUMERIC_FIELDS = new Set(["price", "quantity", "digital_access_duration_days", "max_creators"]);
@@ -173,9 +176,20 @@ export function pickProductUpdates(input: unknown): Record<string, unknown> {
       if (isProductCategory(value)) out[key] = value;
       continue;
     }
+    if (key === "category_custom") {
+      // null / "" clears the label; a typed value is trimmed and bounded
+      out[key] = value === null ? null : cleanCustomCategory(value);
+      continue;
+    }
+    if (key === "brief_data") {
+      // null clears; an object is reduced to known sections/options; anything else is dropped
+      if (value === null) out[key] = null;
+      else if (typeof value === "object" && !Array.isArray(value)) out[key] = sanitizeBriefData(value);
+      continue;
+    }
     if (PRODUCT_NUMERIC_FIELDS.has(key)) {
       if (value === null || value === "") {
-        if (key !== "price" && key !== "max_creators") out[key] = null;
+        if (key !== "price") out[key] = null; // max_creators null = no limit (2026-11-04)
         continue;
       }
       const n = typeof value === "number" ? value : Number(String(value));

@@ -9,7 +9,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useDeliverableUpload } from "@/hooks/use-deliverable-upload";
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch, fetchJson } from "@/lib/client-cache";
-import { FORMAT_LINES } from "@/lib/brief";
+import { FORMAT_LINES, briefDataLines, hasBriefContent, definesFormat, type BriefData } from "@/lib/brief";
+import { displayCategory } from "@/lib/categories";
 import { activeDeadlineField, hasChatHistory } from "@/lib/connection-flow";
 import { toDirectImageUrl } from "@/lib/images";
 import { MAX_VIDEO_MB } from "@/lib/uploads";
@@ -25,13 +26,15 @@ interface ProductDetail {
   product_type: string | null;
   shipping_policy: string | null;
   category?: string | null;
+  category_custom?: string | null;
   brief?: string | null;
+  brief_data?: BriefData | null;
   brand_name: string;
   brand_user_id: string | null;
   logo_url: string | null;
-  max_creators: number;
+  max_creators: number | null;
   occupied: number;
-  spots_left: number;
+  spots_left: number | null;
   status: string;
 }
 
@@ -39,6 +42,7 @@ interface ConnectionDetail {
   id: string;
   status: string;
   initiated_by: string | null;
+  mutual_at?: string | null;
   delivery_type: string | null;
   tracking_number: string | null;
   tracking_url: string | null;
@@ -161,7 +165,8 @@ export default function ProductPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setConnection((prev) => (prev ? { ...prev, status } : prev));
+        // A creator's "approved" keeps the row pending (mutual) until the brand confirms — reload tells the truth
+        if (status !== "approved") setConnection((prev) => (prev ? { ...prev, status } : prev));
         toast(successMessage, "success");
         reload();
       } else if ((data as { code?: string }).code === "portfolio_gate") {
@@ -192,7 +197,7 @@ export default function ProductPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        toast(data.matched ? "🎉 יש מאטץ'! הצ'אט נפתח" : "❤️ הלב נשלח! נעדכן אותך כשהעסק יאשר", "success");
+        toast(data.mutual ? "🎉 יש מאטץ'! העסק יאשר את החיבור ואז ייפתח הצ'אט" : "❤️ הלב נשלח! נעדכן אותך כשהעסק יאשר", "success");
         reload();
       } else if (data.code === "portfolio_gate") {
         setPortfolioCount(typeof data.count === "number" ? data.count : 0);
@@ -223,13 +228,15 @@ export default function ProductPage() {
   const isDigital = product?.product_type === "digital";
   const conn = connection;
   const open = !!conn && !["cancelled", "rejected", "completed"].includes(conn.status);
-  const pendingFromBrand = conn?.status === "pending" && conn.initiated_by === "brand";
-  const pendingFromMe = conn?.status === "pending" && conn.initiated_by !== "brand";
+  const mutual = conn?.status === "pending" && !!conn.mutual_at;
+  const pendingFromBrand = conn?.status === "pending" && !mutual && conn.initiated_by === "brand";
+  const pendingFromMe = conn?.status === "pending" && !mutual && conn.initiated_by !== "brand";
   const matched = !!conn && !["pending", "cancelled", "rejected"].includes(conn.status);
   const canUpload = !!conn && ["delivered", "filming", "revision_requested"].includes(conn.status);
   const deadlineField = conn ? activeDeadlineField(conn.status) : null;
   const deadline = conn && deadlineField ? conn[deadlineField] : null;
-  const full = !!product && product.spots_left <= 0 && !open;
+  const full = !!product && product.spots_left !== null && product.spots_left <= 0 && !open;
+  const briefLines = product ? briefDataLines(product.brief_data) : [];
   const chat = conn && hasChatHistory({ status: conn.status, approved_at: conn.approved_at });
 
   return (
@@ -281,9 +288,9 @@ export default function ProductPage() {
                 <div className="min-w-0">
                   <h2 className="text-xl font-bold text-neutral-900">{product.name}</h2>
                   <p className="text-xs text-neutral-400 mt-0.5">
-                    {product.category ? `${product.category} · ` : ""}
-                    {isDigital ? "מוצר דיגיטלי" : "מוצר פיזי"} · {product.occupied}/{product.max_creators} יוצרים
-                    {product.spots_left > 0 ? ` · נותרו ${product.spots_left} מקומות` : " · המוצר מלא"}
+                    {displayCategory(product.category, product.category_custom) ? `${displayCategory(product.category, product.category_custom)} · ` : ""}
+                    {isDigital ? "מוצר דיגיטלי" : "מוצר פיזי"}
+                    {full ? " · המוצר מלא" : ""}
                   </p>
                 </div>
                 <Badge variant="pink" size="lg">₪{product.price}</Badge>
@@ -313,17 +320,24 @@ export default function ProductPage() {
                 role="creator"
                 initiatedBy={conn.initiated_by}
                 deliveryType={conn.delivery_type || product.product_type}
+                mutual={mutual}
                 deadline={deadline}
               />
 
               {pendingFromBrand && (
                 <div className="flex gap-2">
-                  <Button fullWidth loading={busy === "approved"} onClick={() => (locked ? setGateOpen(true) : putStatus(conn.id, "approved", "🎉 יש מאטץ'! הצ'אט נפתח"))}>
-                    {locked ? "🔒 " : "💗 "}אישור — מאטץ&apos;
+                  <Button fullWidth loading={busy === "approved"} onClick={() => (locked ? setGateOpen(true) : putStatus(conn.id, "approved", "🎉 יש מאטץ'! העסק יאשר את החיבור ואז ייפתח הצ'אט"))}>
+                    {locked ? "🔒 " : "💗 "}כן, מעוניין/ת
                   </Button>
                   <Button fullWidth variant="ghost" loading={busy === "rejected"} onClick={() => putStatus(conn.id, "rejected", "דחית את הלב. העסק יעודכן.")}>
                     לא תודה
                   </Button>
+                </div>
+              )}
+
+              {mutual && (
+                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-sm text-emerald-800">
+                  🎉 שניכם סימנתם לב. העסק מאשר את החיבור הסופי — ואז נפתח צ&apos;אט ונשלח המוצר. נעדכן אותך.
                 </div>
               )}
 
@@ -413,7 +427,7 @@ export default function ProductPage() {
                 </Button>
               )}
               <p className="text-[11px] text-neutral-400 text-center">
-                לב = בקשה לעסק. כשהעסק מאשר נפתח מאטץ&apos;, צ&apos;אט ומשלוח של המוצר.
+                לב = בקשה לעסק. כשהעסק מסמן בחזרה ומאשר, נפתח צ&apos;אט ונשלח המוצר.
               </p>
             </Card>
           )}
@@ -439,13 +453,23 @@ export default function ProductPage() {
               <p className="text-sm text-neutral-400">הבריף נפתח עם 5 סרטונים בתיק העבודות.</p>
             ) : (
               <div className="space-y-3">
-                {product.brief ? (
-                  <p className="text-sm text-neutral-700 whitespace-pre-line">{product.brief}</p>
+                {hasBriefContent(product.brief_data, product.brief) ? (
+                  <div className="text-sm text-neutral-700 space-y-1">
+                    {briefLines.map((line, i) => (
+                      <p key={i} className={line.endsWith(":") ? "font-medium text-neutral-900 mt-1" : "whitespace-pre-line"}>{line}</p>
+                    ))}
+                    {product.brief && (
+                      <>
+                        {briefLines.length > 0 && <p className="font-medium text-neutral-900 mt-1">הערות מהעסק:</p>}
+                        <p className="whitespace-pre-line">{product.brief}</p>
+                      </>
+                    )}
+                  </div>
                 ) : (
                   <p className="text-sm text-neutral-500">העסק עדיין לא כתב בריף מפורט למוצר. הדגשים ייסגרו בצ&apos;אט אחרי המאטץ&apos;.</p>
                 )}
                 <ul className="text-xs text-neutral-500 space-y-1 border-t border-neutral-100 pt-3">
-                  {FORMAT_LINES.map((line) => (
+                  {FORMAT_LINES.slice(definesFormat(product.brief_data) ? 1 : 0).map((line) => (
                     <li key={line}>• {line}</li>
                   ))}
                 </ul>

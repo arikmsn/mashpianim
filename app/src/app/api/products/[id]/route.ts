@@ -73,7 +73,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   // anonymous visitors still get the public shape without it
   const product = privileged
     ? shaped
-    : { ...toPublicProduct(shaped), ...(viewer?.type === "creator" ? { brief: row.brief ?? null } : {}) };
+    : { ...toPublicProduct(shaped), ...(viewer?.type === "creator" ? { brief: row.brief ?? null, brief_data: row.brief_data ?? null } : {}) };
 
   // The viewing creator's own connection for this product (open one first, else the latest closed one).
   // Admins act as creators in the app, so their own creator profile is looked up too.

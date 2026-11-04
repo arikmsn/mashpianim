@@ -33,8 +33,6 @@ interface Product {
   description: string;
   requirements: string;
   deadline: number;
-  applicants: number;
-  maxCreators: number;
 }
 
 
@@ -42,6 +40,7 @@ interface Relation {
   connectionId: string;
   status: string;
   initiatedBy: "creator" | "brand";
+  mutualAt: string | null;
 }
 
 const MIN_PORTFOLIO = 5;
@@ -101,8 +100,9 @@ function ProductCard({
   const colorIndex =
     parseInt(product.id.replace(/\D/g, "") || "0") % placeholderColors.length;
 
-  const pendingFromBrand = relation?.status === "pending" && relation.initiatedBy === "brand";
-  const pendingFromMe = relation?.status === "pending" && relation.initiatedBy === "creator";
+  const mutual = relation?.status === "pending" && !!relation.mutualAt;
+  const pendingFromBrand = relation?.status === "pending" && !mutual && relation.initiatedBy === "brand";
+  const pendingFromMe = relation?.status === "pending" && !mutual && relation.initiatedBy === "creator";
   const matched = !!relation && relation.status !== "pending";
 
   return (
@@ -115,6 +115,11 @@ function ProductCard({
       {matched && (
         <div className="absolute top-3 right-3 z-10 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">
           🎉 מאטץ&apos;
+        </div>
+      )}
+      {mutual && (
+        <div className="absolute top-3 right-3 z-10 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">
+          🎉 מאטץ&apos; — ממתין לאישור העסק
         </div>
       )}
       {/* The card opens the product page (details, brief, status); the buttons below act in place */}
@@ -187,8 +192,7 @@ function ProductCard({
         </div>
         <div className="flex items-center justify-between mt-auto">
           <div className="flex items-center gap-3 text-xs text-neutral-400">
-            <span>👥 {product.applicants}/{product.maxCreators}</span>
-            <span>⏱ {product.deadline} ימים</span>
+            <span>⏱ {product.deadline} ימים לצילום</span>
           </div>
           {pendingFromBrand && relation ? (
             <Button
@@ -197,7 +201,11 @@ function ProductCard({
               loading={approving === relation.connectionId}
               onClick={() => onApprove(relation.connectionId)}
             >
-              {locked ? "🔒 " : "💗 "}אישור — מאטץ&apos;
+              {locked ? "🔒 " : "💗 "}כן, מעוניין/ת
+            </Button>
+          ) : mutual && relation ? (
+            <Button size="sm" rounded variant="secondary" onClick={() => onOpen(product.id)}>
+              🎉 ממתין לעסק
             </Button>
           ) : pendingFromMe ? (
             <Button size="sm" rounded variant="secondary" disabled>
@@ -302,8 +310,6 @@ export default function FeedPage() {
         description: (p.description as string) || "",
         requirements: (p.requirements as string) || "סרטון UGC",
         deadline: (p.film_deadline_days as number) || 10,
-        applicants: (p.occupied as number) || 0,
-        maxCreators: (p.max_creators as number) || 3,
       }))
     );
     setLoading(false);
@@ -320,7 +326,7 @@ export default function FeedPage() {
       if (["cancelled", "rejected", "completed"].includes(status)) continue;
       const pid = c.product_id as string;
       if (!pid || map[pid]) continue;
-      map[pid] = { connectionId: c.id as string, status, initiatedBy: c.initiated_by === "brand" ? "brand" : "creator" };
+      map[pid] = { connectionId: c.id as string, status, initiatedBy: c.initiated_by === "brand" ? "brand" : "creator", mutualAt: (c.mutual_at as string) || null };
     }
     setRelations(map);
     setRelationsReady(true);
@@ -389,16 +395,14 @@ export default function FeedPage() {
 
         if (res.ok) {
           const connectionId = data.connection?.id as string;
-          if (data.matched) {
-            toast("🎉 יש מאטץ'! הצ'אט נפתח", "success");
-            setRelations((prev) => ({ ...prev, [productId]: { connectionId, status: "approved", initiatedBy: "brand" } }));
+          if (data.mutual) {
+            // The brand had already hearted: both sides agree, the brand confirms (and pays) next
+            toast("🎉 יש מאטץ'! העסק יאשר את החיבור ואז ייפתח הצ'אט", "success");
+            setRelations((prev) => ({ ...prev, [productId]: { connectionId, status: "pending", initiatedBy: "brand", mutualAt: new Date().toISOString() } }));
           } else {
             toast("❤️ הלב נשלח! נעדכן אותך כשהעסק יאשר", "success");
-            setRelations((prev) => ({ ...prev, [productId]: { connectionId, status: "pending", initiatedBy: "creator" } }));
+            setRelations((prev) => ({ ...prev, [productId]: { connectionId, status: "pending", initiatedBy: "creator", mutualAt: null } }));
           }
-          setProducts((prev) =>
-            prev.map((p) => (p.id === productId ? { ...p, applicants: p.applicants + 1 } : p))
-          );
         } else if (data.code === "portfolio_gate") {
           setPortfolioCount(typeof data.count === "number" ? data.count : 0);
           setGateOpen(true);
@@ -429,15 +433,15 @@ export default function FeedPage() {
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok) {
-          toast("🎉 יש מאטץ'! הצ'אט נפתח", "success");
+          // The creator's yes completes the pair; the chat opens once the brand confirms the connection
+          toast("🎉 יש מאטץ'! העסק יאשר את החיבור ואז ייפתח הצ'אט", "success");
           setRelations((prev) => {
             const next = { ...prev };
             for (const pid of Object.keys(next)) {
-              if (next[pid].connectionId === connectionId) next[pid] = { ...next[pid], status: "approved" };
+              if (next[pid].connectionId === connectionId) next[pid] = { ...next[pid], mutualAt: new Date().toISOString() };
             }
             return next;
           });
-          router.push(`/messages?connection=${connectionId}`);
         } else if (data.code === "portfolio_gate") {
           setPortfolioCount(typeof data.count === "number" ? data.count : 0);
           setGateOpen(true);
@@ -450,7 +454,7 @@ export default function FeedPage() {
         setApproving(null);
       }
     },
-    [locked, router, toast]
+    [locked, toast]
   );
 
   // Until the creator picks a chip: "for you" when there is something to match on (own categories or hearts/matches), else "all"

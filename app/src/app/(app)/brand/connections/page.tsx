@@ -1,19 +1,20 @@
 "use client";
 
-import { Suspense, useState, useEffect, useRef } from "react";
+import { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, Badge, Button, Modal, Avatar, Input, Textarea, useToast } from "@/components/ui";
-import { ConnectionTimeline, PublicProfileContent } from "@/components/features";
+import { ConnectionTimeline, PublicProfileContent, FeedbackModal } from "@/components/features";
 import { createClient } from "@/lib/supabase/client";
-import { swrFetch } from "@/lib/client-cache";
-import { activeDeadlineField, canBrandReview } from "@/lib/connection-flow";
+import { swrFetch, fetchJson } from "@/lib/client-cache";
+import { activeDeadlineField, canBrandReview, brandBucket, BRAND_BUCKETS, type BrandBucket } from "@/lib/connection-flow";
 import { toDirectImageUrl } from "@/lib/images";
 
 interface Connection {
   id: string;
   creatorId: string | null;
   initiatedBy: "creator" | "brand";
+  mutualAt: string | null;
   creatorName: string;
   creatorAvatar: string | null;
   productName: string;
@@ -33,16 +34,8 @@ interface Connection {
   activeDeadline: string | null;
 }
 
-type TabId = "pending" | "active" | "completed";
-
-const tabs: { id: TabId; label: string }[] = [
-  { id: "pending", label: "ממתינים" },
-  { id: "active", label: "פעילים" },
-  { id: "completed", label: "הסתיימו" },
-];
-
 const statusLabels: Record<string, { label: string; variant: "pink" | "success" | "warning" | "default" }> = {
-  pending: { label: "ממתין לאישור", variant: "warning" },
+  pending: { label: "ממתין", variant: "warning" },
   approved: { label: "אושר — ממתין למשלוח", variant: "pink" },
   rejected: { label: "נדחה", variant: "default" },
   shipped: { label: "נשלח", variant: "pink" },
@@ -55,9 +48,7 @@ const statusLabels: Record<string, { label: string; variant: "pink" | "success" 
   cancelled: { label: "בוטל", variant: "default" },
 };
 
-const pendingStatuses = ["pending"];
 const activeStatuses = ["approved", "shipped", "delivered", "filming", "uploaded", "in_review", "revision_requested"];
-const completedStatuses = ["completed", "rejected", "cancelled"];
 // Statuses in which a deliverable exists for the brand to watch
 const videoStatuses = ["uploaded", "in_review", "revision_requested", "completed"];
 
@@ -68,6 +59,8 @@ interface ConnectionVideo {
   status: string;
   created_at: string;
 }
+
+const BUCKET_IDS = new Set<string>(BRAND_BUCKETS.map((b) => b.id));
 
 function ConnectionsSkeleton() {
   return (
@@ -87,6 +80,13 @@ function ConnectionsSkeleton() {
   );
 }
 
+// The badge on a pending card, by who hearted whom
+function pendingInfo(conn: Connection): { label: string; variant: "pink" | "success" | "warning" } {
+  if (conn.mutualAt) return { label: "🎉 מאטץ' — ממתין לאישורכם", variant: "success" };
+  if (conn.initiatedBy === "brand") return { label: "💗 הלב נשלח — ממתין ליוצר/ת", variant: "pink" };
+  return { label: "💗 בחר/ה בכם", variant: "warning" };
+}
+
 // useSearchParams needs a Suspense boundary for the static shell
 export default function BrandConnectionsPage() {
   return (
@@ -96,21 +96,19 @@ export default function BrandConnectionsPage() {
   );
 }
 
-function tabFor(status: string): TabId {
-  if (pendingStatuses.includes(status)) return "pending";
-  if (activeStatuses.includes(status)) return "active";
-  return "completed";
-}
-
 function BrandConnectionsPageInner() {
   const searchParams = useSearchParams();
-  // `?open=<connectionId>` (from a notification) switches to its tab and opens its modal
+  // `?open=<connectionId>` (from a notification) switches to its tab and opens its modal; `?tab=` lands on a list
   const openId = searchParams.get("open");
+  const tabParam = searchParams.get("tab");
   const handledOpenRef = useRef<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabId>("pending");
+  const [activeTab, setActiveTab] = useState<BrandBucket>(tabParam && BUCKET_IDS.has(tabParam) ? (tabParam as BrandBucket) : "match");
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
+  const [confirmFor, setConfirmFor] = useState<Connection | null>(null);
+  const [credits, setCredits] = useState<{ remaining: number; total: number } | null>(null);
+  const [purchaseOpen, setPurchaseOpen] = useState(false);
 
   useEffect(() => {
     if (!openId || connections.length === 0 || handledOpenRef.current === openId) return;
@@ -118,7 +116,7 @@ function BrandConnectionsPageInner() {
     if (!target) return;
     handledOpenRef.current = openId;
     const t = setTimeout(() => {
-      setActiveTab(tabFor(target.status));
+      setActiveTab(brandBucket({ status: target.status, initiated_by: target.initiatedBy, mutual_at: target.mutualAt }));
       setSelectedConnection(target);
     }, 0);
     return () => clearTimeout(t);
@@ -134,9 +132,59 @@ function BrandConnectionsPageInner() {
   const { toast } = useToast();
   const router = useRouter();
 
-  useEffect(() => {
-    fetchConnections();
+  const fetchConnections = useCallback(async () => {
+    const apply = (data: { connections?: Record<string, unknown>[]; settings?: { max_revisions?: number } }) => {
+      if (typeof data.settings?.max_revisions === "number") setMaxRevisions(data.settings.max_revisions);
+      const conns = data.connections || [];
+      setConnections(
+        conns.map((c) => ({
+          id: c.id as string,
+          creatorId: (c as any).creator_profiles?.user_id || null,
+          initiatedBy: (c as any).initiated_by === "brand" ? "brand" : "creator",
+          mutualAt: (c.mutual_at as string) || null,
+          creatorName: (c as any).creator_profiles?.users?.full_name || (c as any).creator?.full_name || "יוצר/ת",
+          creatorAvatar: (c as any).creator_profiles?.users?.avatar_url || null,
+          productName: (c as any).products?.name || "מוצר",
+          productImage: toDirectImageUrl((c as any).products?.image_url),
+          productType: ((c as any).products?.product_type as "physical" | "digital") || (c.delivery_type as "physical" | "digital") || "physical",
+          status: c.status as string,
+          createdAt: c.created_at as string,
+          approvedAt: (c.approved_at as string) || null,
+          shippedAt: (c.shipped_at as string) || null,
+          deliveredAt: (c.delivered_at as string) || null,
+          completedAt: (c.completed_at as string) || null,
+          trackingNumber: (c.tracking_number as string) || null,
+          trackingUrl: (c.tracking_url as string) || null,
+          digitalAccessValue: (c.digital_access_value as string) || null,
+          revisionCount: (c.revision_count as number) || 0,
+          activeDeadline: (() => {
+            const field = activeDeadlineField(c.status as string);
+            return field ? ((c[field] as string) || null) : null;
+          })(),
+        }))
+      );
+      setLoading(false);
+    };
+    await swrFetch("/api/connections", apply);
+    setLoading(false);
   }, []);
+
+  const fetchCredits = useCallback(() => {
+    return swrFetch<{ profile?: { total_credits?: number; used_credits?: number } }>("/api/profile", (d) => {
+      const total = d.profile?.total_credits || 0;
+      const used = d.profile?.used_credits || 0;
+      setCredits({ total, remaining: Math.max(0, total - used) });
+    });
+  }, []);
+
+  useEffect(() => {
+    // Deferred so a cached response never sets state synchronously inside the effect
+    const t = setTimeout(() => {
+      fetchConnections();
+      fetchCredits();
+    }, 0);
+    return () => clearTimeout(t);
+  }, [fetchConnections, fetchCredits]);
 
   // Load the uploaded deliverable when a connection with a video is opened
   const selectedId = selectedConnection?.id ?? null;
@@ -164,55 +212,14 @@ function BrandConnectionsPageInner() {
     const supabase = createClient();
     const channel = supabase
       .channel("brand-connections")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "connections" },
-        () => {
-          fetchConnections();
-        }
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "connections" }, () => {
+        fetchJson("/api/connections").then((d) => d && fetchConnections());
+      })
       .subscribe();
-
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
-
-  async function fetchConnections() {
-    const apply = (data: { connections?: Record<string, unknown>[]; settings?: { max_revisions?: number } }) => {
-      if (typeof data.settings?.max_revisions === "number") setMaxRevisions(data.settings.max_revisions);
-      const conns = data.connections || [];
-      setConnections(
-        conns.map((c) => ({
-          id: c.id as string,
-          creatorId: (c as any).creator_profiles?.user_id || null,
-          initiatedBy: (c as any).initiated_by === "brand" ? "brand" : "creator",
-          creatorName: (c as any).creator_profiles?.users?.full_name || (c as any).creator?.full_name || "יוצר/ת",
-          creatorAvatar: (c as any).creator_profiles?.users?.avatar_url || null,
-          productName: (c as any).products?.name || "מוצר",
-          productImage: toDirectImageUrl((c as any).products?.image_url),
-          productType: ((c as any).products?.product_type as "physical" | "digital") || (c.delivery_type as "physical" | "digital") || "physical",
-          status: c.status as string,
-          createdAt: c.created_at as string,
-          approvedAt: (c.approved_at as string) || null,
-          shippedAt: (c.shipped_at as string) || null,
-          deliveredAt: (c.delivered_at as string) || null,
-          completedAt: (c.completed_at as string) || null,
-          trackingNumber: (c.tracking_number as string) || null,
-          trackingUrl: (c.tracking_url as string) || null,
-          digitalAccessValue: (c.digital_access_value as string) || null,
-          revisionCount: (c.revision_count as number) || 0,
-          activeDeadline: (() => {
-            const field = activeDeadlineField(c.status as string);
-            return field ? ((c[field] as string) || null) : null;
-          })(),
-        }))
-      );
-      setLoading(false);
-    };
-    await swrFetch("/api/connections", apply);
-    setLoading(false);
-  }
+  }, [fetchConnections]);
 
   async function updateStatus(connectionId: string, newStatus: string, extra?: Record<string, unknown>) {
     setUpdating(connectionId);
@@ -224,21 +231,32 @@ function BrandConnectionsPageInner() {
       });
 
       if (res.ok) {
-        setConnections((prev) =>
-          prev.map((c) => (c.id === connectionId ? { ...c, status: newStatus } : c))
-        );
-        if (newStatus === "approved") {
-          toast("🎉 יש מאטץ'! הצ'אט נפתח והבריף נשלח", "success");
+        if (newStatus === "mutual") {
+          setConnections((prev) => prev.map((c) => (c.id === connectionId ? { ...c, mutualAt: new Date().toISOString() } : c)));
+          toast("🎉 יש מאטץ'! אשרו את החיבור כדי להתחיל", "success");
+          setActiveTab("match");
         } else {
-          const label = statusLabels[newStatus]?.label || newStatus;
-          toast(`סטטוס עודכן: ${label}`, "success");
+          setConnections((prev) => prev.map((c) => (c.id === connectionId ? { ...c, status: newStatus } : c)));
+          if (newStatus === "approved") {
+            toast("🎉 החיבור אושר! הצ'אט נפתח והבריף נשלח ליוצר/ת", "success");
+            setCredits((c) => (c ? { ...c, remaining: Math.max(0, c.remaining - 1) } : c));
+            setActiveTab("active");
+          } else {
+            const label = statusLabels[newStatus]?.label || newStatus;
+            toast(`סטטוס עודכן: ${label}`, "success");
+          }
         }
         setSelectedConnection(null);
+        setConfirmFor(null);
         setShipForm({ trackingNumber: "", trackingUrl: "", digitalAccessValue: "" });
         setRevisionNotes("");
       } else {
         const data = await res.json().catch(() => ({}));
         toast((data as any).error || "שגיאה בעדכון", "error");
+        if ((data as any).error && /סרטונים|קרדיט/.test((data as any).error)) {
+          setConfirmFor(null);
+          setPurchaseOpen(true);
+        }
       }
     } catch {
       toast("שגיאה בעדכון", "error");
@@ -247,41 +265,36 @@ function BrandConnectionsPageInner() {
     }
   }
 
-  const filtered = connections.filter((c) => {
-    if (activeTab === "pending") return pendingStatuses.includes(c.status);
-    if (activeTab === "active") return activeStatuses.includes(c.status);
-    return completedStatuses.includes(c.status);
-  });
+  const bucketOf = (c: Connection) => brandBucket({ status: c.status, initiated_by: c.initiatedBy, mutual_at: c.mutualAt });
+  const filtered = connections.filter((c) => bucketOf(c) === activeTab);
+  const counts: Record<BrandBucket, number> = { chose_you: 0, my_list: 0, match: 0, active: 0, done: 0 };
+  for (const c of connections) counts[bucketOf(c)]++;
 
-  const tabCounts = {
-    pending: connections.filter((c) => pendingStatuses.includes(c.status)).length,
-    active: connections.filter((c) => activeStatuses.includes(c.status)).length,
-    completed: connections.filter((c) => completedStatuses.includes(c.status)).length,
-  };
-
-  // The first visit opens on the first tab that has something in it (an empty "ממתינים" tab in front of
-  // five active connections reads as "nothing here"); a tab the user taps is never overridden
-  const tabPickedRef = useRef(false);
-  const { pending: pendingCount, active: activeCount, completed: completedCount } = tabCounts;
+  // First visit: the list that needs the brand most (matches to confirm, then creators who chose it, then
+  // active work); a tab the user taps, or one named in the URL, is never overridden
+  const tabPickedRef = useRef(!!tabParam && BUCKET_IDS.has(tabParam));
+  const { match: matchCount, chose_you: choseCount, my_list: listCount, active: activeCount, done: doneCount } = counts;
   useEffect(() => {
     if (loading || openId || tabPickedRef.current) return;
     tabPickedRef.current = true;
-    if (pendingCount > 0) return;
-    const first: TabId | null = activeCount > 0 ? "active" : completedCount > 0 ? "completed" : null;
-    if (!first) return;
+    const first: BrandBucket =
+      matchCount > 0 ? "match" : choseCount > 0 ? "chose_you" : activeCount > 0 ? "active" : listCount > 0 ? "my_list" : doneCount > 0 ? "done" : "chose_you";
     const t = setTimeout(() => setActiveTab(first), 0);
     return () => clearTimeout(t);
-  }, [loading, openId, pendingCount, activeCount, completedCount]);
+  }, [loading, openId, matchCount, choseCount, listCount, activeCount, doneCount]);
 
   function getActions(conn: Connection) {
-    const actions: { label: string; status: string; variant: "primary" | "secondary" | "danger"; needsModal?: boolean }[] = [];
+    const actions: { label: string; status: string; variant: "primary" | "secondary" | "danger"; needsModal?: boolean; confirm?: boolean }[] = [];
     switch (conn.status) {
       case "pending":
-        if (conn.initiatedBy === "brand") {
+        if (conn.mutualAt) {
+          actions.push({ label: "✅ אישור החיבור", status: "approved", variant: "primary", confirm: true });
+          actions.push({ label: "ביטול", status: "cancelled", variant: "secondary" });
+        } else if (conn.initiatedBy === "brand") {
           actions.push({ label: "ביטול הלב", status: "cancelled", variant: "secondary" });
         } else {
-          actions.push({ label: "💗 אישור — מאטץ'", status: "approved", variant: "primary" });
-          actions.push({ label: "דחייה", status: "rejected", variant: "danger" });
+          actions.push({ label: "💗 לב בחזרה", status: "mutual", variant: "primary" });
+          actions.push({ label: "לא מתאים", status: "rejected", variant: "danger" });
         }
         break;
       case "approved":
@@ -295,63 +308,88 @@ function BrandConnectionsPageInner() {
     return actions;
   }
 
+  function runAction(conn: Connection, action: ReturnType<typeof getActions>[number]) {
+    if (action.confirm) {
+      setConfirmFor(conn);
+    } else if (action.needsModal) {
+      setSelectedConnection(conn);
+    } else {
+      updateStatus(conn.id, action.status);
+    }
+  }
+
   function formatDate(dateStr: string | null) {
     if (!dateStr) return "—";
     return new Date(dateStr).toLocaleDateString("he-IL");
   }
+
+  const emptyText = BRAND_BUCKETS.find((b) => b.id === activeTab)?.empty || "אין חיבורים";
 
   return (
     <main className="min-h-screen bg-background pb-20">
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-neutral-100">
         <div className="max-w-2xl mx-auto px-4 py-4">
           <h1 className="text-2xl font-bold mb-3">חיבורים</h1>
-          <div className="flex gap-1 bg-neutral-50 rounded-xl p-1">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  tabPickedRef.current = true;
-                  setActiveTab(tab.id);
-                }}
-                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === tab.id
-                    ? "bg-white text-pink-500 shadow-sm"
-                    : "text-neutral-500"
-                }`}
-              >
-                {tab.label}
-                {tabCounts[tab.id] > 0 && (
-                  <span className={`mr-1 text-xs ${
-                    activeTab === tab.id ? "text-pink-400" : "text-neutral-400"
-                  }`}>
-                    ({tabCounts[tab.id]})
-                  </span>
-                )}
-              </button>
-            ))}
+          <div className="flex gap-1 bg-neutral-50 rounded-xl p-1 overflow-x-auto scrollbar-hide">
+            {BRAND_BUCKETS.map((tab) => {
+              const count = counts[tab.id];
+              // Items that wait for the brand get a loud badge; the rest a quiet count
+              const needsMe = tab.id === "match" || tab.id === "chose_you";
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    tabPickedRef.current = true;
+                    setActiveTab(tab.id);
+                  }}
+                  className={`relative flex-1 min-w-fit whitespace-nowrap py-2 px-2.5 rounded-lg text-sm font-medium transition-all ${
+                    activeTab === tab.id ? "bg-white text-pink-500 shadow-sm" : "text-neutral-500"
+                  }`}
+                >
+                  {tab.label}
+                  {count > 0 && needsMe ? (
+                    <span
+                      className={`mr-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white ${
+                        tab.id === "match" ? "bg-emerald-500" : "ig-gradient-bg"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  ) : count > 0 ? (
+                    <span className={`mr-1 text-xs ${activeTab === tab.id ? "text-pink-400" : "text-neutral-400"}`}>({count})</span>
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
         </div>
       </header>
 
       <div className="max-w-2xl mx-auto px-4 py-4">
+        {activeTab === "match" && counts.match > 0 && (
+          <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-3 mb-4 text-sm text-emerald-800">
+            🎉 שני הצדדים סימנו לב. אישור החיבור פותח צ&apos;אט, שולח ליוצר/ת את הבריף ומחייב סרטון אחד מהחבילה
+            {credits ? ` (נותרו ${credits.remaining})` : ""}.
+          </div>
+        )}
         {loading ? (
           <ConnectionsSkeleton />
         ) : filtered.length === 0 ? (
           <div className="text-center py-16 text-neutral-400">
             <span className="text-4xl block mb-3">
-              {activeTab === "pending" ? "⏳" : activeTab === "active" ? "🔗" : "🏆"}
+              {activeTab === "match" ? "🎉" : activeTab === "chose_you" ? "💗" : activeTab === "my_list" ? "📝" : activeTab === "active" ? "🔗" : "🏆"}
             </span>
-            <p>אין חיבורים {activeTab === "pending" ? "ממתינים" : activeTab === "active" ? "פעילים" : "שהסתיימו"}</p>
+            <p>{emptyText}</p>
+            {activeTab === "my_list" && (
+              <Button size="sm" variant="secondary" className="mt-4" onClick={() => router.push("/brand")}>
+                לגלות יוצרים
+              </Button>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
             {filtered.map((conn, i) => {
-              const statusInfo =
-                conn.status === "pending" && conn.initiatedBy === "brand"
-                  ? { label: "💗 הלב נשלח — ממתין ליוצר/ת", variant: "pink" as const }
-                  : conn.status === "pending"
-                    ? { label: "💗 סימן/ה אתכם", variant: "warning" as const }
-                    : statusLabels[conn.status] || { label: conn.status, variant: "default" as const };
+              const statusInfo = conn.status === "pending" ? pendingInfo(conn) : statusLabels[conn.status] || { label: conn.status, variant: "default" as const };
               const actions = getActions(conn);
               return (
                 <motion.div
@@ -372,7 +410,7 @@ function BrandConnectionsPageInner() {
                         </div>
                         <p className="text-xs text-pink-500">{conn.productName}</p>
                         <p className="text-xs text-neutral-400 mt-0.5">
-                          {formatDate(conn.createdAt)}
+                          {conn.mutualAt ? `מאטץ' מ-${formatDate(conn.mutualAt)}` : formatDate(conn.createdAt)}
                         </p>
                       </div>
                     </div>
@@ -399,11 +437,7 @@ function BrandConnectionsPageInner() {
                             loading={updating === conn.id}
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (action.needsModal) {
-                                setSelectedConnection(conn);
-                              } else {
-                                updateStatus(conn.id, action.status);
-                              }
+                              runAction(conn, action);
                             }}
                           >
                             {action.label}
@@ -419,6 +453,36 @@ function BrandConnectionsPageInner() {
         )}
       </div>
 
+      {/* The paid step: confirming a mutual match */}
+      <Modal open={!!confirmFor} onClose={() => !updating && setConfirmFor(null)} size="sm">
+        {confirmFor && (
+          <div className="text-center space-y-4">
+            <span className="text-4xl block">🎉</span>
+            <div>
+              <h3 className="text-lg font-bold">לאשר את החיבור עם {confirmFor.creatorName}?</h3>
+              <p className="text-sm text-neutral-600 mt-2">
+                על ״{confirmFor.productName}״. האישור פותח צ&apos;אט, שולח ליוצר/ת את הבריף, ומחייב{" "}
+                <span className="font-bold text-neutral-900">סרטון אחד מהחבילה</span>
+                {credits ? ` (נותרו ${credits.remaining}${credits.remaining === 1 ? " — זה האחרון" : ""})` : ""}.
+              </p>
+            </div>
+            {credits && credits.remaining === 0 ? (
+              <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-sm text-red-700 space-y-2">
+                <p>אין סרטונים נותרים בחבילה — כדי לאשר צריך לרכוש.</p>
+                <Button size="sm" fullWidth onClick={() => { setConfirmFor(null); setPurchaseOpen(true); }}>לרכישת סרטונים</Button>
+              </div>
+            ) : (
+              <Button fullWidth loading={updating === confirmFor.id} onClick={() => updateStatus(confirmFor.id, "approved")}>
+                ✅ אישור וחיוב סרטון אחד
+              </Button>
+            )}
+            <Button variant="ghost" fullWidth disabled={!!updating} onClick={() => setConfirmFor(null)}>
+              עוד לא
+            </Button>
+          </div>
+        )}
+      </Modal>
+
       <Modal
         open={!!selectedConnection}
         onClose={() => { setSelectedConnection(null); setShipForm({ trackingNumber: "", trackingUrl: "", digitalAccessValue: "" }); setRevisionNotes(""); }}
@@ -426,19 +490,20 @@ function BrandConnectionsPageInner() {
         size="lg"
       >
         {selectedConnection && (() => {
-          const statusInfo = statusLabels[selectedConnection.status] || { label: selectedConnection.status, variant: "default" as const };
+          const statusInfo = selectedConnection.status === "pending" ? pendingInfo(selectedConnection) : statusLabels[selectedConnection.status] || { label: selectedConnection.status, variant: "default" as const };
           const isDigital = selectedConnection.productType === "digital";
           return (
             <div className="space-y-4 max-h-[75vh] overflow-y-auto -m-2 p-2">
               {/* Product being requested */}
               <div className="flex items-center gap-3 bg-pink-50 rounded-xl p-3">
                 {selectedConnection.productImage ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={selectedConnection.productImage} alt={selectedConnection.productName} className="w-12 h-12 rounded-lg object-cover" />
                 ) : (
                   <div className="w-12 h-12 rounded-lg bg-white flex items-center justify-center text-xl">{isDigital ? "📱" : "📦"}</div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-neutral-500">בקשה למוצר</p>
+                  <p className="text-xs text-neutral-500">המוצר</p>
                   <p className="font-bold text-sm truncate">{selectedConnection.productName}</p>
                 </div>
                 <Badge variant={isDigital ? "pink" : "default"} size="sm">
@@ -484,12 +549,18 @@ function BrandConnectionsPageInner() {
                   <Badge variant={statusInfo.variant} size="sm">{statusInfo.label}</Badge>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-neutral-500">תאריך בקשה</span>
+                  <span className="text-neutral-500">תאריך הלב</span>
                   <span>{formatDate(selectedConnection.createdAt)}</span>
                 </div>
+                {selectedConnection.mutualAt && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-neutral-500">מאטץ&apos;</span>
+                    <span>{formatDate(selectedConnection.mutualAt)}</span>
+                  </div>
+                )}
                 {selectedConnection.approvedAt && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-neutral-500">תאריך אישור</span>
+                    <span className="text-neutral-500">אישור החיבור</span>
                     <span>{formatDate(selectedConnection.approvedAt)}</span>
                   </div>
                 )}
@@ -520,7 +591,7 @@ function BrandConnectionsPageInner() {
                 {selectedConnection.revisionCount > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-neutral-500">בקשות תיקון</span>
-                    <span>{selectedConnection.revisionCount}/2</span>
+                    <span>{selectedConnection.revisionCount}/{maxRevisions}</span>
                   </div>
                 )}
               </div>
@@ -636,9 +707,25 @@ function BrandConnectionsPageInner() {
                 </div>
               )}
 
-              {selectedConnection.status === "pending" && selectedConnection.initiatedBy === "brand" && (
+              {/* Pending hearts: the three states */}
+              {selectedConnection.status === "pending" && selectedConnection.mutualAt && (
+                <div className="bg-emerald-50 rounded-xl p-4 space-y-3">
+                  <p className="text-sm text-emerald-800">
+                    🎉 שני הצדדים סימנו לב. אישור החיבור פותח צ&apos;אט, שולח את הבריף ומחייב סרטון אחד מהחבילה.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button fullWidth loading={updating === selectedConnection.id} onClick={() => setConfirmFor(selectedConnection)}>
+                      ✅ אישור החיבור
+                    </Button>
+                    <Button variant="ghost" fullWidth loading={updating === selectedConnection.id} onClick={() => updateStatus(selectedConnection.id, "cancelled")}>
+                      ביטול
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {selectedConnection.status === "pending" && !selectedConnection.mutualAt && selectedConnection.initiatedBy === "brand" && (
                 <div className="bg-pink-50 rounded-xl p-4 space-y-3">
-                  <p className="text-sm text-pink-700">💗 שלחתם לב ל{selectedConnection.creatorName}. ברגע שהיוצר/ת יאשר/תאשר ייפתח צ&apos;אט ויירד קרדיט אחד.</p>
+                  <p className="text-sm text-pink-700">💗 שלחתם לב ל{selectedConnection.creatorName}. כשהיוצר/ת יאשר/תאשר, החיבור יעבור ללשונית ״מאטץ&apos;״ לאישורכם.</p>
                   <Button
                     variant="secondary"
                     fullWidth
@@ -649,31 +736,33 @@ function BrandConnectionsPageInner() {
                   </Button>
                 </div>
               )}
-
-              {/* Basic actions for other statuses */}
-              {selectedConnection.status === "pending" && selectedConnection.initiatedBy !== "brand" && (
-                <div className="flex gap-3 pt-2">
-                  <Button
-                    fullWidth
-                    loading={updating === selectedConnection.id}
-                    onClick={() => updateStatus(selectedConnection.id, "approved")}
-                  >
-                    אישור
-                  </Button>
-                  <Button
-                    variant="danger"
-                    fullWidth
-                    loading={updating === selectedConnection.id}
-                    onClick={() => updateStatus(selectedConnection.id, "rejected")}
-                  >
-                    דחייה
-                  </Button>
+              {selectedConnection.status === "pending" && !selectedConnection.mutualAt && selectedConnection.initiatedBy !== "brand" && (
+                <div className="space-y-2 pt-2">
+                  <p className="text-sm text-amber-700">💗 {selectedConnection.creatorName} בחר/ה בכם. לב בחזרה פותח מאטץ&apos; — החיוב רק באישור החיבור.</p>
+                  <div className="flex gap-3">
+                    <Button fullWidth loading={updating === selectedConnection.id} onClick={() => updateStatus(selectedConnection.id, "mutual")}>
+                      💗 לב בחזרה
+                    </Button>
+                    <Button variant="danger" fullWidth loading={updating === selectedConnection.id} onClick={() => updateStatus(selectedConnection.id, "rejected")}>
+                      לא מתאים
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
           );
         })()}
       </Modal>
+
+      <FeedbackModal
+        key="purchase"
+        open={purchaseOpen}
+        onClose={() => setPurchaseOpen(false)}
+        title="רכישת סרטונים"
+        initialKind="contact"
+        initialSubject="רכישת סרטונים (קרדיטים)"
+        intro="תשלום אונליין יתווסף בקרוב. כתבו כמה סרטונים תרצו ונחזור אליכם עם הצעה ואישור הטעינה — בדרך כלל באותו יום."
+      />
     </main>
   );
 }

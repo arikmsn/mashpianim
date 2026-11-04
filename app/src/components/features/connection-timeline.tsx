@@ -7,6 +7,8 @@ interface ConnectionTimelineProps {
   role: FlowRole;
   initiatedBy?: string | null;
   deliveryType?: string | null;
+  // Both sides hearted; the brand still has to confirm
+  mutual?: boolean;
   // ISO date of the deadline that applies to the current step, if any
   deadline?: string | null;
   compact?: boolean;
@@ -17,11 +19,11 @@ function formatDate(iso: string) {
 }
 
 // Five milestones with the current one highlighted, plus a one-line "what's next" for this side
-export function ConnectionTimeline({ status, role, initiatedBy, deliveryType, deadline, compact = false }: ConnectionTimelineProps) {
+export function ConnectionTimeline({ status, role, initiatedBy, deliveryType, mutual, deadline, compact = false }: ConnectionTimelineProps) {
   const reached = flowStepIndex(status);
   const closedEarly = status === "cancelled" || status === "rejected";
   const revision = status === "revision_requested";
-  const next = flowNextAction(status, role, { initiatedBy, deliveryType });
+  const next = flowNextAction(status, role, { initiatedBy, deliveryType, mutual });
   const steps = FLOW_STEPS.map((s) =>
     deliveryType === "digital" && s.key === "shipped" ? { ...s, label: "גישה" } : s
   );
