@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { pickAllowedFields, USER_EDITABLE_FIELDS, CREATOR_EDITABLE_FIELDS, BRAND_EDITABLE_FIELDS } from "@/lib/authz";
+import { cleanRegion } from "@/lib/regions";
 import { resolveViewer } from "@/lib/viewer";
 import { readActiveRole } from "@/lib/active-role";
 
@@ -181,6 +182,8 @@ export async function PUT(req: Request) {
       }
     } else if (userData.type === "brand") {
       const safeProfile = pickAllowedFields(profileFields, BRAND_EDITABLE_FIELDS);
+      // The region must be one of the app's list; anything else clears it
+      if ("region" in safeProfile) safeProfile.region = cleanRegion(safeProfile.region);
       const { error } = Object.keys(safeProfile).length > 0
         ? await admin.from("brand_profiles").update(safeProfile).eq("user_id", userData.id)
         : { error: null };

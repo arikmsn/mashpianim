@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Avatar, Badge, Modal } from "@/components/ui";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Avatar, Badge, Modal, useToast } from "@/components/ui";
+import { fetchJson, readCache, swrFetch } from "@/lib/client-cache";
 
 export interface CreatorPublicProfile {
   userId: string;
@@ -31,6 +33,7 @@ export interface BrandPublicProfile {
   categories: string[];
   description: string;
   website: string;
+  region: string;
   memberSince: string;
   products: { id: string; name: string; image_url: string | null; price: number; product_type: string }[];
   stats: { activeProducts: number; completed: number; active: number };
@@ -275,9 +278,143 @@ const posterGradients = [
   "from-sky-400 to-indigo-300",
 ];
 
+// The signed-in creator's hearts on this brand's products: the markers and the heart / cancel buttons in
+// the brand profile. Brands (and signed-out viewers) just see the products.
+interface ProductRelation {
+  connectionId: string;
+  status: string;
+  initiatedBy: "creator" | "brand";
+  mutualAt: string | null;
+}
+
+function useCreatorProductRelations() {
+  const [role, setRole] = useState<string | null>(() => {
+    const cached = readCache<{ role?: string; user?: { type?: string } }>("/api/profile");
+    return cached?.role || cached?.user?.type || null;
+  });
+  const [portfolioCount, setPortfolioCount] = useState<number | null>(null);
+  const [relations, setRelations] = useState<Record<string, ProductRelation>>({});
+
+  const apply = useCallback((data: { connections?: Record<string, unknown>[] }) => {
+    const map: Record<string, ProductRelation> = {};
+    for (const c of data.connections || []) {
+      const status = c.status as string;
+      if (status === "cancelled" || status === "rejected") continue;
+      const pid = c.product_id as string;
+      if (!pid || map[pid]) continue;
+      map[pid] = {
+        connectionId: c.id as string,
+        status,
+        initiatedBy: c.initiated_by === "brand" ? "brand" : "creator",
+        mutualAt: (c.mutual_at as string) || null,
+      };
+    }
+    setRelations(map);
+  }, []);
+
+  useEffect(() => {
+    swrFetch<{ role?: string; user?: { type?: string }; profile?: { portfolio_count?: number } }>("/api/profile", (data) => {
+      const r = data.role || data.user?.type || null;
+      setRole(r);
+      if (r === "creator") setPortfolioCount(typeof data.profile?.portfolio_count === "number" ? data.profile.portfolio_count : 0);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (role !== "creator") return;
+    swrFetch("/api/connections", apply);
+  }, [role, apply]);
+
+  const reload = useCallback(async () => {
+    const data = await fetchJson<{ connections?: Record<string, unknown>[] }>("/api/connections");
+    if (data) apply(data);
+  }, [apply]);
+
+  return { isCreator: role === "creator", portfolioCount, relations, setRelations, reload };
+}
+
+function relationMarker(r: ProductRelation | undefined): { label: string; tone: string } | null {
+  if (!r) return null;
+  if (r.status === "pending" && r.mutualAt) return { label: "🎉 מאטץ'", tone: "bg-emerald-500 text-white" };
+  if (r.status === "pending" && r.initiatedBy === "brand") return { label: "💗 בחרו בך", tone: "bg-amber-500 text-white" };
+  if (r.status === "pending") return { label: "❤️ נשלח", tone: "bg-pink-500 text-white" };
+  if (r.status === "completed") return { label: "✅ הושלם", tone: "bg-neutral-600 text-white" };
+  return { label: "🎉 פעיל", tone: "bg-emerald-600 text-white" };
+}
+
 export function BrandProfileView({ profile, compact = false }: { profile: BrandPublicProfile; compact?: boolean }) {
   const site = profile.website ? profile.website.replace(/^https?:\/\//, "").replace(/\/$/, "") : "";
   const siteHref = profile.website ? (profile.website.startsWith("http") ? profile.website : `https://${profile.website}`) : "";
+  const { isCreator, portfolioCount, relations, setRelations, reload } = useCreatorProductRelations();
+  const [busy, setBusy] = useState<string | null>(null);
+  const { toast } = useToast();
+  const router = useRouter();
+  const locked = portfolioCount !== null && portfolioCount < 5;
+
+  async function heart(productId: string) {
+    if (locked) {
+      toast(`צריך 5 סרטונים בתיק העבודות כדי לסמן לב (${portfolioCount}/5)`, "error");
+      router.push("/profile");
+      return;
+    }
+    setBusy(productId);
+    try {
+      const res = await fetch("/api/connections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product_id: productId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast(data.mutual ? "🎉 יש מאטץ'! העסק יאשר ואז ייפתח הצ'אט" : "❤️ הלב נשלח לעסק", "success");
+        setRelations((prev) => ({
+          ...prev,
+          [productId]: {
+            connectionId: data.connection?.id as string,
+            status: "pending",
+            initiatedBy: data.mutual ? "brand" : "creator",
+            mutualAt: data.mutual ? new Date().toISOString() : null,
+          },
+        }));
+        reload();
+      } else if (data.code === "portfolio_gate") {
+        toast(data.error || "צריך 5 סרטונים בתיק העבודות", "error");
+      } else {
+        toast(data.error || "שגיאה בשליחת הלב", "error");
+      }
+    } catch {
+      toast("שגיאה בשליחת הלב", "error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function cancelHeart(productId: string, connectionId: string) {
+    setBusy(productId);
+    try {
+      const res = await fetch(`/api/connections/${connectionId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelled" }),
+      });
+      if (res.ok) {
+        toast("הלב בוטל", "info");
+        setRelations((prev) => {
+          const next = { ...prev };
+          delete next[productId];
+          return next;
+        });
+        reload();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast((data as { error?: string }).error || "שגיאה בביטול", "error");
+      }
+    } catch {
+      toast("שגיאה בביטול", "error");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -289,6 +426,7 @@ export function BrandProfileView({ profile, compact = false }: { profile: BrandP
             {(profile.categories?.length ? profile.categories : [profile.category].filter(Boolean)).map((cat) => (
               <Badge key={cat} variant="pink" size="sm">{cat}</Badge>
             ))}
+            {profile.region && <Badge variant="default" size="sm">📍 {profile.region}</Badge>}
             {profile.memberSince && <span className="text-xs text-neutral-500">בפלטפורמה מ-{memberSinceLabel(profile.memberSince)}</span>}
           </div>
           {siteHref && (
@@ -311,23 +449,59 @@ export function BrandProfileView({ profile, compact = false }: { profile: BrandP
 
       {profile.products.length > 0 && (
         <div>
-          <p className="text-sm font-medium text-neutral-700 mb-2">📦 מוצרים פעילים</p>
-          <div className={`grid grid-cols-3 gap-2 ${compact ? "max-h-[200px]" : "max-h-[360px]"} overflow-y-auto`}>
-            {profile.products.map((p) => (
-              <div key={p.id} className="rounded-xl overflow-hidden border border-neutral-100 bg-white">
-                {p.image_url ? (
-                  <img src={p.image_url} alt={p.name} className="w-full aspect-square object-cover" />
-                ) : (
-                  <div className="w-full aspect-square bg-gradient-to-br from-pink-100 to-pink-50 flex items-center justify-center text-2xl">
-                    {p.product_type === "digital" ? "📱" : "📦"}
-                  </div>
-                )}
-                <div className="p-1.5">
-                  <p className="text-[11px] font-medium truncate">{p.name}</p>
-                  <p className="text-[11px] text-pink-500">₪{Number(p.price) || 0}</p>
+          <div className="flex items-baseline justify-between mb-2">
+            <p className="text-sm font-medium text-neutral-700">📦 מוצרים פעילים</p>
+            {isCreator && <span className="text-[11px] text-neutral-400">❤️ = מעוניין/ת גם במוצר הזה</span>}
+          </div>
+          <div className={`grid grid-cols-3 gap-2 ${compact ? "max-h-[220px]" : "max-h-[380px]"} overflow-y-auto`}>
+            {profile.products.map((p) => {
+              const r = relations[p.id];
+              const marker = isCreator ? relationMarker(r) : null;
+              const canCancel = !!r && r.status === "pending" && r.initiatedBy === "creator" && !r.mutualAt;
+              return (
+                <div key={p.id} className={`relative rounded-xl overflow-hidden border bg-white ${r && isCreator ? "border-pink-200" : "border-neutral-100"}`}>
+                  <button type="button" onClick={() => router.push(`/products/${p.id}`)} className="block w-full text-right" aria-label={`פרטי ${p.name}`}>
+                    {p.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.image_url} alt={p.name} className="w-full aspect-square object-cover" />
+                    ) : (
+                      <div className="w-full aspect-square bg-gradient-to-br from-pink-100 to-pink-50 flex items-center justify-center text-2xl">
+                        {p.product_type === "digital" ? "📱" : "📦"}
+                      </div>
+                    )}
+                    <div className="p-1.5">
+                      <p className="text-[11px] font-medium truncate">{p.name}</p>
+                      <p className="text-[11px] text-pink-500">₪{Number(p.price) || 0}</p>
+                    </div>
+                  </button>
+                  {marker && (
+                    <span className={`absolute top-1 right-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${marker.tone}`}>{marker.label}</span>
+                  )}
+                  {isCreator && !r && (
+                    <button
+                      type="button"
+                      disabled={busy === p.id}
+                      onClick={() => heart(p.id)}
+                      className="absolute top-1 left-1 w-7 h-7 rounded-full bg-white/90 shadow flex items-center justify-center text-sm hover:bg-pink-50 disabled:opacity-50"
+                      aria-label={`לב ל${p.name}`}
+                      title="מעוניין/ת גם במוצר הזה"
+                    >
+                      {locked ? "🔒" : "🤍"}
+                    </button>
+                  )}
+                  {isCreator && canCancel && (
+                    <button
+                      type="button"
+                      disabled={busy === p.id}
+                      onClick={() => cancelHeart(p.id, r.connectionId)}
+                      className="absolute bottom-10 left-1 px-1.5 py-0.5 rounded-full bg-white/90 text-[9px] text-neutral-500 shadow hover:text-red-500 disabled:opacity-50"
+                    >
+                      ביטול
+                    </button>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

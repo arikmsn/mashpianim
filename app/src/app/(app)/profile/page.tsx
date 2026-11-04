@@ -12,6 +12,7 @@ import { generateVideoThumbnail } from "@/lib/video-thumbnail";
 import { uploadToStorage } from "@/lib/storage-upload";
 import { videoFileProblem, MAX_VIDEO_MB } from "@/lib/uploads";
 import { formatDateHe } from "@/lib/dates";
+import { ISRAEL_REGIONS } from "@/lib/regions";
 
 interface PortfolioVideo {
   id: string;
@@ -42,6 +43,7 @@ interface BrandProfile {
   categories: string[];
   description: string;
   websiteUrl: string;
+  region: string;
   stats: { products: number; connections: number; creditsLeft: number };
 }
 
@@ -63,6 +65,7 @@ interface BrandEditForm {
   shop_name: string;
   categories: string[];
   website_url: string;
+  region: string;
   description: string;
   logo_url?: string;
 }
@@ -499,6 +502,25 @@ function BrandEditModal({
           )}
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-neutral-700 mb-2">אזור בארץ</label>
+          <div className="flex flex-wrap gap-2">
+            {ISRAEL_REGIONS.map((region) => (
+              <button
+                key={region}
+                type="button"
+                onClick={() => setForm((prev) => ({ ...prev, region: prev.region === region ? "" : region }))}
+                className={`px-3 py-1.5 rounded-full text-sm transition-all ${
+                  form.region === region ? "bg-pink-500 text-white" : "bg-neutral-100 text-neutral-600 hover:bg-pink-50 hover:text-pink-600"
+                }`}
+              >
+                📍 {region}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-neutral-400 mt-1">יוצרים יכולים לסנן מוצרים לפי אזור</p>
+        </div>
+
         <Input
           label="אתר אינטרנט"
           value={form.website_url}
@@ -572,6 +594,7 @@ export default function ProfilePage() {
     shop_name: "",
     categories: [],
     website_url: "",
+    region: "",
     description: "",
   });
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
@@ -632,6 +655,7 @@ export default function ProfilePage() {
             categories: brandCategoriesFrom(brandData),
             description: brandData?.description || "",
             websiteUrl: brandData?.website_url || "",
+            region: brandData?.region || "",
             stats: {
               products: brandData?.products_count || 0,
               connections: brandData?.connections_count || 0,
@@ -643,6 +667,7 @@ export default function ProfilePage() {
             shop_name: brandData?.shop_name || "",
             categories: brandCategoriesFrom(brandData),
             website_url: brandData?.website_url || "",
+            region: brandData?.region || "",
             description: brandData?.description || "",
             logo_url: brandData?.logo_url || "",
           });
@@ -828,6 +853,7 @@ export default function ProfilePage() {
             categories: data.categories,
             category: data.categories[0] || "",
             website_url: data.website_url,
+            region: data.region || null,
             description: data.description,
             ...(data.logo_url ? { logo_url: data.logo_url } : {}),
           },
@@ -844,6 +870,7 @@ export default function ProfilePage() {
                 categories: data.categories,
                 description: data.description,
                 websiteUrl: data.website_url,
+                region: data.region,
               }
             : prev
         );
@@ -891,6 +918,7 @@ export default function ProfilePage() {
                     ))}
                   </div>
                 )}
+                {brandProfile.region && <p className="text-xs text-neutral-500 mt-1">📍 {brandProfile.region}</p>}
               </div>
             </div>
 

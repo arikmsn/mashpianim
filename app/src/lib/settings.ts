@@ -15,7 +15,7 @@ export const DEFAULT_TIMELINES: Timelines = {
   shipping_days: 7,
   filming_days: 10,
   review_days: 7,
-  max_revisions: 2,
+  max_revisions: 1,
 };
 
 function positiveInt(value: unknown, fallback: number, max: number): number {

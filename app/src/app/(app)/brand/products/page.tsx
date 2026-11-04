@@ -149,7 +149,7 @@ export default function BrandProductsPage() {
       description: product.description,
       price: String(product.price),
       brief: product.brief || "",
-      briefTypes: Array.isArray(product.briefData?.types) ? product.briefData.types : [],
+      briefTypes: Array.isArray(product.briefData?.see) ? product.briefData.see : [],
       imageUrl: product.imageUrl || "",
       shippingPolicy: product.shippingPolicy,
       category: product.categoryCustom ? OTHER : product.category || "",
@@ -194,10 +194,10 @@ export default function BrandProductsPage() {
       }
 
       const isOther = formData.category === OTHER;
-      // Only the "type" section is edited here; the other brief sections live on the brief screen and are kept
+      // Only "מה רואים" is edited here; the other brief sections live on the brief screen and are kept
       const existingData: BriefData = editingProduct?.briefData ? { ...editingProduct.briefData } : {};
-      const briefData: BriefData = { ...existingData, types: formData.briefTypes };
-      if (formData.briefTypes.length === 0) delete briefData.types;
+      const briefData: BriefData = { ...existingData, see: formData.briefTypes };
+      if (formData.briefTypes.length === 0) delete briefData.see;
       const body: Record<string, unknown> = {
         name: formData.name.trim(),
         description: formData.description.trim(),

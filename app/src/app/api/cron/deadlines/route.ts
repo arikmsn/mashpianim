@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createNotification, createNotificationOnce, logActivity, notifyConnectionStatusChange, notificationData } from "@/lib/notifications";
 import { capacityStatus, type PlatformUsage } from "@/lib/capacity";
+import { getTimelineSettings } from "@/lib/settings";
 
 // A reminder of the same kind for the same connection is sent at most once per this many hours
 const WARNING_DEDUPE_HOURS = 48;
@@ -226,7 +227,7 @@ export async function GET(request: NextRequest) {
   const { data: overdueReview } = await supabase
     .from("connections")
     .select(`
-      id, status, review_deadline, brand_id, creator_id,
+      id, status, review_deadline, revision_count, brand_id, creator_id,
       products(name),
       creator_profiles!connections_creator_id_fkey(users(id, full_name)),
       brand_profiles!connections_brand_id_fkey(shop_name, users(id, full_name))
@@ -234,10 +235,13 @@ export async function GET(request: NextRequest) {
     .in("status", ["uploaded", "in_review"])
     .lt("review_deadline", now);
 
+  const timelinesForReview = await getTimelineSettings(supabase);
   for (const conn of (overdueReview || []) as any[]) {
     const daysPast = Math.floor((Date.now() - new Date(conn.review_deadline).getTime()) / 86400000);
+    // After the revision round the upload is final: no grace, no reminder — it closes when the window passes
+    const finalRound = (conn.revision_count || 0) >= timelinesForReview.max_revisions;
 
-    if (daysPast >= 3) {
+    if (daysPast >= 3 || finalRound) {
       // Auto-complete: brand didn't respond in 10 days total
       await supabase.from("connections").update({
         status: "completed",

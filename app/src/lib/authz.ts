@@ -30,6 +30,7 @@ export const BRAND_EDITABLE_FIELDS = [
   "website_url",
   "description",
   "logo_url",
+  "region",
 ] as const;
 
 const NUMERIC_FIELDS = new Set(["tiktok_followers", "instagram_followers"]);
@@ -100,6 +101,7 @@ export const PUBLIC_PRODUCT_FIELDS = [
   "category_custom",
   "categories",
   "logo_url",
+  "brand_region",
 ] as const;
 
 export function toPublicProduct(product: Record<string, unknown>): Record<string, unknown> {

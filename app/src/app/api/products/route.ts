@@ -68,9 +68,19 @@ export async function GET(request: NextRequest) {
     privileged = !!owned;
   }
 
+  // Products a creator skipped ("✕") stay out of their feed
+  let passed = new Set<string>();
+  if (viewer && viewer.type === "creator") {
+    const { data: cp } = await admin.from("creator_profiles").select("id").eq("user_id", viewer.id).maybeSingle();
+    if (cp) {
+      const { data: passes } = await admin.from("creator_passes").select("product_id").eq("creator_id", (cp as any).id);
+      passed = new Set(((passes || []) as { product_id: string }[]).map((p) => p.product_id));
+    }
+  }
+
   let query = admin
     .from("products")
-    .select("*, brand_profiles!inner(shop_name, user_id, category, categories, logo_url)")
+    .select("*, brand_profiles!inner(shop_name, user_id, category, categories, logo_url, region)")
     .neq("status", "deleted")
     .order("created_at", { ascending: false });
 
@@ -119,6 +129,7 @@ export async function GET(request: NextRequest) {
         category_custom: p.category_custom || null,
         categories: p.category ? [p.category] : brandCats,
         logo_url: p.brand_profiles?.logo_url || null,
+        brand_region: p.brand_profiles?.region || null,
       };
       if (privileged) return shaped;
       // Signed-in creators also get the brand's brief (shown on the product page); anonymous callers don't
@@ -126,8 +137,9 @@ export async function GET(request: NextRequest) {
         ? { ...toPublicProduct(shaped), brief: p.brief ?? null, brief_data: p.brief_data ?? null }
         : toPublicProduct(shaped);
     })
-    // Creators browsing the feed don't see products whose creator limit is reached (no limit = always shown)
-    .filter((p: any) => privileged || p.spots_left === null || (p.spots_left as number) > 0);
+    // Creators browsing the feed don't see products whose creator limit is reached (no limit = always shown),
+    // nor ones they skipped
+    .filter((p: any) => privileged || ((p.spots_left === null || (p.spots_left as number) > 0) && !passed.has(p.id)));
 
   return NextResponse.json({ products });
 }

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { cleanRegion } from "@/lib/regions";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { getGreenAPI } from "@/lib/adapters/greenapi";
@@ -150,6 +151,7 @@ export async function POST(request: NextRequest) {
           website_url: profile.websiteUrl || null,
           description: profile.description || null,
           logo_url: profile.logoUrl || null,
+          region: cleanRegion(profile.region),
         });
         if (profileError) {
           console.error("[register] brand profile error:", profileError);

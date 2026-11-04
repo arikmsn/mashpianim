@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createNotification, notificationData } from "@/lib/notifications";
 import { getGreenAPI } from "@/lib/adapters/greenapi";
 import { mapMatchError } from "@/lib/match-errors";
-import { buildBriefMessage as composeBrief } from "@/lib/brief";
+import { sanitizeBriefData, type BriefSnapshot } from "@/lib/brief";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Admin = SupabaseClient<any, any, any, any, any>;
@@ -197,27 +197,31 @@ export async function performMatch(admin: Admin, connectionId: string, actorUser
   const creatorName = creatorUser.full_name || "היוצר/ת";
   const productName = product?.name || "המוצר";
 
+  // The match notice, then the brief as a card the creator approves in the chat (kind "brief", version 1)
+  const snapshot: BriefSnapshot = {
+    product_name: productName,
+    brief_data: sanitizeBriefData(product?.brief_data),
+    brief: product?.brief || null,
+    version: 1,
+  };
   await admin.from("messages").insert([
     {
       connection_id: connectionId,
       sender_id: actorUserId,
       text: `🎉 יש מאטץ'! ${brandName} ו-${creatorName} עובדים יחד על "${productName}". כל התקשורת כאן בצ'אט.`,
       is_system: true,
+      kind: "text",
     },
     {
       connection_id: connectionId,
       sender_id: brandUser.id,
-      text: composeBrief({
-        name: productName,
-        price: product?.price,
-        product_type: product?.product_type,
-        description: product?.description,
-        brief: product?.brief,
-        brief_data: product?.brief_data,
-      }),
-      is_system: true,
+      text: "📋 הבריף לסרטון",
+      is_system: false,
+      kind: "brief",
+      data: snapshot,
     },
   ] as any);
+  await admin.from("connections").update({ brief_posted_at: new Date().toISOString(), brief_approved_at: null } as any).eq("id", connectionId);
 
   await Promise.all([
     createNotification({

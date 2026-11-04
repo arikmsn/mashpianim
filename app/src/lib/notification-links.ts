@@ -5,6 +5,8 @@
 // creator profile is a creator here. Only report notifications ever lead into the admin area, and only
 // for admins (`isAdmin`).
 
+import { CHAT_NOTIFICATION_TYPES } from "./chat.ts";
+
 export type NotificationLike = { type: string; data?: Record<string, unknown> | null };
 export type ViewerRole = "creator" | "brand" | null | undefined;
 
@@ -21,7 +23,7 @@ export function notificationHref(n: NotificationLike, role: ViewerRole, isAdmin 
   if (n.type === "feedback_updated") return "/profile";
   if (n.type === "portfolio_video_removed") return "/profile";
 
-  if (n.type === "match" || n.type === "new_message") {
+  if (CHAT_NOTIFICATION_TYPES.has(n.type)) {
     return connectionId ? `/messages?connection=${connectionId}` : "/messages";
   }
 

@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button, Card, Textarea, useToast } from "@/components/ui";
+import { BriefFull } from "@/components/features/brief-view";
 import { fetchJson } from "@/lib/client-cache";
-import { BRIEF_SECTIONS, BRIEF_TEXT_MAX, briefDataLines, hasBriefContent, sanitizeBriefData, definesFormat, FORMAT_LINES, type BriefData } from "@/lib/brief";
+import { BRIEF_SECTIONS, BRIEF_MORE_TITLE, BRIEF_TEXT_MAX, hasBriefContent, sanitizeBriefData, type BriefData } from "@/lib/brief";
 
 interface ProductRow {
   id: string;
@@ -14,21 +15,32 @@ interface ProductRow {
   brand_user_id?: string | null;
 }
 
-// Structured brief per product: every section is optional and multi-select; the creator sees the result on
-// the product page and in the chat when the brand confirms a match.
 export default function ProductBriefPage() {
+  return (
+    <Suspense>
+      <ProductBriefPageInner />
+    </Suspense>
+  );
+}
+
+// The brief template per product (מה רואים · מה היא תגיד · אורך · שוטים · כתוביות · כללי צילום · מה אסור · עוד משהו).
+// Saved on the product; with `?connection=<id>` the saved brief is also posted into that chat as a card.
+function ProductBriefPageInner() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
+  const searchParams = useSearchParams();
+  const connectionId = searchParams.get("connection");
   const router = useRouter();
   const { toast } = useToast();
 
   const [product, setProduct] = useState<ProductRow | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [picks, setPicks] = useState<Record<string, string[]>>({});
-  const [messages, setMessages] = useState("");
+  const [texts, setTexts] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [preview, setPreview] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -40,9 +52,15 @@ export default function ProductBriefPage() {
     const p = data.product;
     setProduct(p);
     const existing = sanitizeBriefData(p.brief_data) || {};
-    const { messages: m, ...sections } = existing;
-    setPicks(sections as Record<string, string[]>);
-    setMessages(m || "");
+    const chips: Record<string, string[]> = {};
+    const strings: Record<string, string> = {};
+    for (const section of BRIEF_SECTIONS) {
+      const v = existing[section.key];
+      if (section.type === "chips" && Array.isArray(v)) chips[section.key] = v;
+      if (section.type === "text" && typeof v === "string") strings[section.key] = v;
+    }
+    setPicks(chips);
+    setTexts(strings);
     setNotes(p.brief || "");
   }, [id]);
 
@@ -62,9 +80,9 @@ export default function ProductBriefPage() {
     });
   }
 
-  const data = sanitizeBriefData({ ...picks, messages });
-  const previewLines = briefDataLines(data);
-  const pickedCount = Object.values(picks).reduce((n, arr) => n + arr.length, 0);
+  const data = sanitizeBriefData({ ...picks, ...texts });
+  const filledCount = BRIEF_SECTIONS.filter((s) => (s.type === "chips" ? (picks[s.key] || []).length > 0 : !!texts[s.key]?.trim())).length;
+  const backHref = connectionId ? `/messages?connection=${connectionId}` : "/brand/products";
 
   async function save() {
     if (!id) return;
@@ -75,13 +93,29 @@ export default function ProductBriefPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ brief_data: data, brief: notes.trim() || null }),
       });
-      if (res.ok) {
-        toast("הבריף נשמר — היוצרים יראו אותו בדף המוצר ובצ'אט", "success");
-        setDirty(false);
-      } else {
+      if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         toast((d as { error?: string }).error || "שגיאה בשמירה", "error");
+        return;
       }
+      setDirty(false);
+      if (connectionId) {
+        // Into the chat: the creator gets the card (and the earlier approval, if any, is reset)
+        const post = await fetch(`/api/connections/${connectionId}/brief`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "post" }),
+        });
+        if (post.ok) {
+          toast("הבריף נשלח לצ'אט — היוצר/ת תאשר אותו", "success");
+          router.push(`/messages?connection=${connectionId}`);
+          return;
+        }
+        const d = await post.json().catch(() => ({}));
+        toast((d as { error?: string }).error || "הבריף נשמר אבל לא נשלח לצ'אט", "error");
+        return;
+      }
+      toast("הבריף נשמר — היוצרים יראו אותו בדף המוצר ובצ'אט", "success");
     } catch {
       toast("שגיאה בשמירה", "error");
     } finally {
@@ -107,30 +141,46 @@ export default function ProductBriefPage() {
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
           <button
             type="button"
-            onClick={() => router.push("/brand/products")}
+            onClick={() => router.push(backHref)}
             className="p-2 -mr-2 rounded-lg hover:bg-neutral-100 transition-colors"
-            aria-label="חזרה למוצרים"
+            aria-label="חזרה"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 18l6-6-6-6" />
             </svg>
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="text-lg font-bold truncate">בריף ליוצר/ת</h1>
+            <h1 className="text-lg font-bold truncate">בריף לסרטון</h1>
             <p className="text-xs text-neutral-500 truncate">{product?.name || "..."}</p>
           </div>
           <Button size="sm" loading={saving} onClick={save} disabled={!product}>
-            שמירה
+            {connectionId ? "שמירה ושליחה לצ'אט" : "שמירה"}
           </Button>
         </div>
       </header>
 
       <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
         <p className="text-sm text-neutral-600 bg-pink-50 rounded-2xl px-4 py-3">
-          סמנו מה חשוב לכם בסרטון — כל סעיף אופציונלי ואפשר לבחור כמה אפשרויות. היוצר/ת רואה את הבריף בדף המוצר לפני ששולח/ת לב, ושוב בצ&apos;אט כשהחיבור מאושר.
+          {connectionId
+            ? "הבריף יישלח לצ'אט כקלף שהיוצר/ת מאשר/ת. אפשר לעדכן אותו בכל שלב — כל עדכון מחייב אישור מחדש."
+            : "סמנו מה חשוב לכם בסרטון — כל סעיף אופציונלי. היוצר/ת רואה את הבריף בדף המוצר, ומאשר/ת אותו בצ'אט אחרי המאטץ'."}
         </p>
 
         {BRIEF_SECTIONS.map((section) => {
+          if (section.type === "text") {
+            return (
+              <Card key={section.key} padding="sm">
+                <label className="block text-sm font-bold text-neutral-900 mb-1">{section.title}</label>
+                <Textarea
+                  placeholder={section.placeholder}
+                  value={texts[section.key] || ""}
+                  maxLength={BRIEF_TEXT_MAX}
+                  rows={3}
+                  onChange={(e) => { setDirty(true); setTexts((prev) => ({ ...prev, [section.key]: e.target.value })); }}
+                />
+              </Card>
+            );
+          }
           const chosen = picks[section.key] || [];
           return (
             <Card key={section.key} padding="sm">
@@ -161,20 +211,8 @@ export default function ProductBriefPage() {
         })}
 
         <Card padding="sm">
-          <label className="block text-sm font-bold text-neutral-900 mb-1">מסרים מרכזיים</label>
-          <p className="text-[11px] text-neutral-400 mb-2">מה חובה להגיד על המוצר (עד 3 נקודות עובד הכי טוב)</p>
-          <Textarea
-            placeholder="למשל: 1. ללא סוכר 2. מתאים לטבעונים 3. משלוח חינם עד הבית"
-            value={messages}
-            maxLength={BRIEF_TEXT_MAX}
-            rows={4}
-            onChange={(e) => { setDirty(true); setMessages(e.target.value); }}
-          />
-        </Card>
-
-        <Card padding="sm">
-          <label className="block text-sm font-bold text-neutral-900 mb-1">הערות נוספות ליוצר/ת</label>
-          <p className="text-[11px] text-neutral-400 mb-2">כל דבר אחר שחשוב שיידעו — טון, דוגמאות, מה להימנע ממנו</p>
+          <label className="block text-sm font-bold text-neutral-900 mb-1">{BRIEF_MORE_TITLE}</label>
+          <p className="text-[11px] text-neutral-400 mb-2">כל דבר אחר שחשוב שיידעו — טון, דוגמאות, מה חובה להגיד</p>
           <Textarea
             placeholder="טקסט חופשי..."
             value={notes}
@@ -185,33 +223,25 @@ export default function ProductBriefPage() {
         </Card>
 
         <Card padding="sm" className="bg-neutral-50">
-          <h2 className="text-sm font-bold text-neutral-900 mb-2">כך היוצר/ת יראה/תראה את הבריף</h2>
-          {hasBriefContent(data, notes) ? (
-            <div className="text-sm text-neutral-700 space-y-1">
-              {previewLines.map((line, i) => (
-                <p key={i} className={line.endsWith(":") ? "font-medium text-neutral-900 mt-1" : "whitespace-pre-line"}>{line}</p>
-              ))}
-              {notes.trim() && (
-                <>
-                  <p className="font-medium text-neutral-900 mt-1">הערות מהעסק:</p>
-                  <p className="whitespace-pre-line">{notes.trim()}</p>
-                </>
+          <button type="button" onClick={() => setPreview((p) => !p)} className="w-full flex items-center justify-between text-sm font-bold text-neutral-900">
+            <span>כך היוצר/ת רואה את הבריף</span>
+            <span className="text-pink-500 text-xs font-medium">{preview ? "הסתרה" : "תצוגה מקדימה"}</span>
+          </button>
+          {preview && (
+            <div className="mt-3 bg-white rounded-xl p-3">
+              {hasBriefContent(data, notes) ? (
+                <BriefFull data={data} notes={notes} productName={product?.name} />
+              ) : (
+                <p className="text-sm text-neutral-400">עדיין לא סומן כלום — היוצר/ת תקבל בריף ריק לאישור.</p>
               )}
-              <ul className="text-xs text-neutral-500 space-y-1 border-t border-neutral-200 pt-2 mt-2">
-                {FORMAT_LINES.slice(definesFormat(data) ? 1 : 0).map((line) => (
-                  <li key={line}>• {line}</li>
-                ))}
-              </ul>
             </div>
-          ) : (
-            <p className="text-sm text-neutral-400">עדיין לא סומן כלום — היוצר/ת יקבל/תקבל תבנית למילוי בצ&apos;אט.</p>
           )}
         </Card>
 
         <div className="flex items-center justify-between text-xs text-neutral-400">
-          <span>{pickedCount > 0 ? `${pickedCount} סימונים` : "ללא סימונים"}{dirty ? " · יש שינויים שלא נשמרו" : ""}</span>
+          <span>{filledCount > 0 ? `${filledCount} סעיפים מולאו` : "ללא סימונים"}{dirty ? " · יש שינויים שלא נשמרו" : ""}</span>
           <Button size="sm" loading={saving} onClick={save} disabled={!product}>
-            שמירת הבריף
+            {connectionId ? "שמירה ושליחה לצ'אט" : "שמירת הבריף"}
           </Button>
         </div>
       </div>

@@ -10,6 +10,7 @@ import { performMatch, markMutual, countPortfolioVideos, portfolioGateError, MIN
 import { isConnectionParticipant } from "@/lib/authz";
 import { getTimelineSettings } from "@/lib/settings";
 import { isChatOpen } from "@/lib/connection-flow";
+import { CHAT_EVENT_TEXTS } from "@/lib/chat";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -75,7 +76,29 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     .eq("connection_id", id)
     .order("created_at", { ascending: true });
 
-  return NextResponse.json({ connection: data, messages: messages || [] });
+  // Deliverable cards: a fresh signed URL + poster for each video they point at (stored URLs expire)
+  const list = (messages || []) as any[];
+  const videoIds = list.filter((m) => m.kind === "video" && m.data?.video_id).map((m) => m.data.video_id as string);
+  if (videoIds.length > 0) {
+    const { data: videos } = await admin.from("videos").select("id, storage_path, url, thumbnail_url, status").in("id", videoIds);
+    const byId = new Map<string, any>();
+    for (const v of (videos || []) as any[]) {
+      let url = v.url;
+      if (v.storage_path) {
+        const { data: signed } = await admin.storage.from("videos").createSignedUrl(v.storage_path, 86400);
+        url = signed?.signedUrl || url;
+      }
+      byId.set(v.id, { url, thumbnail_url: v.thumbnail_url, status: v.status });
+    }
+    for (const m of list) {
+      if (m.kind === "video" && m.data?.video_id) {
+        const v = byId.get(m.data.video_id);
+        m.data = { ...m.data, url: v?.url || null, thumbnail_url: v?.thumbnail_url || null, status: v?.status || null };
+      }
+    }
+  }
+
+  return NextResponse.json({ connection: data, messages: list });
 }
 
 // State machine: which transitions are valid and who can trigger them
@@ -250,6 +273,17 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       updates.deliver_deadline = new Date(now.getTime() + 14 * 86400000).toISOString();
       if (tracking_number) updates.tracking_number = tracking_number;
       if (tracking_url) updates.tracking_url = tracking_url;
+      // The chat tells the creator the parcel / access is on its way
+      await admin.from("messages").insert({
+        connection_id: id,
+        sender_id: (dbUser as any).id,
+        text: product?.product_type === "digital" || (connection as any).delivery_type === "digital"
+          ? "📲 פרטי הגישה נשלחו — אשרי קבלה כשהכול עובד"
+          : `📦 המוצר נשלח${tracking_number ? ` · מספר מעקב ${tracking_number}` : ""} — אשרי קבלה כשהחבילה מגיעה`,
+        is_system: true,
+        kind: "event",
+        data: { event: "shipped" },
+      } as any);
 
       // For digital products, store the access value
       if ((connection as any).delivery_type === "digital" || product?.product_type === "digital") {
@@ -271,6 +305,15 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       updates.delivery_confirmed_at = now.toISOString();
       updates.film_deadline = new Date(now.getTime() + timelines.filming_days * 86400000).toISOString();
       if (delivery_proof_url) updates.delivery_proof_url = delivery_proof_url;
+      // Written in the creator's name (owner's spec); the filming clock starts now
+      await admin.from("messages").insert({
+        connection_id: id,
+        sender_id: (dbUser as any).id,
+        text: CHAT_EVENT_TEXTS.packageReceived,
+        is_system: false,
+        kind: "event",
+        data: { event: "delivered" },
+      } as any);
       break;
     }
 
@@ -344,6 +387,16 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         .update({ status: "revision_requested", revision_notes } as any)
         .eq("connection_id", id)
         .eq("status", "pending");
+      // The notes appear in the chat in the brand's name: "דרוש שינוי: …"
+      const notesText = String(revision_notes).trim();
+      await admin.from("messages").insert({
+        connection_id: id,
+        sender_id: (dbUser as any).id,
+        text: notesText.startsWith(CHAT_EVENT_TEXTS.revisionPrefix.trim()) ? notesText : `${CHAT_EVENT_TEXTS.revisionPrefix}${notesText}`,
+        is_system: false,
+        kind: "event",
+        data: { event: "revision_requested", round: usedRevisions + 1 },
+      } as any);
       break;
     }
 

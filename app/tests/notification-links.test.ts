@@ -1,30 +1,37 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { notificationHref } from "../src/lib/notification-links.ts";
+import { CHAT_NOTIFICATION_TYPES } from "../src/lib/chat.ts";
 
 describe("notification deep links", () => {
   const data = { connectionId: "c1", productId: "p1" };
 
-  test("creators land on the product page, or the highlighted connection card for older rows", () => {
+  test("hearts: creators land on the product page, or the highlighted connection card for older rows", () => {
     assert.equal(notificationHref({ type: "heart_received", data }, "creator"), "/products/p1");
-    assert.equal(notificationHref({ type: "product_shipped", data: { connectionId: "c1" } }, "creator"), "/connections?open=c1");
-    assert.equal(notificationHref({ type: "revision_requested", data }, "creator"), "/products/p1");
+    assert.equal(notificationHref({ type: "heart_back", data: { connectionId: "c1" } }, "creator"), "/connections?open=c1");
+    assert.equal(notificationHref({ type: "heart_expired", data }, "creator"), "/products/p1");
   });
 
-  test("brands land on the highlighted connection card (modal)", () => {
+  test("hearts: brands land on the highlighted connection card (modal)", () => {
     assert.equal(notificationHref({ type: "heart_received", data }, "brand"), "/brand/connections?open=c1");
-    assert.equal(notificationHref({ type: "video_uploaded", data: { connectionId: "c1" } }, "brand"), "/brand/connections?open=c1");
+    assert.equal(notificationHref({ type: "match_ready", data: { connectionId: "c1" } }, "brand"), "/brand/connections?open=c1");
   });
 
-  test("a match opens the chat for both sides", () => {
-    assert.equal(notificationHref({ type: "match", data }, "creator"), "/messages?connection=c1");
-    assert.equal(notificationHref({ type: "match", data }, "brand"), "/messages?connection=c1");
+  test("everything after the match opens the chat for both sides", () => {
+    for (const type of ["match", "brief_posted", "brief_updated", "brief_approved", "product_shipped", "product_delivered", "video_uploaded", "revision_requested", "connection_completed", "filming_deadline_warning"]) {
+      assert.equal(CHAT_NOTIFICATION_TYPES.has(type), true, type);
+      assert.equal(notificationHref({ type, data }, "creator"), "/messages?connection=c1", type);
+      assert.equal(notificationHref({ type, data }, "brand"), "/messages?connection=c1", type);
+    }
     assert.equal(notificationHref({ type: "match", data: null }, "brand"), "/messages");
+    // hearts stay out of the chat
+    assert.equal(CHAT_NOTIFICATION_TYPES.has("heart_received"), false);
+    assert.equal(CHAT_NOTIFICATION_TYPES.has("heart_back"), false);
   });
 
   test("an admin acting as a creator never lands in the admin area for connection events", () => {
     assert.equal(notificationHref({ type: "heart_received", data }, "creator", true), "/products/p1");
-    assert.equal(notificationHref({ type: "video_uploaded", data }, "brand", true), "/brand/connections?open=c1");
+    assert.equal(notificationHref({ type: "heart_received", data }, "brand", true), "/brand/connections?open=c1");
     assert.equal(notificationHref({ type: "match", data }, "creator", true), "/messages?connection=c1");
   });
 

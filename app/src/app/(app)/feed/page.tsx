@@ -1,24 +1,16 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
-import { Avatar, Badge, Button, Card, Modal, useToast } from "@/components/ui";
+import { motion, AnimatePresence, type PanInfo } from "framer-motion";
+import { Avatar, Badge, Button, Modal, useToast } from "@/components/ui";
 import { useAuth } from "@/hooks/use-auth";
 import { useNotifications } from "@/hooks/use-notifications";
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch, fetchJson } from "@/lib/client-cache";
 import { toDirectImageUrl } from "@/lib/images";
-import { PRODUCT_CATEGORIES, REGISTRATION_TO_FEED } from "@/lib/categories";
-
-// Filter chips: "for you" (the creator's categories + anything already in motion), everything, then categories
-const FOR_YOU = "בשבילך";
-const ALL = "הכל";
-
-// One shared list with the product form and the API (lib/categories.ts)
-const allFeedCategories: string[] = [...PRODUCT_CATEGORIES];
-const registrationToFeedMap: Record<string, string> = REGISTRATION_TO_FEED;
+import { REGISTRATION_TO_FEED, displayCategory } from "@/lib/categories";
 
 interface Product {
   id: string;
@@ -28,241 +20,82 @@ interface Product {
   brandUserId: string | null;
   image: string | null;
   category: string;
-  categories: string[];
+  categoryLabel: string;
+  region: string;
   value: number;
   description: string;
-  requirements: string;
+  productType: string;
   deadline: number;
+  createdAt: string;
 }
-
 
 interface Relation {
   connectionId: string;
   status: string;
   initiatedBy: "creator" | "brand";
   mutualAt: string | null;
+  approvedAt: string | null;
+  product: { id: string; name: string; image: string | null; value: number; brand: string };
 }
 
-const MIN_PORTFOLIO = 5;
+type View = "all" | "mine";
 
-function ProductSkeleton() {
+const MIN_PORTFOLIO = 5;
+const SWIPE_THRESHOLD = 70;
+
+const placeholderColors = [
+  "from-pink-200 to-pink-300",
+  "from-purple-200 to-purple-300",
+  "from-blue-200 to-blue-300",
+  "from-emerald-200 to-emerald-300",
+  "from-amber-200 to-amber-300",
+  "from-rose-200 to-rose-300",
+];
+
+function placeholderFor(id: string) {
+  return placeholderColors[parseInt(id.replace(/\D/g, "").slice(-4) || "0", 10) % placeholderColors.length];
+}
+
+function relationLabel(r: Relation): { text: string; tone: string } {
+  if (r.status === "pending" && r.mutualAt) return { text: "🎉 מאטץ' — ממתין לאישור העסק", tone: "bg-emerald-500" };
+  if (r.status === "pending" && r.initiatedBy === "creator") return { text: "❤️ נשלח — ממתין לעסק", tone: "bg-pink-500" };
+  if (r.status === "pending") return { text: "💗 העסק סימן אותך", tone: "bg-amber-500" };
+  if (r.status === "completed") return { text: "✅ הושלם", tone: "bg-neutral-500" };
+  return { text: "🎉 פעיל", tone: "bg-emerald-600" };
+}
+
+function FeedSkeleton() {
   return (
-    <div className="bg-white rounded-2xl border border-neutral-100 overflow-hidden">
-      <div className="h-48 bg-gradient-to-br from-pink-100 to-pink-50 animate-pulse" />
-      <div className="p-4 space-y-3">
-        <div className="flex justify-between">
-          <div className="space-y-2 flex-1">
-            <div className="h-4 bg-pink-100 rounded-lg w-3/4 animate-pulse" />
-            <div className="h-3 bg-neutral-100 rounded-lg w-1/2 animate-pulse" />
-          </div>
-          <div className="h-6 w-12 bg-pink-100 rounded-full animate-pulse" />
-        </div>
-        <div className="h-3 bg-neutral-100 rounded-lg w-full animate-pulse" />
-        <div className="h-3 bg-neutral-100 rounded-lg w-2/3 animate-pulse" />
-        <div className="flex justify-between items-center pt-1">
-          <div className="h-3 bg-neutral-100 rounded-lg w-1/3 animate-pulse" />
-          <div className="h-8 w-20 bg-pink-100 rounded-full animate-pulse" />
-        </div>
+    <div className="max-w-2xl mx-auto px-4 py-4">
+      <div className="aspect-[3/4] max-h-[560px] rounded-3xl bg-pink-100 animate-pulse" />
+      <div className="flex justify-center gap-5 mt-4">
+        {[1, 2, 3].map((i) => <div key={i} className="w-14 h-14 rounded-full bg-neutral-100 animate-pulse" />)}
       </div>
     </div>
   );
 }
 
-function ProductCard({
-  product,
-  relation,
-  locked,
-  onApply,
-  onApprove,
-  onOpenChat,
-  onOpen,
-  applying,
-  approving,
-}: {
-  product: Product;
-  relation: Relation | undefined;
-  locked: boolean;
-  onApply: (id: string) => void;
-  onApprove: (connectionId: string) => void;
-  onOpenChat: (connectionId: string) => void;
-  onOpen: (productId: string) => void;
-  applying: string | null;
-  approving: string | null;
-}) {
-  const placeholderColors = [
-    "from-pink-200 to-pink-300",
-    "from-purple-200 to-purple-300",
-    "from-blue-200 to-blue-300",
-    "from-emerald-200 to-emerald-300",
-    "from-amber-200 to-amber-300",
-    "from-rose-200 to-rose-300",
-  ];
-  const colorIndex =
-    parseInt(product.id.replace(/\D/g, "") || "0") % placeholderColors.length;
-
-  const mutual = relation?.status === "pending" && !!relation.mutualAt;
-  const pendingFromBrand = relation?.status === "pending" && !mutual && relation.initiatedBy === "brand";
-  const pendingFromMe = relation?.status === "pending" && !mutual && relation.initiatedBy === "creator";
-  const matched = !!relation && relation.status !== "pending";
-
-  return (
-    <Card hover padding="none" className="overflow-hidden relative h-full flex flex-col">
-      {pendingFromBrand && (
-        <div className="absolute top-3 right-3 z-10 ig-gradient-bg text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">
-          💗 סימנו אותך
-        </div>
-      )}
-      {matched && (
-        <div className="absolute top-3 right-3 z-10 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">
-          🎉 מאטץ&apos;
-        </div>
-      )}
-      {mutual && (
-        <div className="absolute top-3 right-3 z-10 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">
-          🎉 מאטץ&apos; — ממתין לאישור העסק
-        </div>
-      )}
-      {/* The card opens the product page (details, brief, status); the buttons below act in place */}
-      <button
-        type="button"
-        onClick={() => onOpen(product.id)}
-        className="block w-full text-right"
-        aria-label={`פרטי המוצר ${product.name}`}
-      >
-        {product.image ? (
-          <div className="h-48 overflow-hidden">
-            <img
-              src={product.image}
-              alt={product.name}
-              loading="lazy"
-              decoding="async"
-              className="w-full h-full object-cover"
-            />
-          </div>
-        ) : (
-          <div
-            className={`h-48 bg-gradient-to-br ${placeholderColors[colorIndex]} flex items-center justify-center`}
-          >
-            <span className="text-5xl opacity-50">📦</span>
-          </div>
-        )}
-      </button>
-      {/* Body is a column: the description keeps two lines of height and the footer sits at the bottom,
-          so every card in the grid has the same height whatever the text length */}
-      <div className="p-4 flex flex-col flex-1">
-        <div className="flex items-start justify-between mb-2">
-          <button
-            type="button"
-            onClick={() => onOpen(product.id)}
-            className="flex items-center gap-2 text-right min-w-0 group"
-          >
-            <Avatar src={product.brandAvatar} name={product.brand} size="sm" className="group-hover:ring-pink-300 transition-all" />
-            <div className="min-w-0">
-              <h3 className="font-bold text-neutral-900 truncate group-hover:text-pink-600 transition-colors">{product.name}</h3>
-              <p className="text-sm text-neutral-500 truncate">
-                {product.brand}
-                <span className="text-[10px] text-pink-400 mr-1">· פרטים ובריף ›</span>
-              </p>
-            </div>
-          </button>
-          <Badge variant="pink" size="sm">
-            ₪{product.value}
-          </Badge>
-        </div>
-        {locked ? (
-          <div className="relative mb-3 min-h-[2.5rem]">
-            <p className="text-sm text-neutral-600 line-clamp-2 blur-sm select-none" aria-hidden="true">
-              {product.description || "פרטי המוצר, הדרישות והבריף יופיעו כאן"}
-            </p>
-            <button
-              type="button"
-              onClick={() => onApply(product.id)}
-              className="absolute inset-0 flex items-center justify-center text-xs font-medium text-neutral-600 bg-white/50 rounded-lg"
-            >
-              🔒 5 סרטונים בתיק פותחים את הפרטים
-            </button>
-          </div>
-        ) : (
-          <p className="text-sm text-neutral-600 mb-3 line-clamp-2 min-h-[2.5rem]">
-            {product.description || "העסק לא הוסיף תיאור — הפרטים והבריף בדף המוצר"}
-          </p>
-        )}
-        <div className="flex items-center gap-2 mb-3 text-xs text-neutral-400">
-          <span>📋 {product.requirements}</span>
-        </div>
-        <div className="flex items-center justify-between mt-auto">
-          <div className="flex items-center gap-3 text-xs text-neutral-400">
-            <span>⏱ {product.deadline} ימים לצילום</span>
-          </div>
-          {pendingFromBrand && relation ? (
-            <Button
-              size="sm"
-              rounded
-              loading={approving === relation.connectionId}
-              onClick={() => onApprove(relation.connectionId)}
-            >
-              {locked ? "🔒 " : "💗 "}כן, מעוניין/ת
-            </Button>
-          ) : mutual && relation ? (
-            <Button size="sm" rounded variant="secondary" onClick={() => onOpen(product.id)}>
-              🎉 ממתין לעסק
-            </Button>
-          ) : pendingFromMe ? (
-            <Button size="sm" rounded variant="secondary" disabled>
-              ❤️ לב נשלח
-            </Button>
-          ) : matched && relation ? (
-            <Button size="sm" rounded variant="secondary" onClick={() => onOpenChat(relation.connectionId)}>
-              💬 לצ&apos;אט
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              rounded
-              loading={applying === product.id}
-              onClick={() => onApply(product.id)}
-            >
-              {locked ? "🔒 " : "❤️ "}מעוניין/ת
-            </Button>
-          )}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function productMatchesCategory(p: Product, cat: string): boolean {
-  if (cat === ALL || cat === FOR_YOU) return true;
-  const cats = p.categories.length > 0 ? p.categories : [p.category];
-  return cats.some((c) => c === cat || c.startsWith(cat));
-}
-
-// Chip order: "for you", everything, the creator's own categories, then the rest
-function buildCategoryList(userCategories: string[]): string[] {
-  const mapped = userCategories
-    .map((c) => registrationToFeedMap[c] || c)
-    .filter((c) => allFeedCategories.includes(c));
-  const unique = [...new Set(mapped)];
-  const rest = allFeedCategories.filter((c) => !unique.includes(c));
-  return [FOR_YOU, ALL, ...unique, ...rest];
-}
-
 export default function FeedPage() {
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [view, setView] = useState<View>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [applying, setApplying] = useState<string | null>(null);
-  const [categories, setCategories] = useState<string[]>([FOR_YOU, ALL, ...allFeedCategories]);
   const [portfolioCount, setPortfolioCount] = useState<number | null>(null);
   const [userCategories, setUserCategories] = useState<string[]>([]);
   const [relations, setRelations] = useState<Record<string, Relation>>({});
   const [gateOpen, setGateOpen] = useState(false);
-  const [approving, setApproving] = useState<string | null>(null);
-  // The grid is painted only once products, the profile (categories → chip + ranking) and the creator's
-  // relations (hearts/matches → ranking, strip) are all in, so nothing reorders in front of the user
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [regionFilter, setRegionFilter] = useState<string[]>([]);
+  const [typeFilter, setTypeFilter] = useState<"" | "physical" | "digital">("");
+  const [index, setIndex] = useState(0);
+  const [currentId, setCurrentId] = useState<string | null>(null);
+  const [direction, setDirection] = useState<1 | -1>(1);
+  const [busy, setBusy] = useState<string | null>(null);
+  // The deck is painted only once products, the profile and the relations are all in
   const [profileReady, setProfileReady] = useState(false);
   const [relationsReady, setRelationsReady] = useState(false);
+  const dragging = useRef(false);
   const { user } = useAuth();
   const { toast } = useToast();
   const { unreadCount } = useNotifications();
@@ -279,11 +112,7 @@ export default function FeedPage() {
           return;
         }
         const profile = data.profile || {};
-        const userCats: string[] = profile.categories || (profile.category ? [profile.category] : []);
-        setUserCategories(userCats);
-        if (userCats.length > 0) {
-          setCategories(buildCategoryList(userCats));
-        }
+        setUserCategories(profile.categories || (profile.category ? [profile.category] : []));
         if (role === "creator") {
           setPortfolioCount(typeof profile.portfolio_count === "number" ? profile.portfolio_count : 0);
         }
@@ -305,11 +134,13 @@ export default function FeedPage() {
         brandUserId: (p.brand_user_id as string) || null,
         image: toDirectImageUrl((p.image_url as string) || null),
         category: (p.category as string) || "",
-        categories: Array.isArray(p.categories) ? (p.categories as string[]) : [],
+        categoryLabel: displayCategory(p.category, p.category_custom),
+        region: (p.brand_region as string) || "",
         value: Number(p.price) || 0,
         description: (p.description as string) || "",
-        requirements: (p.requirements as string) || "סרטון UGC",
+        productType: (p.product_type as string) || "physical",
         deadline: (p.film_deadline_days as number) || 10,
+        createdAt: (p.created_at as string) || "",
       }))
     );
     setLoading(false);
@@ -323,10 +154,25 @@ export default function FeedPage() {
     const map: Record<string, Relation> = {};
     for (const c of data.connections || []) {
       const status = c.status as string;
-      if (["cancelled", "rejected", "completed"].includes(status)) continue;
+      if (["cancelled", "rejected"].includes(status)) continue;
       const pid = c.product_id as string;
       if (!pid || map[pid]) continue;
-      map[pid] = { connectionId: c.id as string, status, initiatedBy: c.initiated_by === "brand" ? "brand" : "creator", mutualAt: (c.mutual_at as string) || null };
+      const prod = (c.products as Record<string, unknown> | null) || {};
+      const bp = (c.brand_profiles as Record<string, unknown> | null) || {};
+      map[pid] = {
+        connectionId: c.id as string,
+        status,
+        initiatedBy: c.initiated_by === "brand" ? "brand" : "creator",
+        mutualAt: (c.mutual_at as string) || null,
+        approvedAt: (c.approved_at as string) || null,
+        product: {
+          id: pid,
+          name: (prod.name as string) || "מוצר",
+          image: toDirectImageUrl((prod.image_url as string) || null),
+          value: Number(prod.price) || 0,
+          brand: (bp.shop_name as string) || "",
+        },
+      };
     }
     setRelations(map);
     setRelationsReady(true);
@@ -335,11 +181,16 @@ export default function FeedPage() {
   useEffect(() => {
     if (!user) return;
     swrFetch("/api/connections", applyRelations).then((fresh) => {
-      if (fresh === null) setRelationsReady(true); // offline / error: don't block the screen
+      if (fresh === null) setRelationsReady(true);
     });
+  }, [user, applyRelations]);
+
+  // Realtime: a brand answering updates the cards
+  useEffect(() => {
+    if (!user) return;
     const supabase = createClient();
     const channel = supabase
-      .channel("feed-connections")
+      .channel("feed-relations")
       .on("postgres_changes", { event: "*", schema: "public", table: "connections" }, () => {
         fetchJson<{ connections?: Record<string, unknown>[] }>("/api/connections").then((d) => d && applyRelations(d));
       })
@@ -349,180 +200,218 @@ export default function FeedPage() {
     };
   }, [user, applyRelations]);
 
-  // Realtime: refresh feed when products change
-  useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel("feed-products")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "products" },
-        () => {
-          fetchJson<{ products?: Record<string, unknown>[] }>("/api/products?status=active").then((data) => {
-            if (data) applyProducts(data);
-          });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [applyProducts]);
-
+  const ready = !loading && profileReady && (relationsReady || !user);
   const locked = portfolioCount !== null && portfolioCount < MIN_PORTFOLIO;
-  const ready = !loading && profileReady && (!user || relationsReady);
 
-  const handleApply = useCallback(
-    async (productId: string) => {
-      if (!user) {
-        router.push("/login?redirect=/feed");
-        return;
-      }
-      if (locked) {
-        setGateOpen(true);
-        return;
-      }
+  // Only categories and regions that actually have products are offered as filters
+  const availableCategories = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of products) counts.set(p.category || "כללי", (counts.get(p.category || "כללי") || 0) + 1);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }, [products]);
+  const availableRegions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of products) if (p.region) counts.set(p.region, (counts.get(p.region) || 0) + 1);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }, [products]);
+  const activeFilterCount = categoryFilter.length + regionFilter.length + (typeFilter ? 1 : 0);
 
-      setApplying(productId);
-      try {
-        const res = await fetch("/api/connections", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ product_id: productId }),
-        });
-        const data = await res.json().catch(() => ({}));
+  const ownFeedCategories = useMemo<string[]>(() => userCategories.map((c) => REGISTRATION_TO_FEED[c] || c), [userCategories]);
 
-        if (res.ok) {
-          const connectionId = data.connection?.id as string;
-          if (data.mutual) {
-            // The brand had already hearted: both sides agree, the brand confirms (and pays) next
-            toast("🎉 יש מאטץ'! העסק יאשר את החיבור ואז ייפתח הצ'אט", "success");
-            setRelations((prev) => ({ ...prev, [productId]: { connectionId, status: "pending", initiatedBy: "brand", mutualAt: new Date().toISOString() } }));
-          } else {
-            toast("❤️ הלב נשלח! נעדכן אותך כשהעסק יאשר", "success");
-            setRelations((prev) => ({ ...prev, [productId]: { connectionId, status: "pending", initiatedBy: "creator", mutualAt: null } }));
-          }
-        } else if (data.code === "portfolio_gate") {
-          setPortfolioCount(typeof data.count === "number" ? data.count : 0);
-          setGateOpen(true);
-        } else {
-          toast(data.error || "שגיאה בשליחת הלב", "error");
-        }
-      } catch {
-        toast("שגיאה בשליחת הלב", "error");
-      } finally {
-        setApplying(null);
-      }
-    },
-    [user, router, toast, locked]
-  );
-
-  const handleApprove = useCallback(
-    async (connectionId: string) => {
-      if (locked) {
-        setGateOpen(true);
-        return;
-      }
-      setApproving(connectionId);
-      try {
-        const res = await fetch(`/api/connections/${connectionId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "approved" }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok) {
-          // The creator's yes completes the pair; the chat opens once the brand confirms the connection
-          toast("🎉 יש מאטץ'! העסק יאשר את החיבור ואז ייפתח הצ'אט", "success");
-          setRelations((prev) => {
-            const next = { ...prev };
-            for (const pid of Object.keys(next)) {
-              if (next[pid].connectionId === connectionId) next[pid] = { ...next[pid], mutualAt: new Date().toISOString() };
-            }
-            return next;
-          });
-        } else if (data.code === "portfolio_gate") {
-          setPortfolioCount(typeof data.count === "number" ? data.count : 0);
-          setGateOpen(true);
-        } else {
-          toast(data.error || "שגיאה באישור", "error");
-        }
-      } catch {
-        toast("שגיאה באישור", "error");
-      } finally {
-        setApproving(null);
-      }
-    },
-    [locked, toast]
-  );
-
-  // Until the creator picks a chip: "for you" when there is something to match on (own categories or hearts/matches), else "all"
-  const effectiveCategory =
-    activeCategory ?? (userCategories.length > 0 || Object.keys(relations).length > 0 ? FOR_YOU : ALL);
-
-  // Products that match the creator's own categories float to the top; brand hearts first of all
-  const matchesUser = (p: Product) => userCategories.some((c) => productMatchesCategory(p, registrationToFeedMap[c] || c));
-
-  // Search matches the product name or the brand name, ignoring case and surrounding spaces
+  // The deck: products with no open relation, matching the filters; own categories first, then newest
   const query = searchQuery.trim().toLowerCase();
-  const filtered = products.filter((p) => {
-    if (effectiveCategory === FOR_YOU) {
-      if (!matchesUser(p) && !relations[p.id]) return false;
-    } else if (!productMatchesCategory(p, effectiveCategory)) {
-      return false;
+  const deck = useMemo(() => {
+    const fits = (p: Product) => ownFeedCategories.includes(p.category);
+    return products
+      .filter((p) => !relations[p.id] || relations[p.id].status === "completed")
+      .filter((p) => categoryFilter.length === 0 || categoryFilter.includes(p.category || "כללי"))
+      .filter((p) => regionFilter.length === 0 || regionFilter.includes(p.region))
+      .filter((p) => !typeFilter || p.productType === typeFilter)
+      .filter((p) => !query || p.name.toLowerCase().includes(query) || p.brand.toLowerCase().includes(query))
+      .sort((a, b) => Number(fits(b)) - Number(fits(a)) || b.createdAt.localeCompare(a.createdAt));
+  }, [products, relations, categoryFilter, regionFilter, typeFilter, query, ownFeedCategories]);
+
+  const picks = useMemo(
+    () => Object.values(relations).filter((r) => r.initiatedBy === "creator" || !!r.mutualAt || r.status !== "pending"),
+    [relations]
+  );
+  const brandHearts = Object.values(relations).filter((r) => r.status === "pending" && r.initiatedBy === "brand" && !r.mutualAt).length;
+
+  const currentIndex = (() => {
+    if (deck.length === 0) return 0;
+    const byId = currentId ? deck.findIndex((p) => p.id === currentId) : -1;
+    return byId >= 0 ? byId : Math.min(index, deck.length - 1);
+  })();
+  const current = deck[currentIndex];
+
+  function goTo(nextIndex: number, dir: 1 | -1) {
+    if (deck.length === 0) return;
+    const wrapped = ((nextIndex % deck.length) + deck.length) % deck.length;
+    setDirection(dir);
+    setIndex(wrapped);
+    setCurrentId(deck[wrapped]?.id ?? null);
+  }
+  const next = () => goTo(currentIndex + 1, 1);
+  const prev = () => goTo(currentIndex - 1, -1);
+  function onDragEnd(_: unknown, info: PanInfo) {
+    dragging.current = false;
+    if (info.offset.x < -SWIPE_THRESHOLD) next();
+    else if (info.offset.x > SWIPE_THRESHOLD) prev();
+  }
+  // After ❤️/✕ the card leaves the deck; stay on the same slot so the next product slides in
+  function keepSlot() {
+    setCurrentId(null);
+    setIndex(currentIndex);
+  }
+
+  // ❤️ — a heart on the product (needs the 5-video portfolio)
+  async function heart(product: Product) {
+    if (!user) {
+      router.push("/login?redirect=/feed");
+      return;
     }
-    if (query && !p.name.toLowerCase().includes(query) && !p.brand.toLowerCase().includes(query)) return false;
-    return true;
-  });
-  const rank = (p: Product) => {
-    const r = relations[p.id];
-    if (r?.status === "pending" && r.initiatedBy === "brand") return 3;
-    if (r && r.status !== "pending") return 2;
-    return matchesUser(p) ? 1 : 0;
-  };
-  const ordered = [...filtered].sort((a, b) => rank(b) - rank(a));
-  const brandHearts = Object.values(relations).filter((r) => r.status === "pending" && r.initiatedBy === "brand").length;
+    if (locked) {
+      setGateOpen(true);
+      return;
+    }
+    setBusy(product.id);
+    try {
+      const res = await fetch("/api/connections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product_id: product.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const connectionId = data.connection?.id as string;
+        toast(data.mutual ? "🎉 יש מאטץ'! העסק יאשר את החיבור ואז ייפתח הצ'אט" : "❤️ הלב נשלח! נעדכן אותך כשהעסק יאשר", "success");
+        setRelations((prev) => ({
+          ...prev,
+          [product.id]: {
+            connectionId,
+            status: "pending",
+            initiatedBy: data.mutual ? "brand" : "creator",
+            mutualAt: data.mutual ? new Date().toISOString() : null,
+            approvedAt: null,
+            product: { id: product.id, name: product.name, image: product.image, value: product.value, brand: product.brand },
+          },
+        }));
+        keepSlot();
+      } else if (data.code === "portfolio_gate") {
+        setPortfolioCount(typeof data.count === "number" ? data.count : 0);
+        setGateOpen(true);
+      } else {
+        toast(data.error || "שגיאה בשליחת הלב", "error");
+      }
+    } catch {
+      toast("שגיאה בשליחת הלב", "error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  // ✕ — not interested: the product never comes back
+  async function pass(product: Product) {
+    if (!user) {
+      router.push("/login?redirect=/feed");
+      return;
+    }
+    setBusy(product.id);
+    try {
+      const res = await fetch("/api/products/pass", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product_id: product.id }),
+      });
+      if (res.ok) {
+        setProducts((prev) => prev.filter((p) => p.id !== product.id));
+        keepSlot();
+      } else {
+        toast("לא הצלחנו לשמור את הדילוג", "error");
+      }
+    } catch {
+      toast("לא הצלחנו לשמור את הדילוג", "error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function resetPasses() {
+    const res = await fetch("/api/products/pass", { method: "DELETE" });
+    if (res.ok) {
+      toast("המוצרים שדילגת עליהם חזרו", "success");
+      const d = await fetchJson<{ products?: Record<string, unknown>[] }>("/api/products?status=active");
+      if (d) applyProducts(d);
+      setIndex(0);
+      setCurrentId(null);
+    } else {
+      toast("שגיאה באיפוס", "error");
+    }
+  }
+
+  // Withdraw a heart the brand has not answered yet
+  async function cancelHeart(r: Relation) {
+    setBusy(r.connectionId);
+    try {
+      const res = await fetch(`/api/connections/${r.connectionId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelled" }),
+      });
+      if (res.ok) {
+        toast("הלב בוטל", "info");
+        setRelations((prev) => {
+          const next = { ...prev };
+          delete next[r.product.id];
+          return next;
+        });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast((data as { error?: string }).error || "שגיאה בביטול", "error");
+      }
+    } catch {
+      toast("שגיאה בביטול", "error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const toggleIn = (list: string[], value: string) => (list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
 
   return (
-    <main className="min-h-screen bg-background pb-20">
+    <main className="min-h-screen bg-background pb-24">
       {/* Header */}
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-neutral-100">
         <div className="max-w-2xl mx-auto px-4 py-3">
-          <div className="flex items-center gap-3 mb-3">
+          <div className="flex items-center gap-2 mb-3">
             <div className="flex-1 relative">
               <input
                 type="text"
                 placeholder="חיפוש מוצרים..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => { setSearchQuery(e.target.value); setIndex(0); setCurrentId(null); }}
                 className="w-full pl-4 pr-10 py-2.5 rounded-xl bg-neutral-50 border border-neutral-100 text-sm outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-500/10 transition-all"
               />
-              <svg
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
+              <svg className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="11" cy="11" r="8" />
                 <path d="M21 21l-4.35-4.35" />
               </svg>
             </div>
-            <Link
-              href="/notifications"
-              className="relative p-2.5 rounded-xl bg-neutral-50 border border-neutral-100 text-neutral-500 hover:bg-neutral-100 transition-colors"
+            <button
+              type="button"
+              onClick={() => setFiltersOpen(true)}
+              aria-label="סינון"
+              className={`relative p-2.5 rounded-xl border text-sm transition-colors ${activeFilterCount > 0 ? "bg-pink-50 border-pink-200 text-pink-600" : "bg-neutral-50 border-neutral-100 text-neutral-500 hover:bg-neutral-100"}`}
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+              </svg>
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-pink-500 text-white text-[10px] flex items-center justify-center font-bold ring-2 ring-white">{activeFilterCount}</span>
+              )}
+            </button>
+            <Link href="/notifications" className="relative p-2.5 rounded-xl bg-neutral-50 border border-neutral-100 text-neutral-500 hover:bg-neutral-100 transition-colors" aria-label="התראות">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                 <path d="M13.73 21a2 2 0 0 1-3.46 0" />
               </svg>
@@ -534,26 +423,25 @@ export default function FeedPage() {
             </Link>
           </div>
 
-          {/* Categories */}
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            {categories.map((cat) => (
+          <div className="flex gap-2">
+            {([
+              { id: "all", label: "כל המוצרים" },
+              { id: "mine", label: `❤️ המוצרים שבחרתי${picks.length > 0 ? ` (${picks.length})` : ""}` },
+            ] as { id: View; label: string }[]).map((v) => (
               <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
+                key={v.id}
+                onClick={() => setView(v.id)}
                 className={`whitespace-nowrap px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  effectiveCategory === cat
-                    ? "bg-pink-500 text-white"
-                    : "bg-neutral-50 text-neutral-600 hover:bg-neutral-100"
+                  view === v.id ? "bg-pink-500 text-white" : "bg-neutral-50 text-neutral-600 hover:bg-neutral-100"
                 }`}
               >
-                {cat}
+                {v.label}
               </button>
             ))}
           </div>
         </div>
       </header>
 
-      {/* Product grid */}
       <div className="max-w-2xl mx-auto px-4 py-4">
         {ready && brandHearts > 0 && (
           <button
@@ -564,7 +452,7 @@ export default function FeedPage() {
             <span className="text-2xl">💗</span>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold">{brandHearts === 1 ? "עסק אחד מתעניין בך!" : `${brandHearts} עסקים מתעניינים בך!`}</p>
-              <p className="text-xs text-white/90">{locked ? "השלימו 5 סרטונים בתיק כדי לאשר" : "אשרו כדי לפתוח צ'אט ולקבל את המוצר"}</p>
+              <p className="text-xs text-white/90">{locked ? "השלימו 5 סרטונים בתיק כדי לאשר" : "אשרו בחיבורים ← העסק יאשר סופית ויפתח צ'אט"}</p>
             </div>
             <span className="text-sm font-medium">לצפייה ›</span>
           </button>
@@ -583,77 +471,244 @@ export default function FeedPage() {
             <span className="text-amber-600 text-sm font-medium">להעלאה ›</span>
           </button>
         )}
+
         {!ready ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {[1, 2, 3, 4].map((i) => (
-              <ProductSkeleton key={i} />
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <AnimatePresence mode="popLayout">
-              {ordered.map((product) => (
+          <FeedSkeleton />
+        ) : view === "mine" ? (
+          picks.length === 0 ? (
+            <div className="text-center py-20 text-neutral-400">
+              <span className="text-4xl block mb-4">❤️</span>
+              <p>עדיין לא סימנת לב לאף מוצר</p>
+              <p className="text-xs mt-1">לב מהקרוסלה יופיע כאן</p>
+              <Button variant="secondary" size="sm" rounded className="mt-4" onClick={() => setView("all")}>לכל המוצרים</Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {picks.map((r) => {
+                const label = relationLabel(r);
+                const canCancel = r.status === "pending" && r.initiatedBy === "creator" && !r.mutualAt;
+                return (
+                  <div key={r.connectionId} className="relative rounded-2xl overflow-hidden bg-white border border-neutral-100 shadow-sm">
+                    <button type="button" onClick={() => router.push(`/products/${r.product.id}`)} className="block w-full text-right">
+                      {r.product.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={r.product.image} alt={r.product.name} loading="lazy" className="w-full aspect-square object-cover" />
+                      ) : (
+                        <div className={`w-full aspect-square bg-gradient-to-br ${placeholderFor(r.product.id)} flex items-center justify-center`}>
+                          <span className="text-4xl opacity-50">📦</span>
+                        </div>
+                      )}
+                      <div className="p-2.5">
+                        <p className="text-sm font-bold truncate">{r.product.name}</p>
+                        <p className="text-xs text-neutral-500 truncate">{r.product.brand} · ₪{r.product.value}</p>
+                        <span className={`inline-block mt-1.5 text-[10px] font-bold text-white px-2 py-0.5 rounded-full ${label.tone}`}>{label.text}</span>
+                      </div>
+                    </button>
+                    {/* Lit heart = a product you already chose */}
+                    <span className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 shadow flex items-center justify-center text-base" aria-label="סימנת לב">❤️</span>
+                    {canCancel && (
+                      <button
+                        type="button"
+                        onClick={() => cancelHeart(r)}
+                        disabled={busy === r.connectionId}
+                        className="absolute top-2 left-2 px-2 py-1 rounded-full bg-white/90 text-[10px] text-neutral-500 shadow hover:text-red-500 disabled:opacity-50"
+                      >
+                        ביטול הלב
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )
+        ) : current ? (
+          <>
+            <div className="relative">
+              <AnimatePresence mode="wait" initial={false} custom={direction}>
                 <motion.div
-                  key={product.id}
-                  layout
-                  className="h-full"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.2 }}
+                  key={current.id}
+                  custom={direction}
+                  initial={{ opacity: 0, x: direction * -60 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: direction * 60 }}
+                  transition={{ duration: 0.18 }}
+                  drag="x"
+                  dragConstraints={{ left: 0, right: 0 }}
+                  dragElastic={0.6}
+                  onDragStart={() => { dragging.current = true; }}
+                  onDragEnd={onDragEnd}
+                  className="relative rounded-3xl overflow-hidden bg-white shadow-xl border border-neutral-100 touch-pan-y select-none"
                 >
-                  <ProductCard
-                    product={product}
-                    relation={relations[product.id]}
-                    locked={locked}
-                    onApply={handleApply}
-                    onApprove={handleApprove}
-                    onOpenChat={(id) => router.push(`/messages?connection=${id}`)}
-                    onOpen={(id) => router.push(`/products/${id}`)}
-                    applying={applying}
-                    approving={approving}
-                  />
+                  <button type="button" onClick={() => { if (!dragging.current) router.push(`/products/${current.id}`); }} className="block w-full text-right">
+                    {current.image ? (
+                      <div className="h-72 bg-neutral-50">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={current.image} alt={current.name} className="w-full h-full object-cover pointer-events-none" />
+                      </div>
+                    ) : (
+                      <div className={`h-72 bg-gradient-to-br ${placeholderFor(current.id)} flex items-center justify-center`}>
+                        <span className="text-6xl opacity-50">📦</span>
+                      </div>
+                    )}
+                  </button>
+                  <div className="absolute top-3 right-3 flex flex-wrap gap-1.5">
+                    {ownFeedCategories.includes(current.category) && (
+                      <span className="bg-white/90 text-pink-600 text-xs font-bold px-2.5 py-1 rounded-full">✨ מתאים לך</span>
+                    )}
+                    {current.categoryLabel && <span className="bg-black/50 text-white text-xs px-2.5 py-1 rounded-full">{current.categoryLabel}</span>}
+                    {current.region && <span className="bg-black/50 text-white text-xs px-2.5 py-1 rounded-full">📍 {current.region}</span>}
+                  </div>
+                  <div className="p-4 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h2 className="text-lg font-bold text-neutral-900 truncate">{current.name}</h2>
+                        <button type="button" onClick={() => router.push(`/products/${current.id}`)} className="flex items-center gap-2 mt-1 text-sm text-neutral-500">
+                          <Avatar src={current.brandAvatar} name={current.brand} size="sm" />
+                          <span className="truncate">{current.brand}</span>
+                        </button>
+                      </div>
+                      <Badge variant="pink" size="lg">₪{current.value}</Badge>
+                    </div>
+                    {locked ? (
+                      <p className="text-sm text-neutral-400">🔒 {MIN_PORTFOLIO} סרטונים בתיק פותחים את פרטי המוצר והבריף</p>
+                    ) : (
+                      <p className="text-sm text-neutral-600 line-clamp-3 min-h-[3.75rem]">{current.description || "העסק לא הוסיף תיאור — הפרטים והבריף בדף המוצר"}</p>
+                    )}
+                    <p className="text-xs text-neutral-400">
+                      {current.productType === "digital" ? "📱 מוצר דיגיטלי" : "📦 מוצר פיזי"} · ⏱ {current.deadline} ימים לצילום
+                    </p>
+                  </div>
                 </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
-        )}
-        {ready && ordered.length === 0 && (
-          <div className="text-center py-20 text-neutral-400">
-            <span className="text-4xl block mb-4">🔍</span>
-            {query ? (
-              // A search with no hits is a search problem, not a category one (QA 13)
-              <>
-                <p>לא נמצאו מוצרים עבור ״{searchQuery.trim()}״</p>
-                <p className="text-xs mt-1">
-                  {effectiveCategory === FOR_YOU || effectiveCategory === ALL
-                    ? "נסו שם מוצר או שם עסק אחר"
-                    : `החיפוש מוגבל לקטגוריה ״${effectiveCategory}״ — נסו גם ב״הכל״`}
-                </p>
-                <div className="flex justify-center gap-2 mt-4">
-                  <Button variant="secondary" size="sm" rounded onClick={() => setSearchQuery("")}>
-                    ניקוי החיפוש
-                  </Button>
-                  {effectiveCategory !== ALL && (
-                    <Button variant="ghost" size="sm" rounded onClick={() => setActiveCategory(ALL)}>
-                      חיפוש בכל המוצרים
-                    </Button>
-                  )}
-                </div>
-              </>
-            ) : effectiveCategory === FOR_YOU ? (
-              <>
-                <p>אין כרגע מוצרים בקטגוריות שלך</p>
-                <Button variant="secondary" size="sm" rounded className="mt-4" onClick={() => setActiveCategory(ALL)}>
-                  הצגת כל המוצרים
+              </AnimatePresence>
+              {deck.length > 1 && (
+                <>
+                  <button type="button" onClick={prev} aria-label="הקודם" className="absolute right-1 top-28 w-9 h-9 rounded-full bg-white/85 text-neutral-700 shadow flex items-center justify-center text-lg hover:bg-white">›</button>
+                  <button type="button" onClick={next} aria-label="הבא" className="absolute left-1 top-28 w-9 h-9 rounded-full bg-white/85 text-neutral-700 shadow flex items-center justify-center text-lg hover:bg-white">‹</button>
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center justify-center gap-5 mt-4">
+              <button
+                type="button"
+                onClick={() => pass(current)}
+                disabled={busy === current.id}
+                aria-label="לא מעוניין/ת"
+                title="לא מעוניין/ת — המוצר לא יוצג שוב"
+                className="w-14 h-14 rounded-full bg-white border border-neutral-200 shadow-md flex items-center justify-center text-2xl text-neutral-500 hover:bg-neutral-50 active:scale-95 transition-all disabled:opacity-40"
+              >
+                ✕
+              </button>
+              <button
+                type="button"
+                onClick={() => heart(current)}
+                disabled={busy === current.id}
+                aria-label="מעוניין/ת"
+                className="w-20 h-20 rounded-full shadow-lg flex items-center justify-center text-4xl active:scale-95 transition-all ig-gradient-bg text-white disabled:opacity-60"
+              >
+                {locked ? "🔒" : "❤️"}
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push(`/products/${current.id}`)}
+                aria-label="פרטים"
+                className="w-14 h-14 rounded-full bg-white border border-neutral-200 shadow-md flex items-center justify-center text-xs font-bold text-neutral-600 hover:bg-neutral-50 active:scale-95 transition-all"
+              >
+                פרטים
+              </button>
+            </div>
+            <p className="text-center text-[11px] text-neutral-400 mt-2">
+              החליקו כדי לדפדף · ❤️ מעוניין/ת · ✕ לא מעוניין/ת · {currentIndex + 1}/{deck.length}
+            </p>
+          </>
+        ) : (
+          <div className="text-center py-16 text-neutral-400 bg-white rounded-3xl border border-neutral-100">
+            <span className="text-4xl block mb-3">🎉</span>
+            <p className="font-medium text-neutral-600">{activeFilterCount > 0 || query ? "אין מוצרים שמתאימים לסינון" : "עברת על כל המוצרים"}</p>
+            <p className="text-xs mt-1">{activeFilterCount > 0 || query ? "נסו סינון אחר" : "מוצרים חדשים מצטרפים כל הזמן — חזרו מחר"}</p>
+            <div className="flex justify-center gap-2 mt-4">
+              {(activeFilterCount > 0 || query) && (
+                <Button size="sm" variant="secondary" onClick={() => { setCategoryFilter([]); setRegionFilter([]); setTypeFilter(""); setSearchQuery(""); }}>
+                  ניקוי הסינון
                 </Button>
-              </>
-            ) : (
-              <p>לא נמצאו מוצרים בקטגוריה זו</p>
-            )}
+              )}
+              {user && <Button size="sm" variant="ghost" onClick={resetPasses}>להחזיר מוצרים שדילגת עליהם</Button>}
+            </div>
           </div>
         )}
       </div>
+
+      {/* Full filter: categories and regions that have products, product type */}
+      <Modal open={filtersOpen} onClose={() => setFiltersOpen(false)} title="סינון" size="md">
+        <div className="space-y-5">
+          <div>
+            <p className="text-sm font-bold text-neutral-900 mb-2">קטגוריות</p>
+            <div className="flex flex-wrap gap-2">
+              {availableCategories.map(([cat, count]) => {
+                const active = categoryFilter.includes(cat);
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setCategoryFilter((prev) => toggleIn(prev, cat))}
+                    className={`px-3 py-1.5 rounded-full text-sm border transition-all ${active ? "bg-pink-500 border-pink-500 text-white" : "bg-neutral-50 border-neutral-200 text-neutral-600"}`}
+                  >
+                    {cat} <span className={active ? "text-white/80" : "text-neutral-400"}>({count})</span>
+                  </button>
+                );
+              })}
+              {availableCategories.length === 0 && <p className="text-xs text-neutral-400">אין מוצרים כרגע</p>}
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-bold text-neutral-900 mb-2">אזור בארץ</p>
+            {availableRegions.length === 0 ? (
+              <p className="text-xs text-neutral-400">העסקים עדיין לא ציינו אזור</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {availableRegions.map(([region, count]) => {
+                  const active = regionFilter.includes(region);
+                  return (
+                    <button
+                      key={region}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => setRegionFilter((prev) => toggleIn(prev, region))}
+                      className={`px-3 py-1.5 rounded-full text-sm border transition-all ${active ? "bg-pink-500 border-pink-500 text-white" : "bg-neutral-50 border-neutral-200 text-neutral-600"}`}
+                    >
+                      📍 {region} <span className={active ? "text-white/80" : "text-neutral-400"}>({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <div>
+            <p className="text-sm font-bold text-neutral-900 mb-2">סוג מוצר</p>
+            <div className="flex gap-2">
+              {([
+                { id: "", label: "הכל" },
+                { id: "physical", label: "📦 פיזי" },
+                { id: "digital", label: "📱 דיגיטלי" },
+              ] as { id: "" | "physical" | "digital"; label: string }[]).map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTypeFilter(t.id)}
+                  className={`flex-1 py-2 rounded-xl text-sm border transition-all ${typeFilter === t.id ? "bg-pink-50 border-pink-300 text-pink-600" : "bg-neutral-50 border-neutral-200 text-neutral-600"}`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button fullWidth onClick={() => { setFiltersOpen(false); setIndex(0); setCurrentId(null); }}>הצגת {deck.length} מוצרים</Button>
+            <Button variant="ghost" onClick={() => { setCategoryFilter([]); setRegionFilter([]); setTypeFilter(""); }}>ניקוי</Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal open={gateOpen} onClose={() => setGateOpen(false)} size="sm">
         <div className="text-center space-y-4">

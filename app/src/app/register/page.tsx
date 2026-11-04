@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/components/ui";
 import { clearCache } from "@/lib/client-cache";
 import { refreshAuth } from "@/hooks/use-auth";
+import { ISRAEL_REGIONS } from "@/lib/regions";
 
 type UserType = "creator" | "brand" | null;
 
@@ -439,6 +440,7 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
     shopName: "",
     category: "",
     websiteUrl: "",
+    region: "",
   });
   const router = useRouter();
   const { toast } = useToast();
@@ -615,6 +617,23 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
                 )}
               </div>
             </div>
+            <div>
+              <label className="block text-sm text-neutral-500 mb-2">אזור בארץ (אופציונלי — יוצרים מסננים לפי אזור)</label>
+              <div className="flex flex-wrap gap-2">
+                {ISRAEL_REGIONS.map((region) => (
+                  <button
+                    key={region}
+                    type="button"
+                    onClick={() => updateForm("region", form.region === region ? "" : region)}
+                    className={`px-3 py-1.5 rounded-full border text-sm transition-all ${
+                      form.region === region ? "bg-pink-500 text-white border-pink-500" : "border-neutral-200 hover:border-pink-500 hover:bg-pink-50"
+                    }`}
+                  >
+                    📍 {region}
+                  </button>
+                ))}
+              </div>
+            </div>
             <input
               type="url"
               dir="ltr"
@@ -654,6 +673,12 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
               <div className="flex justify-between py-2 border-b border-neutral-50">
                 <span className="text-neutral-500">קטגוריה</span>
                 <span className="font-medium">{form.category}</span>
+              </div>
+            )}
+            {form.region && (
+              <div className="flex justify-between py-2 border-b border-neutral-50">
+                <span className="text-neutral-500">אזור</span>
+                <span className="font-medium">{form.region}</span>
               </div>
             )}
             {form.websiteUrl && (

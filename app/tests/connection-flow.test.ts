@@ -13,7 +13,7 @@ import {
   flowNextAction,
 } from "../src/lib/connection-flow.ts";
 import { mapMatchError } from "../src/lib/match-errors.ts";
-import { buildBriefMessage, sanitizeBriefData, briefDataLines, hasBriefContent } from "../src/lib/brief.ts";
+import { buildBriefMessage, sanitizeBriefData, briefDataLines, hasBriefContent, sectionValue, definesFormat, BRIEF_SECTIONS } from "../src/lib/brief.ts";
 import { pickProductUpdates, toPublicProduct } from "../src/lib/authz.ts";
 
 describe("chat lifecycle", () => {
@@ -143,47 +143,56 @@ describe("hearts, mutual hearts and the brand's lists (2026-11-04)", () => {
   });
 });
 
-describe("structured brief (migration 015)", () => {
-  test("only known sections and options survive; empty input clears", () => {
+describe("structured brief (the owner's template, 2026-11-04)", () => {
+  test("only known sections and options survive; text sections are trimmed; empty input clears", () => {
     const data = sanitizeBriefData({
-      types: ["אנבוקסינג", "לא קיים", 7],
-      length: ["30–60 שנ'"],
+      see: ["אנבוקסינג", "לא קיים", 7],
+      length: ["עד 30 שניות"],
       bogus: ["x"],
-      messages: "  להגיד שהמוצר ללא סוכר  ",
+      say: "  מתחילה מהבעיה  ",
+      types: ["אנבוקסינג"],
     });
-    assert.deepEqual(data, { types: ["אנבוקסינג"], length: ["30–60 שנ'"], messages: "להגיד שהמוצר ללא סוכר" });
-    assert.equal(sanitizeBriefData({ types: [], messages: "   " }), null);
+    assert.deepEqual(data, { see: ["אנבוקסינג"], say: "מתחילה מהבעיה", length: ["עד 30 שניות"] });
+    assert.equal(sanitizeBriefData({ see: [], say: "   " }), null);
     assert.equal(sanitizeBriefData("text"), null);
     assert.equal(sanitizeBriefData(null), null);
+    assert.equal(
+      BRIEF_SECTIONS.map((s) => s.title).join(" · "),
+      "מה רואים · מה היא תגיד · אורך · שוטים שחייבים · כתוביות · כללי צילום · מה אסור"
+    );
   });
 
-  test("renders one line per section plus the key messages", () => {
-    const lines = briefDataLines({ types: ["אנבוקסינג", "שימוש / הדגמה"], platforms: ["TikTok"], messages: "בלי סוכר" });
-    assert.deepEqual(lines, ["סוג הסרטון: אנבוקסינג, שימוש / הדגמה", "פלטפורמת יעד: TikTok", "מסרים מרכזיים:", "בלי סוכר"]);
+  test("renders one line per section, then 'עוד משהו' from the notes", () => {
+    const lines = briefDataLines({ see: ["אנבוקסינג", "שימוש / הדגמה"], say: "בלי סוכר", shots: ["המוצר מקרוב"] }, " בלי מוזיקה ");
+    assert.deepEqual(lines, ["מה רואים: אנבוקסינג, שימוש / הדגמה", "מה היא תגיד: בלי סוכר", "שוטים שחייבים: המוצר מקרוב", "עוד משהו: בלי מוזיקה"]);
     assert.equal(hasBriefContent(null, ""), false);
     assert.equal(hasBriefContent(null, "הערה"), true);
-    assert.equal(hasBriefContent({ types: ["אנבוקסינג"] }, null), true);
+    assert.equal(hasBriefContent({ see: ["אנבוקסינג"] }, null), true);
+    assert.equal(sectionValue({ say: "  " }, "say"), null);
+    assert.deepEqual(sectionValue({ see: ["אנבוקסינג"] }, "see"), ["אנבוקסינג"]);
   });
 
-  test("the chat message carries the structured brief and the notes; a chosen format replaces the default line", () => {
+  test("the plain-text brief carries the sections and the notes; a chosen format replaces the default line", () => {
     const text = buildBriefMessage({
       name: "סרום",
       price: 120,
       product_type: "physical",
       brief: "בלי מוזיקה",
-      brief_data: { types: ["אנבוקסינג"], length: ["60–90 שנ'"] },
+      brief_data: { see: ["אנבוקסינג"], length: ["עד 90 שניות"] },
     });
-    assert.match(text, /סוג הסרטון: אנבוקסינג/);
-    assert.match(text, /אורך הסרטון: 60–90 שנ'/);
-    assert.match(text, /הערות מהעסק:\nבלי מוזיקה/);
+    assert.match(text, /מה רואים: אנבוקסינג/);
+    assert.match(text, /אורך: עד 90 שניות/);
+    assert.match(text, /עוד משהו: בלי מוזיקה/);
     assert.doesNotMatch(text, /פורמט: וידאו 15–45/);
     assert.match(text, /זכויות שימוש/);
+    assert.equal(definesFormat({ shots: ["המוצר מקרוב"] }), false);
+    assert.equal(definesFormat({ captions: ["בלי כתוביות"] }), true);
     // no picks at all → the old template
-    assert.match(buildBriefMessage({ name: "x", brief_data: { types: [] } }), /(העסק ישלים)/);
+    assert.match(buildBriefMessage({ name: "x", brief_data: { see: [] } }), /(העסק ישלים)/);
   });
 
   test("brands edit brief_data and a custom category through the allowlist", () => {
-    assert.deepEqual(pickProductUpdates({ brief_data: { types: ["אנבוקסינג"], junk: 1 } }), { brief_data: { types: ["אנבוקסינג"] } });
+    assert.deepEqual(pickProductUpdates({ brief_data: { see: ["אנבוקסינג"], junk: 1 } }), { brief_data: { see: ["אנבוקסינג"] } });
     assert.deepEqual(pickProductUpdates({ brief_data: null }), { brief_data: null });
     assert.deepEqual(pickProductUpdates({ brief_data: "text" }), {});
     assert.deepEqual(pickProductUpdates({ category_custom: "  מוצרי   טבע  " }), { category_custom: "מוצרי טבע" });

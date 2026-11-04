@@ -6,6 +6,7 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { isOwnConnectionVideoPath, isImagePath, canUploadConnectionVideo } from "@/lib/authz";
 import { notifyConnectionStatusChange, logActivity } from "@/lib/notifications";
 import { getTimelineSettings } from "@/lib/settings";
+import { FINAL_REVIEW_HOURS } from "@/lib/chat";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
     const { data: connection } = await supabase
       .from("connections")
       .select(`
-        id, status, filmed_at, product_id,
+        id, status, filmed_at, product_id, revision_count,
         products(name),
         creator_profiles!connections_creator_id_fkey(user_id, users(id, full_name)),
         brand_profiles!connections_brand_id_fkey(user_id, shop_name, users(id, full_name))
@@ -110,20 +111,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "שגיאה בשמירת הסרטון" }, { status: 500 });
     }
 
-    // The brand's review clock starts now (auto-approve after review_days, see cron)
+    // The brand's review clock starts now: review_days for the first upload (auto-approve after the grace
+    // period, see cron); the revised upload is final and closes after 24 h without an answer
     const timelines = await getTimelineSettings(supabase);
     const nowMs = Date.now();
+    const round = (conn.revision_count || 0) + 1;
+    const finalRound = (conn.revision_count || 0) >= timelines.max_revisions;
+    const reviewDeadline = finalRound
+      ? new Date(nowMs + FINAL_REVIEW_HOURS * 3600000).toISOString()
+      : new Date(nowMs + timelines.review_days * 86400000).toISOString();
     const { error: updateError } = await supabase
       .from("connections")
       .update({
         status: "uploaded",
         filmed_at: conn.filmed_at || new Date(nowMs).toISOString(),
-        review_deadline: new Date(nowMs + timelines.review_days * 86400000).toISOString(),
+        review_deadline: reviewDeadline,
       } as any)
       .eq("id", connectionId);
     if (updateError) {
       console.error("[videos] connection status error:", updateError);
     }
+
+    // The deliverable shows in the chat as a card (fresh URLs are attached when the chat loads)
+    await supabase.from("messages").insert({
+      connection_id: connectionId,
+      sender_id: (dbUser as any).id,
+      text: round > 1 ? "🎬 הגרסה המתוקנת הועלתה" : "🎬 הסרטון הועלה",
+      is_system: false,
+      kind: "video",
+      data: { video_id: (video as any)?.id, round, final: finalRound },
+    } as any);
 
     const creatorUser = conn.creator_profiles?.users;
     const brandUser = conn.brand_profiles?.users;

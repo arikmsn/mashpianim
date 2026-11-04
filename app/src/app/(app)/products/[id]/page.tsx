@@ -236,7 +236,7 @@ export default function ProductPage() {
   const deadlineField = conn ? activeDeadlineField(conn.status) : null;
   const deadline = conn && deadlineField ? conn[deadlineField] : null;
   const full = !!product && product.spots_left !== null && product.spots_left <= 0 && !open;
-  const briefLines = product ? briefDataLines(product.brief_data) : [];
+  const briefLines = product ? briefDataLines(product.brief_data, product.brief) : [];
   const chat = conn && hasChatHistory({ status: conn.status, approved_at: conn.approved_at });
 
   return (
@@ -455,15 +455,14 @@ export default function ProductPage() {
               <div className="space-y-3">
                 {hasBriefContent(product.brief_data, product.brief) ? (
                   <div className="text-sm text-neutral-700 space-y-1">
-                    {briefLines.map((line, i) => (
-                      <p key={i} className={line.endsWith(":") ? "font-medium text-neutral-900 mt-1" : "whitespace-pre-line"}>{line}</p>
-                    ))}
-                    {product.brief && (
-                      <>
-                        {briefLines.length > 0 && <p className="font-medium text-neutral-900 mt-1">הערות מהעסק:</p>}
-                        <p className="whitespace-pre-line">{product.brief}</p>
-                      </>
-                    )}
+                    {briefLines.map((line, i) => {
+                      const sep = line.indexOf(": ");
+                      return (
+                        <p key={i} className="whitespace-pre-line">
+                          {sep > 0 ? <><span className="font-medium text-neutral-900">{line.slice(0, sep)}:</span> {line.slice(sep + 2)}</> : line}
+                        </p>
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-sm text-neutral-500">העסק עדיין לא כתב בריף מפורט למוצר. הדגשים ייסגרו בצ&apos;אט אחרי המאטץ&apos;.</p>
