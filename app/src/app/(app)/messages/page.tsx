@@ -739,6 +739,7 @@ function MessagesContent() {
                 deliveryType={connection.deliveryType || connection.productType}
                 deadline={connection.deadline}
                 compact
+                showNext={false}
               />
               {nextAction?.text && (
                 <p className={`text-[11px] mt-1.5 ${nextAction.mine ? "text-pink-600 font-medium" : "text-neutral-500"}`}>
@@ -865,7 +866,7 @@ function MessagesContent() {
                             : `${event ? "bg-pink-50 border border-pink-100 text-neutral-800" : "bg-neutral-100 text-neutral-800"} rounded-bl-md`
                         }`}
                       >
-                        <span className="whitespace-pre-wrap break-words">{event && !msg.text.startsWith("✏️") && !msg.text.startsWith("📦") && !msg.text.startsWith("📲") ? "✓ " : ""}{msg.text}</span>
+                        <span className="whitespace-pre-wrap break-words">{event ? (msg.text.startsWith(CHAT_EVENT_TEXTS.revisionPrefix.trim()) ? "✏️ " : "✓ ") : ""}{msg.text}</span>
                         <span
                           className={`block text-[10px] leading-none mt-1.5 text-left ${isMe ? "text-pink-100" : "text-neutral-400"}`}
                           dir="ltr"

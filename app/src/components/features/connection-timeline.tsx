@@ -12,6 +12,8 @@ interface ConnectionTimelineProps {
   // ISO date of the deadline that applies to the current step, if any
   deadline?: string | null;
   compact?: boolean;
+  // The chat renders its own next-step line (it knows about the brief approval), so it hides this one
+  showNext?: boolean;
 }
 
 function formatDate(iso: string) {
@@ -19,7 +21,7 @@ function formatDate(iso: string) {
 }
 
 // Five milestones with the current one highlighted, plus a one-line "what's next" for this side
-export function ConnectionTimeline({ status, role, initiatedBy, deliveryType, mutual, deadline, compact = false }: ConnectionTimelineProps) {
+export function ConnectionTimeline({ status, role, initiatedBy, deliveryType, mutual, deadline, compact = false, showNext = true }: ConnectionTimelineProps) {
   const reached = flowStepIndex(status);
   const closedEarly = status === "cancelled" || status === "rejected";
   const revision = status === "revision_requested";
@@ -64,7 +66,7 @@ export function ConnectionTimeline({ status, role, initiatedBy, deliveryType, mu
           );
         })}
       </ol>
-      {next.text && (
+      {showNext && next.text && (
         <p className={`${compact ? "text-xs" : "text-sm"} ${next.mine ? "text-pink-600 font-medium" : "text-neutral-500"}`}>
           {next.mine ? "👉 " : ""}
           {next.text}
