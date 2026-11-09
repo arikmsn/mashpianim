@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, after, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { resolveViewer } from "@/lib/viewer";
@@ -85,16 +85,23 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "שגיאה בשליחת הבריף" }, { status: 500 });
     }
     await admin.from("connections").update({ brief_posted_at: now, brief_approved_at: null } as any).eq("id", id);
-    if (creatorUser) {
-      await createNotification({
-        userId: creatorUser.id,
-        type: snapshot.version > 1 ? "brief_updated" : "brief_posted",
-        title: snapshot.version > 1 ? "📋 הבריף עודכן" : "📋 הבריף לסרטון הגיע",
-        body: `${conn.products?.brand_profiles?.shop_name || "העסק"} ${snapshot.version > 1 ? "עדכנו את הבריף" : "שלחו את הבריף"} ל"${productName}". קראי ואשרי אותו בצ'אט.`,
-        data: notificationData(id, conn.product_id, "creator"),
-      });
-    }
-    await logActivity({ actorId: viewer.userId, action: "brief_posted", entityType: "connection", entityId: id, details: { version: snapshot.version } });
+    // Notification + activity log after the response (the brand waits only for the card itself)
+    after(async () => {
+      try {
+        if (creatorUser) {
+          await createNotification({
+            userId: creatorUser.id,
+            type: snapshot.version > 1 ? "brief_updated" : "brief_posted",
+            title: snapshot.version > 1 ? "📋 הבריף עודכן" : "📋 הבריף לסרטון הגיע",
+            body: `${conn.products?.brand_profiles?.shop_name || "העסק"} ${snapshot.version > 1 ? "עדכנו את הבריף" : "שלחו את הבריף"} ל"${productName}". קראי ואשרי אותו בצ'אט.`,
+            data: notificationData(id, conn.product_id, "creator"),
+          });
+        }
+        await logActivity({ actorId: viewer.userId, action: "brief_posted", entityType: "connection", entityId: id, details: { version: snapshot.version } });
+      } catch (err) {
+        console.error("[brief] post-response notifications failed:", err);
+      }
+    });
     return NextResponse.json({ success: true, message, version: snapshot.version });
   }
 
@@ -120,15 +127,22 @@ export async function POST(request: NextRequest, context: RouteContext) {
     .insert({ connection_id: id, sender_id: creatorUserId || viewer.userId, text: CHAT_EVENT_TEXTS.briefApproved, is_system: false, kind: "event", data: { event: "brief_approved" } } as any)
     .select()
     .single();
-  if (brandUser) {
-    await createNotification({
-      userId: brandUser.id,
-      type: "brief_approved",
-      title: "✅ הבריף אושר",
-      body: `${creatorUser?.full_name || "היוצר/ת"} אישר/ה את הבריף ל"${productName}". עכשיו תורכם — שלחו את המוצר.`,
-      data: notificationData(id, conn.product_id, "brand"),
-    });
-  }
-  await logActivity({ actorId: viewer.userId, action: "brief_approved", entityType: "connection", entityId: id });
+  // Notification + activity log after the response (the creator sees her approval land at once)
+  after(async () => {
+    try {
+      if (brandUser) {
+        await createNotification({
+          userId: brandUser.id,
+          type: "brief_approved",
+          title: "✅ הבריף אושר",
+          body: `${creatorUser?.full_name || "היוצר/ת"} אישר/ה את הבריף ל"${productName}". עכשיו תורכם — שלחו את המוצר.`,
+          data: notificationData(id, conn.product_id, "brand"),
+        });
+      }
+      await logActivity({ actorId: viewer.userId, action: "brief_approved", entityType: "connection", entityId: id });
+    } catch (err) {
+      console.error("[brief] post-response notifications failed:", err);
+    }
+  });
   return NextResponse.json({ success: true, message, brief_approved_at: now, ship_deadline: updates.ship_deadline || null });
 }

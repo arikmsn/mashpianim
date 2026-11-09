@@ -32,6 +32,62 @@ export const CHAT_EVENT_TEXTS = {
 // Review window after the revised (final) upload: the brand answers within a day or it closes automatically
 export const FINAL_REVIEW_HOURS = 24;
 
+// --- Realtime hygiene ---------------------------------------------------------------------------------------
+// Columns of `connections` that move without the chat needing to reload: our own "mark as read" and
+// bookkeeping. Reloading on them made a loop (open chat → mark read → row update → realtime → reload → mark
+// read …) that sent ~70 requests a second from one phone on 2026-11-09 and starved Supabase Auth.
+export const QUIET_CONNECTION_FIELDS: ReadonlySet<string> = new Set(["creator_read_at", "brand_read_at", "updated_at"]);
+
+// Postgres timestamps arrive in two spellings (PostgREST "2026-11-09T17:54:47.606332+00:00", Realtime
+// "2026-11-09 17:54:47.606332+00"); both become the same instant. Non-timestamps give NaN.
+export function parseInstant(value: unknown): number {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(value)) return NaN;
+  const normalised = value
+    .replace(" ", "T")
+    .replace(/(\.\d{3})\d+/, "$1")
+    .replace(/([+-]\d{2})$/, "$1:00");
+  return Date.parse(normalised);
+}
+
+// Equal for our purposes: null / undefined / "" alike, timestamps by instant, everything else by value.
+export function sameFieldValue(a: unknown, b: unknown): boolean {
+  const emptyA = a === null || a === undefined || a === "";
+  const emptyB = b === null || b === undefined || b === "";
+  if (emptyA || emptyB) return emptyA && emptyB;
+  if (typeof a === "object" || typeof b === "object") return JSON.stringify(a) === JSON.stringify(b);
+  if (String(a) === String(b)) return true;
+  const ta = parseInstant(a);
+  const tb = parseInstant(b);
+  return !Number.isNaN(ta) && !Number.isNaN(tb) && ta === tb;
+}
+
+// Keys of `next` whose value differs from `prev`
+export function changedConnectionFields(prev: Record<string, unknown>, next: Record<string, unknown>): string[] {
+  return Object.keys(next).filter((key) => !sameFieldValue(prev[key], next[key]));
+}
+
+// True when a realtime update touched only quiet fields (or nothing): merge it locally, don't refetch.
+export function isQuietConnectionUpdate(prev: Record<string, unknown> | null | undefined, next: Record<string, unknown>): boolean {
+  if (!prev) return false;
+  return changedConnectionFields(prev, next).every((key) => QUIET_CONNECTION_FIELDS.has(key));
+}
+
+// Does the chat hold messages from the other side that this viewer hasn't marked read yet? Mirrors
+// /api/messages/unread (sender ≠ me, newer than my read marker). An unknown viewer counts as "yes".
+export function hasUnreadFromOthers(
+  messages: { senderId: string; createdAt: string }[],
+  myUserId: string | null | undefined,
+  readAt: string | null | undefined
+): boolean {
+  const since = readAt ? parseInstant(readAt) : NaN;
+  return messages.some((m) => {
+    if (myUserId && m.senderId === myUserId) return false;
+    if (Number.isNaN(since)) return true;
+    const at = parseInstant(m.createdAt);
+    return Number.isNaN(at) || at > since;
+  });
+}
+
 // Notification types whose tap opens the chat (everything after the match lives there)
 export const CHAT_NOTIFICATION_TYPES = new Set([
   "match",

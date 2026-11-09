@@ -353,9 +353,10 @@ export default function BrandDiscoverPage() {
 
   if (loading) return <DiscoverSkeleton />;
 
+  // "✨ מתאימים לכם" (the `fit` filter) is hidden until the creator↔business matching rule is defined
+  // (owner, 2026-11-09); the filtering code stays so it can come back with a one-line change.
   const filters: { id: Filter; label: string }[] = [
     { id: "all", label: "הכל" },
-    { id: "fit", label: "✨ מתאימים לכם" },
     { id: "liked", label: `💗 אהבתי${liked.length > 0 ? ` (${liked.length})` : ""}` },
   ];
   const heartIcon = current?.relation

@@ -52,7 +52,9 @@ function Modal({ open, onClose, children, title, size = "md", className }: Modal
           />
           <motion.div
             className={cn(
-              "relative w-full bg-white rounded-2xl shadow-2xl overflow-hidden",
+              // A column no taller than the screen: the header stays, the body scrolls (on the phone a
+              // long brief inside a dialog could not be scrolled at all before this)
+              "relative w-full bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)]",
               sizeMap[size],
               className
             )}
@@ -62,7 +64,7 @@ function Modal({ open, onClose, children, title, size = "md", className }: Modal
             transition={{ duration: 0.2 }}
           >
             {title && (
-              <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 shrink-0">
                 <h2 className="text-lg font-bold">{title}</h2>
                 <button
                   onClick={onClose}
@@ -75,7 +77,7 @@ function Modal({ open, onClose, children, title, size = "md", className }: Modal
                 </button>
               </div>
             )}
-            <div className="p-6">{children}</div>
+            <div className="p-6 flex-1 min-h-0 overflow-y-auto overscroll-contain">{children}</div>
           </motion.div>
         </div>
       )}

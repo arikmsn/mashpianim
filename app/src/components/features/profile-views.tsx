@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar, Badge, Modal, useToast } from "@/components/ui";
 import { fetchJson, readCache, swrFetch } from "@/lib/client-cache";
+import { socialReach } from "@/lib/social";
 
 export interface CreatorPublicProfile {
   userId: string;
@@ -49,20 +50,9 @@ const levelLabels: Record<string, string> = {
   on_the_radar: "על הרדאר",
 };
 
-function formatFollowers(n: number) {
-  if (!n) return null;
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
-  return String(n);
-}
-
 function memberSinceLabel(iso: string) {
   if (!iso) return "";
   return new Date(iso).toLocaleDateString("he-IL", { month: "long", year: "numeric" });
-}
-
-function cleanHandle(h: string) {
-  return h.trim().replace(/^@/, "").replace(/^https?:\/\/(www\.)?(tiktok\.com\/@?|instagram\.com\/)/, "").replace(/\/.*$/, "");
 }
 
 function StatBox({ value, label, tone = "neutral" }: { value: number | string; label: string; tone?: "neutral" | "pink" | "emerald" }) {
@@ -119,10 +109,8 @@ export function ProfileSkeleton() {
 }
 
 export function CreatorProfileView({ profile, compact = false }: { profile: CreatorPublicProfile; compact?: boolean }) {
-  const tiktok = cleanHandle(profile.tiktok || "");
-  const instagram = cleanHandle(profile.instagram || "");
-  const tf = formatFollowers(profile.tiktokFollowers);
-  const inf = formatFollowers(profile.instagramFollowers);
+  // Reach only, never the account: businesses contact creators through the platform (owner, 2026-11-09)
+  const socials = socialReach(profile);
   // The portfolio grid shows posters only; one video plays at a time in a modal (no <video> in lists)
   const [playing, setPlaying] = useState<CreatorPublicProfile["portfolio"][number] | null>(null);
 
@@ -155,37 +143,25 @@ export function CreatorProfileView({ profile, compact = false }: { profile: Crea
         <p className="text-sm text-neutral-700 bg-neutral-50 rounded-xl p-3 whitespace-pre-line">{profile.bio}</p>
       )}
 
-      {/* Socials */}
-      {(tiktok || instagram) && (
+      {/* Socials: reach only — never the account or a link to it; businesses contact creators inside the
+          platform (owner, 2026-11-09) */}
+      {socials.length > 0 && (
         <div className="grid grid-cols-2 gap-2">
-          {tiktok && (
-            <a
-              href={`https://www.tiktok.com/@${tiktok}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 p-3 rounded-xl border border-neutral-100 hover:border-pink-300 hover:bg-pink-50/40 transition-colors"
+          {socials.map((s) => (
+            <div
+              key={s.platform}
+              className="flex items-center gap-2 p-3 rounded-xl border border-neutral-100 bg-neutral-50/60"
+              aria-label={`${s.name}: ${s.label}`}
             >
-              <span className="w-8 h-8 rounded-lg bg-black text-white flex items-center justify-center text-xs font-bold">TT</span>
-              <div className="min-w-0" dir="ltr">
-                <p className="text-sm font-medium truncate">@{tiktok}</p>
-                {tf && <p className="text-[11px] text-neutral-500">{tf} עוקבים</p>}
+              <span className={`w-8 h-8 rounded-lg ${s.platform === "tiktok" ? "bg-black" : "ig-gradient-bg"} text-white flex items-center justify-center text-xs font-bold`}>
+                {s.platform === "tiktok" ? "TT" : "IG"}
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate">{s.name}</p>
+                <p className="text-[11px] text-neutral-500">{s.label}</p>
               </div>
-            </a>
-          )}
-          {instagram && (
-            <a
-              href={`https://www.instagram.com/${instagram}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 p-3 rounded-xl border border-neutral-100 hover:border-pink-300 hover:bg-pink-50/40 transition-colors"
-            >
-              <span className="w-8 h-8 rounded-lg ig-gradient-bg text-white flex items-center justify-center text-xs font-bold">IG</span>
-              <div className="min-w-0" dir="ltr">
-                <p className="text-sm font-medium truncate">@{instagram}</p>
-                {inf && <p className="text-[11px] text-neutral-500">{inf} עוקבים</p>}
-              </div>
-            </a>
-          )}
+            </div>
+          ))}
         </div>
       )}
 

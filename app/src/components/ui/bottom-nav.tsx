@@ -106,21 +106,27 @@ function BottomNav() {
     if (!user) return;
 
     const supabase = createClient();
+    // Bursts of row changes (a card and its connection update, several hearts at once) become one request
+    const timers: { unread?: ReturnType<typeof setTimeout>; hearts?: ReturnType<typeof setTimeout> } = {};
     const channel = supabase
       .channel("nav-messages")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages" },
         () => {
-          fetchUnread();
+          clearTimeout(timers.unread);
+          timers.unread = setTimeout(fetchUnread, 500);
         }
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "connections" }, () => {
-        fetchHearts();
+        clearTimeout(timers.hearts);
+        timers.hearts = setTimeout(fetchHearts, 500);
       })
       .subscribe();
 
     return () => {
+      clearTimeout(timers.unread);
+      clearTimeout(timers.hearts);
       supabase.removeChannel(channel);
     };
   }, [user, fetchUnread, fetchHearts]);

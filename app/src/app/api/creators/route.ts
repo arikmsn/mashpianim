@@ -43,7 +43,7 @@ export async function GET() {
   const [{ data: creators }, { data: videos }, { data: relations }, { data: passes }] = await Promise.all([
     admin
       .from("users")
-      .select("id, full_name, avatar_url, created_at, creator_profiles(id, bio, city, categories, level, completed_connections, tiktok_followers, instagram_followers, tiktok_handle, instagram_handle)")
+      .select("id, full_name, avatar_url, created_at, creator_profiles(id, bio, city, categories, level, completed_connections, tiktok_followers, instagram_followers)")
       .eq("type", "creator")
       .eq("is_active", true)
       // An account that is both a brand and a creator must not see (or heart) itself
@@ -125,9 +125,8 @@ export async function GET() {
         bio: cp?.bio || "",
         categories,
         level: cp?.level || "creator",
+        // Follower reach only — social handles never leave the platform (owner, 2026-11-09)
         followers,
-        tiktok: cp?.tiktok_handle || "",
-        instagram: cp?.instagram_handle || "",
         completed,
         portfolioCount: port.count,
         portfolioReady: port.count >= MIN_PORTFOLIO_VIDEOS,

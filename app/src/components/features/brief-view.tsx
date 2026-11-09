@@ -60,12 +60,16 @@ export function BriefCard({
   canApprove,
   approving,
   onApprove,
+  onOpenFull,
 }: {
   snapshot: BriefSnapshot;
   approved: boolean;
   canApprove: boolean;
   approving?: boolean;
   onApprove?: () => void;
+  // When the screen has its own full-brief view (the chat's sheet), both "לבריף המלא" and the approve step
+  // open it there, so the brief is read in full before it is approved
+  onOpenFull?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const data = snapshot.brief_data;
@@ -100,7 +104,7 @@ export function BriefCard({
           </div>
         )}
       </div>
-      <button type="button" onClick={() => setOpen(true)} className="w-full border-t border-neutral-100 px-4 py-2.5 text-sm font-bold text-pink-600 text-right flex items-center justify-between">
+      <button type="button" onClick={() => (onOpenFull ? onOpenFull() : setOpen(true))} className="w-full border-t border-neutral-100 px-4 py-2.5 text-sm font-bold text-pink-600 text-right flex items-center justify-between">
         לבריף המלא
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-pink-400"><path d="M15 18l-6-6 6-6" /></svg>
       </button>
@@ -110,10 +114,10 @@ export function BriefCard({
         <button
           type="button"
           disabled={approving}
-          onClick={onApprove}
+          onClick={onOpenFull ?? onApprove}
           className="w-full ig-gradient-bg text-white text-sm font-bold py-2.5 disabled:opacity-60"
         >
-          {approving ? "מאשרת..." : "✅ אישור הבריף"}
+          {approving ? "מאשרת..." : onOpenFull ? "📋 לקריאה ולאישור הבריף" : "✅ אישור הבריף"}
         </button>
       ) : null}
 

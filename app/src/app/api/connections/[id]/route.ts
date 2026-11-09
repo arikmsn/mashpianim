@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, after, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/admin-auth";
@@ -39,23 +39,28 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 
-  // `type` here is the role this session is signed in as (an admin signed in as a creator is a creator)
-  const viewerGet = await resolveViewer(admin, user.id, await readActiveRole());
+  // `type` here is the role this session is signed in as (an admin signed in as a creator is a creator).
+  // The viewer, the connection and its messages are independent queries — one round trip instead of three
+  // (the database is a continent away from where this ran until 2026-11-09; every hop cost ~120 ms).
+  const activeRole = await readActiveRole();
+  const [viewerGet, { data, error }, { data: messages }] = await Promise.all([
+    resolveViewer(admin, user.id, activeRole),
+    admin
+      .from("connections")
+      .select(`
+        *,
+        products(name, image_url, price, description, product_type, digital_access_type, digital_access_instructions, digital_access_duration_days, shipping_policy),
+        creator_profiles!connections_creator_id_fkey(id, user_id, bio, categories, level, hearts, completed_connections, users(full_name, avatar_url)),
+        brand_profiles!connections_brand_id_fkey(id, user_id, shop_name, logo_url, users(full_name, avatar_url))
+      `)
+      .eq("id", id)
+      .single(),
+    admin.from("messages").select("*").eq("connection_id", id).order("created_at", { ascending: true }),
+  ]);
   const dbUser = viewerGet ? { id: viewerGet.userId, type: viewerGet.role } : null;
   if (!dbUser) {
     return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 404 });
   }
-
-  const { data, error } = await admin
-    .from("connections")
-    .select(`
-      *,
-      products(name, image_url, price, description, product_type, digital_access_type, digital_access_instructions, digital_access_duration_days, shipping_policy),
-      creator_profiles!connections_creator_id_fkey(id, user_id, bio, categories, level, hearts, completed_connections, users(full_name, avatar_url)),
-      brand_profiles!connections_brand_id_fkey(id, user_id, shop_name, logo_url, users(full_name, avatar_url))
-    `)
-    .eq("id", id)
-    .single();
 
   if (error || !data) {
     return NextResponse.json({ error: "חיבור לא נמצא" }, { status: 404 });
@@ -70,24 +75,24 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "אין הרשאה לחיבור זה" }, { status: 403 });
   }
 
-  const { data: messages } = await admin
-    .from("messages")
-    .select("*")
-    .eq("connection_id", id)
-    .order("created_at", { ascending: true });
-
-  // Deliverable cards: a fresh signed URL + poster for each video they point at (stored URLs expire)
+  // Deliverable cards: a fresh signed URL + poster for each video they point at (stored URLs expire).
+  // All paths are signed in one call.
   const list = (messages || []) as any[];
   const videoIds = list.filter((m) => m.kind === "video" && m.data?.video_id).map((m) => m.data.video_id as string);
   if (videoIds.length > 0) {
     const { data: videos } = await admin.from("videos").select("id, storage_path, url, thumbnail_url, status").in("id", videoIds);
-    const byId = new Map<string, any>();
-    for (const v of (videos || []) as any[]) {
-      let url = v.url;
-      if (v.storage_path) {
-        const { data: signed } = await admin.storage.from("videos").createSignedUrl(v.storage_path, 86400);
-        url = signed?.signedUrl || url;
+    const rows = (videos || []) as any[];
+    const paths = rows.map((v) => v.storage_path).filter((p): p is string => typeof p === "string" && p.length > 0);
+    const signedByPath = new Map<string, string>();
+    if (paths.length > 0) {
+      const { data: signed } = await admin.storage.from("videos").createSignedUrls(paths, 86400);
+      for (const s of signed || []) {
+        if (s.path && s.signedUrl) signedByPath.set(s.path, s.signedUrl);
       }
+    }
+    const byId = new Map<string, any>();
+    for (const v of rows) {
+      const url = (v.storage_path && signedByPath.get(v.storage_path)) || v.url;
       byId.set(v.id, { url, thumbnail_url: v.thumbnail_url, status: v.status });
     }
     for (const m of list) {
@@ -438,49 +443,55 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "שגיאה בעדכון" }, { status: 500 });
   }
 
-  // Send notifications
+  // Notifications and the activity log are written after the response has gone out — the person tapping
+  // "נשלח" / "קיבלתי" waits only for the status change itself
   const creatorUser = creatorProfile?.users;
   const brandUser = brandProfile?.users;
   const productId = ((connection as any).product_id as string | null) || null;
-  if (newStatus === "rejected" && initiatedBy === "brand" && brandUser) {
-    await createNotification({
-      userId: (brandUser as any).id,
-      type: "heart_declined",
-      title: "היוצר/ת דחה/תה את הלב",
-      body: `${(creatorUser as any)?.full_name || "היוצר/ת"} לא מעוניין/ת כרגע ב"${product?.name || "המוצר"}". הקרדיט לא נוצל — אפשר לבחור יוצר/ת אחר/ת.`,
-      data: notificationData(id, productId, "brand"),
-    });
-  } else if (newStatus === "cancelled" && currentStatus === "pending" && creatorUser && brandUser) {
-    // The side that did not act hears about it (on a mutual pair that is whoever is not the actor)
-    const actorIsBrand = userType === "brand";
-    const target = isMutual ? (actorIsBrand ? creatorUser : brandUser) : initiatedBy === "brand" ? creatorUser : brandUser;
-    const targetRole = target === creatorUser ? "creator" : "brand";
-    await createNotification({
-      userId: (target as any).id,
-      type: "heart_withdrawn",
-      title: isMutual ? "המאטץ' בוטל" : "לב בוטל",
-      body: `${isMutual ? "המאטץ'" : "הלב"} למוצר "${product?.name || ""}" בוטל על ידי הצד השני.`,
-      data: notificationData(id, productId, targetRole),
-    });
-  } else if (creatorUser && brandUser) {
-    await notifyConnectionStatusChange(newStatus, {
-      connectionId: id,
-      productName: product?.name || "",
-      creatorName: (creatorUser as any).full_name || "יוצר",
-      brandName: brandProfile?.shop_name || (brandUser as any).full_name || "עסק",
-      creatorUserId: (creatorUser as any).id,
-      brandUserId: (brandUser as any).id,
-      productId,
-    });
-  }
+  after(async () => {
+    try {
+      if (newStatus === "rejected" && initiatedBy === "brand" && brandUser) {
+        await createNotification({
+          userId: (brandUser as any).id,
+          type: "heart_declined",
+          title: "היוצר/ת דחה/תה את הלב",
+          body: `${(creatorUser as any)?.full_name || "היוצר/ת"} לא מעוניין/ת כרגע ב"${product?.name || "המוצר"}". הקרדיט לא נוצל — אפשר לבחור יוצר/ת אחר/ת.`,
+          data: notificationData(id, productId, "brand"),
+        });
+      } else if (newStatus === "cancelled" && currentStatus === "pending" && creatorUser && brandUser) {
+        // The side that did not act hears about it (on a mutual pair that is whoever is not the actor)
+        const actorIsBrand = userType === "brand";
+        const target = isMutual ? (actorIsBrand ? creatorUser : brandUser) : initiatedBy === "brand" ? creatorUser : brandUser;
+        const targetRole = target === creatorUser ? "creator" : "brand";
+        await createNotification({
+          userId: (target as any).id,
+          type: "heart_withdrawn",
+          title: isMutual ? "המאטץ' בוטל" : "לב בוטל",
+          body: `${isMutual ? "המאטץ'" : "הלב"} למוצר "${product?.name || ""}" בוטל על ידי הצד השני.`,
+          data: notificationData(id, productId, targetRole),
+        });
+      } else if (creatorUser && brandUser) {
+        await notifyConnectionStatusChange(newStatus, {
+          connectionId: id,
+          productName: product?.name || "",
+          creatorName: (creatorUser as any).full_name || "יוצר",
+          brandName: brandProfile?.shop_name || (brandUser as any).full_name || "עסק",
+          creatorUserId: (creatorUser as any).id,
+          brandUserId: (brandUser as any).id,
+          productId,
+        });
+      }
 
-  // Log activity
-  await logActivity({
-    actorId: (dbUser as any).id,
-    action: `connection_${newStatus}`,
-    entityType: "connection",
-    entityId: id,
-    details: { from: currentStatus, to: newStatus },
+      await logActivity({
+        actorId: (dbUser as any).id,
+        action: `connection_${newStatus}`,
+        entityType: "connection",
+        entityId: id,
+        details: { from: currentStatus, to: newStatus },
+      });
+    } catch (err) {
+      console.error("[connections] post-response notifications failed:", err);
+    }
   });
 
   return NextResponse.json({ success: true, status: newStatus });

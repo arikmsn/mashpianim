@@ -114,7 +114,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   // creator (or admin acting as creator)
   const { data: cp } = await supabase
     .from("creator_profiles")
-    .select("id, bio, city, categories, level, hearts, completed_connections, tiktok_handle, tiktok_followers, instagram_handle, instagram_followers, intro_video_url")
+    .select("id, bio, city, categories, level, hearts, completed_connections, tiktok_followers, instagram_followers, intro_video_url")
     .eq("user_id", t.id)
     .single();
   const profile = cp as any;
@@ -161,9 +161,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       categories: profile?.categories || [],
       level: profile?.level || "creator",
       hearts: profile?.hearts || 0,
-      tiktok: profile?.tiktok_handle || "",
+      // Reach only, never the account (owner, 2026-11-09): a business must not be able to reach the creator
+      // outside the platform. The handles stay in the creator's own /api/profile for editing.
+      tiktok: "",
       tiktokFollowers: profile?.tiktok_followers || 0,
-      instagram: profile?.instagram_handle || "",
+      instagram: "",
       instagramFollowers: profile?.instagram_followers || 0,
       introVideo: profile?.intro_video_url || null,
       memberSince: t.created_at,

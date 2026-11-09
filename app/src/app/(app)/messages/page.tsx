@@ -13,7 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import { swrFetch, readCache, emitUnreadChanged } from "@/lib/client-cache";
 import { toDirectImageUrl } from "@/lib/images";
 import { isChatOpen, hasChatHistory, activeDeadlineField, flowNextAction } from "@/lib/connection-flow";
-import { CHAT_EVENT_TEXTS, isBriefSnapshot, isVideoCard, type MessageKind } from "@/lib/chat";
+import { CHAT_EVENT_TEXTS, isBriefSnapshot, isVideoCard, isQuietConnectionUpdate, hasUnreadFromOthers, type MessageKind } from "@/lib/chat";
 import type { BriefSnapshot } from "@/lib/brief";
 
 type Role = "creator" | "brand";
@@ -182,6 +182,21 @@ function MessagesContent() {
   const { toast } = useToast();
   const fetchConversationsRef = useRef<() => void>(() => {});
   const fetchMessagesRef = useRef<(id: string) => void>(() => {});
+  // The open connection as the API returned it (columns + joins); realtime row updates are merged into it
+  const rawConnectionRef = useRef<Record<string, unknown> | null>(null);
+  const conversationsRef = useRef<Conversation[]>([]);
+  const userIdRef = useRef<string | null>(null);
+  const roleRef = useRef<Role | null>(null);
+  // Realtime bursts (a card plus its row update) collapse into one reload each
+  const refetchTimers = useRef<{ messages?: ReturnType<typeof setTimeout>; conversations?: ReturnType<typeof setTimeout> }>({});
+
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+  useEffect(() => {
+    userIdRef.current = user?.id ?? null;
+    roleRef.current = role;
+  }, [user?.id, role]);
 
   useEffect(() => {
     swrFetch<{ role?: string; user?: { type?: string } }>("/api/profile", (data) => {
@@ -265,10 +280,19 @@ function MessagesContent() {
       const res = await fetch(`/api/connections/${connectionId}`);
       if (res.ok) {
         const data = await res.json();
-        if (data.connection) setConnection(mapConnection(data.connection));
+        const raw = (data.connection as Record<string, unknown> | null) || null;
+        if (raw) {
+          rawConnectionRef.current = raw;
+          setConnection(mapConnection(raw));
+        }
         if (data.messages && data.messages.length > 0) {
-          setMessages(data.messages.map((m: Record<string, unknown>) => mapMessage(m)));
-          markRead(connectionId);
+          const mapped = data.messages.map((m: Record<string, unknown>) => mapMessage(m)) as Message[];
+          setMessages(mapped);
+          // Mark read only when the other side wrote something we haven't seen. Marking on every load
+          // updated the row every time, and that update came back over realtime as a reason to load again
+          // (the 2026-11-09 request flood).
+          const readAt = (roleRef.current === "brand" ? raw?.brand_read_at : raw?.creator_read_at) as string | null | undefined;
+          if (hasUnreadFromOthers(mapped, userIdRef.current, readAt)) markRead(connectionId);
           return;
         }
       }
@@ -288,6 +312,22 @@ function MessagesContent() {
     ]);
   }, []);
   fetchMessagesRef.current = fetchMessages;
+
+  const scheduleMessagesRefetch = useCallback((connectionId: string) => {
+    clearTimeout(refetchTimers.current.messages);
+    refetchTimers.current.messages = setTimeout(() => fetchMessagesRef.current(connectionId), 350);
+  }, []);
+  const scheduleConversationsRefetch = useCallback(() => {
+    clearTimeout(refetchTimers.current.conversations);
+    refetchTimers.current.conversations = setTimeout(() => fetchConversationsRef.current(), 700);
+  }, []);
+  useEffect(() => {
+    const timers = refetchTimers.current;
+    return () => {
+      clearTimeout(timers.messages);
+      clearTimeout(timers.conversations);
+    };
+  }, []);
 
   useEffect(() => {
     if (selectedId) fetchMessagesRef.current(selectedId);
@@ -313,7 +353,7 @@ function MessagesContent() {
           const mapped = mapMessage(newMsg);
           if (mapped.kind === "video" || mapped.kind === "brief" || mapped.kind === "event") {
             // Cards need the signed URL / the connection flags that come with the full fetch
-            fetchMessagesRef.current(selectedId);
+            scheduleMessagesRefetch(selectedId);
           } else {
             setMessages((prev) => (prev.some((m) => m.id === mapped.id) ? prev : [...prev, mapped]));
             markRead(selectedId);
@@ -326,14 +366,25 @@ function MessagesContent() {
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "connections", filter: `id=eq.${selectedId}` },
-        () => fetchMessagesRef.current(selectedId)
+        (payload) => {
+          const next = payload.new as Record<string, unknown>;
+          const prev = rawConnectionRef.current;
+          if (prev && isQuietConnectionUpdate(prev, next)) {
+            // Only read markers moved (usually our own "mark as read"): merge locally, nothing to reload
+            const merged = { ...prev, ...next };
+            rawConnectionRef.current = merged;
+            setConnection(mapConnection(merged));
+            return;
+          }
+          scheduleMessagesRefetch(selectedId);
+        }
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedId]);
+  }, [selectedId, scheduleMessagesRefetch]);
 
   // Realtime subscription for the conversations list (new connections, status changes, new messages anywhere)
   useEffect(() => {
@@ -342,18 +393,24 @@ function MessagesContent() {
     const supabase = createClient();
     const channel = supabase
       .channel("connections-updates")
-      .on("postgres_changes", { event: "*", schema: "public", table: "connections" }, () => {
-        fetchConversationsRef.current();
+      .on("postgres_changes", { event: "*", schema: "public", table: "connections" }, (payload) => {
+        // A row update that kept its status (read markers, deadlines) changes nothing in this list
+        if (payload.eventType === "UPDATE") {
+          const next = payload.new as Record<string, unknown>;
+          const known = conversationsRef.current.find((c) => c.id === next.id);
+          if (known && known.status === next.status) return;
+        }
+        scheduleConversationsRefetch();
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => {
-        fetchConversationsRef.current();
+        scheduleConversationsRefetch();
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user, scheduleConversationsRefetch]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -451,8 +508,8 @@ function MessagesContent() {
     }
   }
 
-  async function approveBrief() {
-    if (!selectedId) return;
+  async function approveBrief(): Promise<boolean> {
+    if (!selectedId) return false;
     setActing(true);
     try {
       const res = await fetch(`/api/connections/${selectedId}/brief`, {
@@ -463,12 +520,15 @@ function MessagesContent() {
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         toast("הבריף אושר — העסק יקבל עדכון וישלח את המוצר", "success");
+        setBriefOpen(false);
         await fetchMessages(selectedId);
-      } else {
-        toast((data as { error?: string }).error || "שגיאה באישור הבריף", "error");
+        return true;
       }
+      toast((data as { error?: string }).error || "שגיאה באישור הבריף", "error");
+      return false;
     } catch {
       toast("שגיאה באישור הבריף", "error");
+      return false;
     } finally {
       setActing(false);
     }
@@ -522,10 +582,11 @@ function MessagesContent() {
       if (s === "approved") {
         if (!connection.briefPostedAt) return <Hint icon="📋" text="העסק יעלה את הבריף לסרטון — אפשר לכתוב לו בינתיים" />;
         if (!briefApproved) {
+          // The approve button lives at the end of the brief itself, so it is read before it is approved
           return (
             <div className="space-y-1.5">
-              <Button fullWidth loading={acting} onClick={approveBrief}>✅ אישור הבריף</Button>
-              <p className="text-[11px] text-neutral-500 text-center">רוצה לשנות משהו? כתבי לעסק בצ&apos;אט והוא יעדכן את הבריף</p>
+              <Button fullWidth disabled={acting} onClick={() => setBriefOpen(true)}>📋 קריאת הבריף ואישורו</Button>
+              <p className="text-[11px] text-neutral-500 text-center">כפתור האישור נמצא בסוף הבריף · רוצה לשנות משהו? כתבי לעסק בצ&apos;אט</p>
             </div>
           );
         }
@@ -627,6 +688,7 @@ function MessagesContent() {
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-neutral-100">
         <div className="max-w-2xl mx-auto px-4 py-4">
           <h1 className="text-2xl font-bold">הודעות</h1>
+          <p className="text-xs text-neutral-500 mt-0.5">כל כרטיס הוא שיחה — לחצו עליו כדי לפתוח אותה</p>
         </div>
       </header>
 
@@ -651,13 +713,15 @@ function MessagesContent() {
           </div>
         ) : (
           conversations.map((conv) => (
+            // Each conversation is a card that reads as a button: bold name, the last line cut with "…", a chevron
             <motion.button
               key={conv.id}
-              className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-pink-50/50 transition-colors border-b border-neutral-50 text-right"
+              className="flex w-[calc(100%-1.5rem)] mx-3 my-2 items-center gap-3 px-3 py-3 rounded-2xl bg-white border border-neutral-100 shadow-sm hover:border-pink-200 hover:bg-pink-50/40 transition-colors text-right"
               onClick={() => openConversation(conv)}
               whileTap={{ scale: 0.98 }}
+              aria-label={`פתיחת השיחה עם ${conv.name}`}
             >
-              <div className="relative">
+              <div className="relative shrink-0">
                 <Avatar src={conv.avatar} name={conv.name} size="md" />
                 {conv.unread > 0 && (
                   <span className="absolute -top-0.5 -left-0.5 w-4 h-4 rounded-full bg-pink-500 text-white text-[9px] flex items-center justify-center font-bold ring-2 ring-white">
@@ -666,13 +730,16 @@ function MessagesContent() {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className={`font-medium text-sm ${conv.unread > 0 ? "text-neutral-900" : "text-neutral-600"}`}>{conv.name}</span>
-                  <span className="text-xs text-neutral-400">{conv.time}</span>
+                <div className="flex items-center justify-between gap-2 mb-0.5">
+                  <span className={`text-[15px] truncate ${conv.unread > 0 ? "font-bold text-neutral-900" : "font-semibold text-neutral-800"}`}>{conv.name}</span>
+                  <span className="text-[11px] text-neutral-400 shrink-0">{conv.time}</span>
                 </div>
-                {conv.product && <span className="text-xs text-pink-500 block mb-0.5">{conv.product}{conv.closed ? " · הסתיים" : ""}</span>}
-                <p className={`text-sm truncate ${conv.unread > 0 ? "text-neutral-700 font-medium" : "text-neutral-400"}`}>{conv.lastMessage}</p>
+                {conv.product && <span className="text-xs text-pink-500 block mb-0.5 truncate">{conv.product}{conv.closed ? " · הסתיים" : ""}</span>}
+                <p className={`text-sm truncate ${conv.unread > 0 ? "text-neutral-800 font-medium" : "text-neutral-500"}`}>{conv.lastMessage}</p>
               </div>
+              <svg className="shrink-0 text-neutral-300" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
             </motion.button>
           ))
         )}
@@ -789,6 +856,7 @@ function MessagesContent() {
                             canApprove={creatorCanApprove}
                             approving={acting}
                             onApprove={approveBrief}
+                            onOpenFull={() => setBriefOpen(true)}
                           />
                         ) : (
                           <div className="max-w-[75%] px-4 py-2.5 rounded-2xl text-xs bg-neutral-50 text-neutral-400 border border-neutral-100">
@@ -936,28 +1004,50 @@ function MessagesContent() {
             )}
           </div>
 
-          {/* The agreed brief, any time */}
-          <Modal open={briefOpen} onClose={() => setBriefOpen(false)} title="📋 הבריף שסיכמנו" size="md" className="max-h-[90vh] overflow-y-auto">
-            {latestBrief ? (
-              <>
-                <BriefFull data={latestBrief.brief_data} notes={latestBrief.brief} productName={latestBrief.product_name} />
-                <p className="text-[11px] text-neutral-400 mt-3 text-center">
-                  {briefApproved ? "✅ הבריף אושר על ידי היוצר/ת" : "ממתין לאישור היוצר/ת"}
-                  {latestBrief.version > 1 ? ` · גרסה ${latestBrief.version}` : ""}
-                </p>
-                {creatorCanApprove && (
-                  <Button fullWidth className="mt-3" loading={acting} onClick={() => { setBriefOpen(false); approveBrief(); }}>✅ אישור הבריף</Button>
+          {/* The agreed brief, any time — a full-screen sheet over the chat with its own scroll and the approve
+              button fixed at its end (the dialog version could not scroll on the phone, and the chat's own
+              action bar sat on top of it) */}
+          {briefOpen && (
+            <div className="fixed inset-0 z-[70] bg-white flex flex-col" role="dialog" aria-modal="true" aria-label="הבריף שסיכמנו">
+              <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-neutral-100">
+                <h2 className="text-base font-bold truncate">📋 הבריף שסיכמנו</h2>
+                <button
+                  type="button"
+                  onClick={() => setBriefOpen(false)}
+                  className="p-2 -ml-2 rounded-lg text-neutral-500 hover:bg-neutral-100"
+                  aria-label="סגירת הבריף"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </header>
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4">
+                {latestBrief ? (
+                  <>
+                    <BriefFull data={latestBrief.brief_data} notes={latestBrief.brief} productName={latestBrief.product_name} />
+                    <p className="text-[11px] text-neutral-400 mt-3 text-center">
+                      {briefApproved ? "✅ הבריף אושר על ידי היוצר/ת" : "ממתין לאישור היוצר/ת"}
+                      {latestBrief.version > 1 ? ` · גרסה ${latestBrief.version}` : ""}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-neutral-500 text-center py-4">{role === "brand" ? "עדיין לא הועלה בריף לצ'אט הזה" : "העסק עדיין לא העלה בריף"}</p>
                 )}
-              </>
-            ) : (
-              <p className="text-sm text-neutral-500 text-center py-4">{role === "brand" ? "עדיין לא הועלה בריף לצ'אט הזה" : "העסק עדיין לא העלה בריף"}</p>
-            )}
-            {role === "brand" && connection?.productId && chatOpen && (
-              <Button variant="secondary" fullWidth className="mt-3" onClick={() => router.push(`/brand/products/${connection.productId}/brief?connection=${connection.id}`)}>
-                ✏️ {latestBrief ? "עדכון הבריף" : "מילוי הבריף"}
-              </Button>
-            )}
-          </Modal>
+                {role === "brand" && connection?.productId && chatOpen && (
+                  <Button variant="secondary" fullWidth className="mt-3" onClick={() => router.push(`/brand/products/${connection.productId}/brief?connection=${connection.id}`)}>
+                    ✏️ {latestBrief ? "עדכון הבריף" : "מילוי הבריף"}
+                  </Button>
+                )}
+              </div>
+              {creatorCanApprove && latestBrief && (
+                <div className="p-3 border-t border-neutral-100 pb-[calc(0.75rem+env(safe-area-inset-bottom))] space-y-1.5 bg-white">
+                  <Button fullWidth loading={acting} onClick={approveBrief}>✅ אישור הבריף</Button>
+                  <p className="text-[11px] text-neutral-500 text-center">רוצה לשנות משהו? סגרי וכתבי לעסק בצ&apos;אט — הוא יעדכן את הבריף</p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Brand: the product left (tracking) / digital access details */}
           <Modal open={shipOpen} onClose={() => setShipOpen(false)} title={isDigital ? "📲 שליחת פרטי גישה" : "📦 המוצר נשלח"} size="sm">
