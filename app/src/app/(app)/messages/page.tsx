@@ -13,7 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import { swrFetch, readCache, emitUnreadChanged } from "@/lib/client-cache";
 import { toDirectImageUrl } from "@/lib/images";
 import { isChatOpen, hasChatHistory, activeDeadlineField, flowNextAction } from "@/lib/connection-flow";
-import { CHAT_EVENT_TEXTS, isBriefSnapshot, isVideoCard, isQuietConnectionUpdate, hasUnreadFromOthers, type MessageKind } from "@/lib/chat";
+import { CHAT_EVENT_TEXTS, MAX_DELIVERABLES_PER_ROUND, isBriefSnapshot, isVideoCard, isQuietConnectionUpdate, hasUnreadFromOthers, type MessageKind } from "@/lib/chat";
 import type { BriefSnapshot } from "@/lib/brief";
 
 type Role = "creator" | "brand";
@@ -568,6 +568,8 @@ function MessagesContent() {
   const latestBriefVersion = briefMessages.reduce((max, m) => Math.max(max, (m.data as unknown as BriefSnapshot).version || 0), 0);
   const latestBrief = briefMessages.find((m) => (m.data as unknown as BriefSnapshot).version === latestBriefVersion)?.data as unknown as BriefSnapshot | undefined;
   const briefApproved = !!connection?.briefApprovedAt;
+  // Videos of the current round still waiting for the brand (the creator may add options up to the cap)
+  const pendingVideoCount = messages.filter((m) => m.kind === "video" && isVideoCard(m.data) && m.data.status === "pending").length;
   const creatorCanApprove = role === "creator" && !!connection && connection.status === "approved" && !!connection.briefPostedAt && !briefApproved;
   const deadlineText = connection ? deadlineLabel(connection.deadline) : null;
   const nextAction = connection && role ? flowNextAction(connection.status, role, { initiatedBy: connection.initiatedBy, deliveryType: connection.deliveryType || connection.productType }) : null;
@@ -616,13 +618,23 @@ function MessagesContent() {
               {upload.buttonLabel(connection.id, s === "revision_requested" ? "🎬 העלאת הגרסה המתוקנת" : "🎬 העלאת הסרטון")}
             </Button>
             <p className="text-[11px] text-neutral-500 text-center">
-              {deadlineText ? `זמן לצילום ולהעלאה: ${deadlineText}` : "צלמו לפי הבריף והעלו כאן"}
+              {deadlineText ? `זמן לצילום ולהעלאה: ${deadlineText} · ` : ""}אפשר להעלות כמה אפשרויות (עד {MAX_DELIVERABLES_PER_ROUND}) והעסק יבחר
             </p>
           </div>
         );
       }
       if (s === "uploaded" || s === "in_review") {
-        return <Hint icon="👀" text={`הסרטון אצל העסק לבדיקה${deadlineText ? ` · ${deadlineText}` : ""}${finalRound ? " · ללא תשובה החיבור יושלם אוטומטית" : ""}`} />;
+        // The round is in front of the brand; more options may still be added until it decides
+        return (
+          <div className="space-y-1.5">
+            <Hint icon="👀" text={`${pendingVideoCount > 1 ? `${pendingVideoCount} סרטונים` : "הסרטון"} אצל העסק לבדיקה${deadlineText ? ` · ${deadlineText}` : ""}${finalRound ? " · ללא תשובה החיבור יושלם אוטומטית" : ""}`} />
+            {pendingVideoCount < MAX_DELIVERABLES_PER_ROUND && (
+              <Button fullWidth variant="secondary" loading={upload.uploadingId === connection.id} onClick={() => upload.start(connection.id)}>
+                {upload.buttonLabel(connection.id, "🎬 העלאת סרטון נוסף")}
+              </Button>
+            )}
+          </div>
+        );
       }
       return null;
     }
@@ -666,7 +678,7 @@ function MessagesContent() {
       return (
         <div className="space-y-1.5">
           <div className="flex gap-2">
-            <Button fullWidth loading={acting} onClick={() => updateStatus("completed")}>✅ מאשר סרטון</Button>
+            <Button fullWidth loading={acting} onClick={() => updateStatus("completed")}>{pendingVideoCount > 1 ? "✅ מאשר את הסרטונים" : "✅ מאשר סרטון"}</Button>
             {!finalRound && (
               <Button fullWidth variant="secondary" disabled={acting || revisionMode} onClick={startRevision}>✏️ דרוש שינוי</Button>
             )}
@@ -898,7 +910,10 @@ function MessagesContent() {
                             </span>
                           </button>
                           <div className="px-3 py-2">
-                            <p className="text-sm font-bold text-neutral-900">{round > 1 ? "🎬 הגרסה המתוקנת" : "🎬 הסרטון"}</p>
+                            <p className="text-sm font-bold text-neutral-900">
+                              {round > 1 ? "🎬 הגרסה המתוקנת" : "🎬 הסרטון"}
+                              {typeof v.option === "number" && v.option > 1 ? ` · אפשרות ${v.option}` : ""}
+                            </p>
                             <p className="text-[11px] text-neutral-500">
                               {vStatus === "approved" ? "✅ אושר" : vStatus === "revision_requested" ? "✏️ נדרש שינוי" : round > 1 ? "סופי — לאישור העסק" : "ממתין לאישור העסק"}
                             </p>

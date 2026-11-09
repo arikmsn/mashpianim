@@ -93,6 +93,73 @@ export function canBrandReview(status: unknown): boolean {
   return typeof status === "string" && (BRAND_REVIEW_STATUSES as readonly string[]).includes(status);
 }
 
+// --- The business's board ("חיבורים", owner 2026-11-09) --------------------------------------------------
+// Four views instead of five lists: what waits for the business itself ("לטיפול"), what is in motion, the
+// hearts inbox (creators who chose it, its own hearts, matches to confirm) and the archive. "בחרו בך" is a
+// long list that matters at the start; later the business works from "לטיפול" and "בתהליך".
+export type BrandBoardTab = "tasks" | "active" | "hearts" | "done";
+
+export const BRAND_BOARD_TABS: { id: BrandBoardTab; label: string; empty: string }[] = [
+  { id: "tasks", label: "⚡ לטיפול", empty: "שום דבר לא מחכה לכם כרגע 🙌" },
+  { id: "active", label: "בתהליך", empty: "אין חיבורים בתהליך — אשרו מאטץ' או שלחו לב ליוצר/ת" },
+  { id: "hearts", label: "לבבות", empty: "אין לבבות פתוחים — גלו יוצרים ושלחו לב" },
+  { id: "done", label: "הסתיימו", empty: "אין חיבורים שהסתיימו" },
+];
+
+export type BrandTaskKind = "confirm_match" | "ship" | "post_brief" | "review";
+
+export interface BrandTask {
+  kind: BrandTaskKind;
+  label: string;
+  cta: string;
+  // Lower = shown first in "לטיפול"
+  order: number;
+}
+
+// The business's own next step on a connection, or null when the ball is with the creator (or nothing is due)
+export function brandTask(conn: {
+  status: unknown;
+  mutual_at?: unknown;
+  brief_posted_at?: unknown;
+  brief_approved_at?: unknown;
+  product_type?: unknown;
+  delivery_type?: unknown;
+}): BrandTask | null {
+  const status = typeof conn.status === "string" ? conn.status : "";
+  if (status === "pending") {
+    return conn.mutual_at ? { kind: "confirm_match", label: "🎉 מאטץ' — ממתין לאישורכם", cta: "✅ אישור החיבור", order: 0 } : null;
+  }
+  if (status === "approved") {
+    if (!conn.brief_posted_at) return { kind: "post_brief", label: "📋 הבריף עוד לא נשלח ליוצר/ת", cta: "📋 שליחת הבריף", order: 2 };
+    if (conn.brief_approved_at) {
+      const digital = conn.product_type === "digital" || conn.delivery_type === "digital";
+      return digital
+        ? { kind: "ship", label: "📲 הבריף אושר — שלחו את פרטי הגישה", cta: "📲 שליחת גישה", order: 1 }
+        : { kind: "ship", label: "📦 הבריף אושר — זמן לשלוח את המוצר", cta: "📦 עדכון משלוח", order: 1 };
+    }
+    return null;
+  }
+  if (canBrandReview(status)) return { kind: "review", label: "🎬 סרטון ממתין לבדיקה שלכם", cta: "🎬 סקירת הסרטון", order: 3 };
+  return null;
+}
+
+// The state view a connection belongs to (every connection has exactly one; "tasks" is a cross-cut on top)
+export function brandBoardTab(conn: { status: unknown; initiated_by?: unknown; mutual_at?: unknown }): Exclude<BrandBoardTab, "tasks"> {
+  const bucket = brandBucket(conn);
+  if (bucket === "active") return "active";
+  if (bucket === "done") return "done";
+  return "hearts";
+}
+
+// Old deep links (`?tab=match|chose_you|my_list|active|done`, notifications, the home-screen chips) still land
+export function boardTabFromParam(param: string | null | undefined): BrandBoardTab | null {
+  if (!param) return null;
+  if (param === "tasks" || param === "match") return "tasks";
+  if (param === "active" || param === "hearts" || param === "done") return param;
+  if (param === "chose_you" || param === "my_list") return "hearts";
+  return null;
+}
+
 // --- Journey timeline (product page, connection cards) ---------------------------------------------
 
 // The five milestones both sides see; "shipped"/"delivered" read as access sent/received for digital products

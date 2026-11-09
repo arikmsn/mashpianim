@@ -62,7 +62,7 @@ app/src/
     login/, register/           phone OTP flows (register has creator + brand branches; brand categories are chips)
     terms/
     (app)/                      authenticated area; layout.tsx gates on useAuth, template.tsx = 150ms fade
-      feed/                     CREATOR HOME: one-product deck (❤️ / ✕ / פרטים, swipe or arrows), filter popup (categories with products, brand regions, type), "המוצרים שבחרתי" grid, gate banner, brand-hearts strip
+      feed/                     CREATOR HOME: one-product deck (❤️ / ✕ / פרטים, swipe or arrows; only פרטים opens the product — the picture is inert since 2026-11-09), filter popup (categories with products, brand regions, type), "המוצרים שבחרתי" grid, gate banner, brand-hearts strip
       products/[id]/            creator product page: details, the brand's brief, timeline settings, own connection's journey + actions
       connections/              creator's connections: "בתהליך" (brands that chose her: yes/no; mutual pairs waiting for the brand) and "הסתיימו" (matched, with status + chat + brand profile); `?open=<id>` lands on the right tab and highlights the card
       messages/                 chat list + chat view (both roles): typed messages (brief card, video card, events), status strip (timeline + clock + next step), per-role action bar (creator: approve brief / confirm delivery / upload; brand: update brief / ship / approve video / request one change), "📋 הבריף" modal
@@ -70,19 +70,20 @@ app/src/
       notifications/
       brand/                    BRAND HOME: Tinder-style creator gallery (card stack + grid + filters + product picker)
       brand/products/           product CRUD
-      brand/connections/        brand's connections; modal shows creator's full public profile
+      brand/connections/        the business's board (2026-11-09): "⚡ לטיפול" (its own next steps — match to confirm, brief to send, product to ship, video to review — with a CTA per card) / בתהליך / לבבות (grouped: matches, בחרו בך, שלחתם לב) / הסתיימו; old `?tab=` values still land; modal shows the creator's full public profile
     admin/                      admin dashboard: brands (credits editor, activate/deactivate), creators, moderation, content, feedback (in-app reports), settings
     api/                        see section 5
     auth/callback/              OAuth callback (unused now)
   components/
-    ui/                         Button, Input, Textarea, Card, Avatar (expandable → lightbox), Badge, Modal, Toast, BottomNav
+    ui/                         Button, Input, Textarea, Card, Avatar (expandable → lightbox), Badge, Modal (fixed header, scrolling body), Toast, BottomNav (the working screens + "☰ תפריט" that opens the SideMenu)
     features/profile-views.tsx  CreatorProfileView, BrandProfileView (shows the signed-in creator's hearts on the brand's products + heart/cancel buttons), PublicProfileContent, ProfileModal, usePublicProfile
+    features/side-menu.tsx      SideMenu — the drawer behind ☰ (2026-11-09): avatar + name, הפרופיל שלי, התראות, צור קשר / דיווח על תקלה, החלפת ממשק (accounts with several roles), התנתקות with a confirm step
     features/brief-view.tsx     BriefCard (the chat card: three headline sections + "לבריף המלא" + approval) and BriefFull (the whole template rendered)
     pwa/                        service-worker registration, install prompt
   hooks/
     use-auth.ts                 ONE shared auth store (useSyncExternalStore) — session read from cookie, no per-component network call
     use-notifications.ts        ONE shared notifications store: realtime + 60 s poll + foreground refresh; markAsRead / markAllRead
-    use-deliverable-upload.tsx  creator deliverable upload (direct to Storage + save-connection) shared by product page and connections
+    use-deliverable-upload.tsx  creator deliverable upload (direct to Storage + save-connection) shared by product page and connections; several files per pick, uploaded one after the other ("סרטון 2/3")
   lib/
     match.ts                    performMatch(), countPortfolioVideos(), portfolioGateError(), buildBriefMessage(), notifyHeartSent(), notifyBrandOfHeart()
     client-cache.ts             swrFetch/fetchJson/readCache (stale-while-revalidate for GET APIs; one in-flight request per URL, 2 s freshness window) + UNREAD_EVENT bus
@@ -96,9 +97,9 @@ app/src/
     categories.ts               PRODUCT_CATEGORIES (the 8 feed categories), REGISTRATION_TO_FEED, resolveProductCategory(): one list behind the feed chips, the product form and the API validation
     chat-time.ts                formatMessageTime() / sameDay() / dayLabel(): bubble times and day separators in the chat (viewer's zone)
     capacity.ts                 Supabase capacity watch: SUPABASE_PLAN (flip to "pro" after the upgrade), PLAN_LIMITS, capacityStatus() (70 % warn / 90 % critical) — admin gauge + daily cron alert; reads platform_usage() (migration 014)
-    connection-flow.ts          lifecycle rules + journey timeline (FLOW_STEPS, flowNextAction incl. the mutual state, activeDeadlineField), optional creator limit (normalizeMaxCreators → number|null, isProductFull), brand lists (BRAND_BUCKETS, brandBucket, heartState), who the business is (brandRevealedToCreator, hideBrand)
+    connection-flow.ts          lifecycle rules + journey timeline (FLOW_STEPS, flowNextAction incl. the mutual state, activeDeadlineField), optional creator limit (normalizeMaxCreators → number|null, isProductFull), brand lists (BRAND_BUCKETS, brandBucket, heartState), who the business is (brandRevealedToCreator, hideBrand), the business's board (BRAND_BOARD_TABS, brandTask, brandBoardTab, boardTabFromParam)
     brief.ts                    the brief template (owner's reference 2026-11-04): BRIEF_SECTIONS (see / say [text] / length / shots / captions / rules / donts), BRIEF_MORE_TITLE ("עוד משהו" = products.brief), sanitizeBriefData, sectionValue, briefDataLines(data, notes), definesFormat, BriefSnapshot (chat card), buildBriefMessage (plain text), FORMAT_LINES
-    chat.ts                     chat message kinds (text / brief / video / event), isBriefSnapshot / isVideoCard, CHAT_EVENT_TEXTS ("אישרתי את הבריף", "קיבלתי את החבילה", "דרוש שינוי: "), FINAL_REVIEW_HOURS (24), CHAT_NOTIFICATION_TYPES (notifications that open the chat), realtime hygiene (QUIET_CONNECTION_FIELDS, isQuietConnectionUpdate, changedConnectionFields, hasUnreadFromOthers, parseInstant)
+    chat.ts                     chat message kinds (text / brief / video / event), isBriefSnapshot / isVideoCard, CHAT_EVENT_TEXTS ("אישרתי את הבריף", "קיבלתי את החבילה", "דרוש שינוי: "), FINAL_REVIEW_HOURS (24), CHAT_NOTIFICATION_TYPES (notifications that open the chat), realtime hygiene (QUIET_CONNECTION_FIELDS, isQuietConnectionUpdate, changedConnectionFields, hasUnreadFromOthers, parseInstant), MAX_DELIVERABLES_PER_ROUND (5 options per round)
     regions.ts                  ISRAEL_REGIONS (the brand's "אזור בארץ" — feed filter), isRegion, cleanRegion
     social.ts                   what other users learn about a creator's reach: socialReach (platform + follower count, never the handle or a link), formatFollowersCount
     admin-auth.ts               verifyAdmin(), isSupabaseConfigured()
@@ -159,7 +160,7 @@ Pattern in every route: `createServerClient()` → `auth.getUser()` for identity
 | `videos` | GET, POST | GET `?portfolio=me|<userId>` (brands/admins may view others) or `?connectionId=` (the two parties or admin); POST = small-file fallback upload through the server (Vercel 4.5 MB body cap) — the app uploads directly to Storage instead |
 | `videos/[id]` | PUT/DELETE | approve/reject/delete |
 | `videos/save-portfolio` | POST | records a browser-uploaded portfolio video (`storagePath`, `title`, `thumbnailPath`); the path must be `portfolio/<auth uid>/<file>` |
-| `videos/save-connection` | POST | records a browser-uploaded deliverable for a connection (`connectionId`, `storagePath` = `portfolio/<auth uid>/connections/<connectionId>/<file>`, `thumbnailPath`) and moves the connection to `uploaded`; creator of that connection only, status must be delivered/filming/revision_requested. Inserts a `video` card into the chat (`{video_id, round, final}`); the brand's `review_deadline` is `review_days` for the first upload and 24 h (`FINAL_REVIEW_HOURS`) once `revision_count` ≥ `max_revisions` |
+| `videos/save-connection` | POST | several options per round (2026-11-09): allowed while the round already waits for the brand (`uploaded` / `in_review`), capped at `MAX_DELIVERABLES_PER_ROUND` pending videos; the status change, the review clock and the brand's notification happen on the round's first video only, later ones add a card "סרטון נוסף הועלה (אפשרות N)". Records a browser-uploaded deliverable for a connection (`connectionId`, `storagePath` = `portfolio/<auth uid>/connections/<connectionId>/<file>`, `thumbnailPath`) and moves the connection to `uploaded`; creator of that connection only, status must be delivered/filming/revision_requested. Inserts a `video` card into the chat (`{video_id, round, final}`); the brand's `review_deadline` is `review_days` for the first upload and 24 h (`FINAL_REVIEW_HOURS`) once `revision_count` ≥ `max_revisions` |
 | `videos/[id]` | DELETE | creator deletes one of their own portfolio videos (storage objects + row); admins may delete any video |
 | `notifications` | GET, PUT | GET: own rows (newest 50); PUT `{id, read}` marks one, `{all: true}` marks every unread row (the notifications screen calls it on open). `data` carries `connectionId` and, since Batch 7, `productId` — `lib/notification-links.ts` turns a row into its destination per role |
 | `admin/brands` | GET, PUT | list; PUT `{userId, is_active?, total_credits?}` (total can't drop below used → 400). Every admin PUT writes an `activity_log` row (`admin_update_*`, actor = admin's users.id) |
@@ -174,7 +175,7 @@ Pattern in every route: `createServerClient()` → `auth.getUser()` for identity
 ## 6. Front-end conventions that matter
 
 - Pages are client components. Data loading uses `swrFetch(url, apply)` from `lib/client-cache.ts`: `apply` runs with the cached response immediately (instant revisit) and again with fresh data. Mutations refetch via `fetchJson`. Supabase Realtime (`postgres_changes`) is used on `connections`, `products`, `messages` to refresh lists.
-- Auth: `useAuth()` is a single shared store; `(app)/layout.tsx` redirects to `/login?redirect=` when there is no session. Role is fetched from `/api/profile` (cached) — BottomNav shows creator or brand tabs accordingly.
+- Auth: `useAuth()` is a single shared store; `(app)/layout.tsx` redirects to `/login?redirect=` when there is no session. Role is fetched from `/api/profile` (cached) — BottomNav shows creator or brand tabs accordingly; the profile, notifications, contact and logout live in the side menu (☰ in the bar, `SideMenu` rendered by the layout).
 - UI primitives live in `components/ui`; `Avatar` has `expandable` (lightbox); `ProfileModal userId=…` shows any user's public profile anywhere.
 - All user-facing text is Hebrew. JSX text containing `'` must use `&apos;` (eslint `react/no-unescaped-entities`).
 - Lint state: `npx tsc --noEmit` is clean and must stay clean. ESLint has ~15 **pre-existing** errors (`react-hooks` "setState synchronously in effect", "cannot access variable before declared") and widespread `no-explicit-any` — the codebase uses `as any` for Supabase rows. Don't add new errors; don't feel obliged to fix old ones unless touching that code.

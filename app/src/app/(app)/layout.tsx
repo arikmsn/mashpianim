@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { BottomNav } from "@/components/ui";
+import { SideMenu } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { swrFetch } from "@/lib/client-cache";
 
@@ -11,6 +12,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [checked, setChecked] = useState(false);
+  // The side menu (☰ in the bottom bar): profile, notifications, contact / report, logout
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!loading) {
@@ -44,7 +47,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <div className="pb-20">{children}</div>
-      <BottomNav />
+      <BottomNav onMenu={() => setMenuOpen(true)} />
+      <SideMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
     </>
   );
 }

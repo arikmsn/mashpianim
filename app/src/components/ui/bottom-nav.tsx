@@ -33,12 +33,6 @@ const messagesIcon = (
   </svg>
 );
 
-const profileIcon = (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
-  </svg>
-);
-
 const productsIcon = (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
@@ -47,11 +41,17 @@ const productsIcon = (
   </svg>
 );
 
+const menuIcon = (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+  </svg>
+);
+
+// The profile moved into the side menu (☰, owner 2026-11-09); the bar keeps the working screens
 const creatorNavItems: NavItem[] = [
   { href: "/feed", label: "גלו", icon: compassIcon },
   { href: "/connections", label: "חיבורים", icon: connectionsIcon },
   { href: "/messages", label: "הודעות", icon: messagesIcon },
-  { href: "/profile", label: "פרופיל", icon: profileIcon },
 ];
 
 const brandNavItems: NavItem[] = [
@@ -59,10 +59,10 @@ const brandNavItems: NavItem[] = [
   { href: "/brand/products", label: "מוצרים", icon: productsIcon },
   { href: "/brand/connections", label: "חיבורים", icon: connectionsIcon },
   { href: "/messages", label: "הודעות", icon: messagesIcon },
-  { href: "/profile", label: "פרופיל", icon: profileIcon },
 ];
 
-function BottomNav() {
+// `onMenu` opens the side menu (profile, notifications, contact, logout); without it the bar has no menu item
+function BottomNav({ onMenu }: { onMenu?: () => void } = {}) {
   const pathname = usePathname();
   const { user } = useAuth();
   // The role this session is signed in as (not the account type: an admin signed in as a brand sees the brand nav)
@@ -199,6 +199,20 @@ function BottomNav() {
             </Link>
           );
         })}
+        {onMenu && (
+          <button
+            type="button"
+            onClick={onMenu}
+            aria-label="תפריט"
+            className={cn(
+              "flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-colors relative min-w-[56px]",
+              pathname.startsWith("/profile") || pathname.startsWith("/notifications") ? "text-ig-pink" : "text-neutral-400 active:text-neutral-600"
+            )}
+          >
+            <span>{menuIcon}</span>
+            <span className="text-[10px] font-medium">תפריט</span>
+          </button>
+        )}
       </div>
     </nav>
   );

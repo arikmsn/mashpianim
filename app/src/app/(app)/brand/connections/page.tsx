@@ -7,7 +7,7 @@ import { Card, Badge, Button, Modal, Avatar, Input, Textarea, useToast } from "@
 import { ConnectionTimeline, PublicProfileContent, FeedbackModal } from "@/components/features";
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch, fetchJson } from "@/lib/client-cache";
-import { activeDeadlineField, canBrandReview, brandBucket, BRAND_BUCKETS, type BrandBucket } from "@/lib/connection-flow";
+import { activeDeadlineField, canBrandReview, brandBoardTab, brandTask, boardTabFromParam, BRAND_BOARD_TABS, type BrandBoardTab, type BrandTask } from "@/lib/connection-flow";
 import { toDirectImageUrl } from "@/lib/images";
 
 interface Connection {
@@ -30,6 +30,9 @@ interface Connection {
   trackingUrl: string | null;
   digitalAccessValue: string | null;
   revisionCount: number;
+  productId: string | null;
+  briefPostedAt: string | null;
+  briefApprovedAt: string | null;
   // The deadline that applies to the current step (ship / deliver / film / review)
   activeDeadline: string | null;
 }
@@ -60,7 +63,33 @@ interface ConnectionVideo {
   created_at: string;
 }
 
-const BUCKET_IDS = new Set<string>(BRAND_BUCKETS.map((b) => b.id));
+// The business's own next step on a connection (drives "⚡ לטיפול" and the CTA on each card)
+function taskOf(conn: Connection): BrandTask | null {
+  return brandTask({
+    status: conn.status,
+    mutual_at: conn.mutualAt,
+    brief_posted_at: conn.briefPostedAt,
+    brief_approved_at: conn.briefApprovedAt,
+    product_type: conn.productType,
+  });
+}
+
+function stateTabOf(conn: Connection) {
+  return brandBoardTab({ status: conn.status, initiated_by: conn.initiatedBy, mutual_at: conn.mutualAt });
+}
+
+// The hearts inbox is grouped: matches to confirm, creators who chose the business, the business's own hearts
+type HeartGroup = "match" | "chose_you" | "my_list";
+const HEART_GROUP_ORDER: HeartGroup[] = ["match", "chose_you", "my_list"];
+const HEART_GROUP_TITLES: Record<HeartGroup, string> = {
+  match: "🎉 מאטץ' — שני הצדדים סימנו לב, האישור שלכם פותח את החיבור",
+  chose_you: "💗 בחרו בך — יוצרים שסימנו את המוצרים שלכם · לב בחזרה = מאטץ'",
+  my_list: "💗 שלחתם לב — ממתינים לתשובת היוצר/ת",
+};
+function heartGroupOf(conn: Connection): HeartGroup {
+  if (conn.mutualAt) return "match";
+  return conn.initiatedBy === "brand" ? "my_list" : "chose_you";
+}
 
 function ConnectionsSkeleton() {
   return (
@@ -102,7 +131,7 @@ function BrandConnectionsPageInner() {
   const openId = searchParams.get("open");
   const tabParam = searchParams.get("tab");
   const handledOpenRef = useRef<string | null>(null);
-  const [activeTab, setActiveTab] = useState<BrandBucket>(tabParam && BUCKET_IDS.has(tabParam) ? (tabParam as BrandBucket) : "match");
+  const [activeTab, setActiveTab] = useState<BrandBoardTab>(boardTabFromParam(tabParam) || "tasks");
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
@@ -116,7 +145,7 @@ function BrandConnectionsPageInner() {
     if (!target) return;
     handledOpenRef.current = openId;
     const t = setTimeout(() => {
-      setActiveTab(brandBucket({ status: target.status, initiated_by: target.initiatedBy, mutual_at: target.mutualAt }));
+      setActiveTab(taskOf(target) ? "tasks" : stateTabOf(target));
       setSelectedConnection(target);
     }, 0);
     return () => clearTimeout(t);
@@ -157,6 +186,9 @@ function BrandConnectionsPageInner() {
           trackingUrl: (c.tracking_url as string) || null,
           digitalAccessValue: (c.digital_access_value as string) || null,
           revisionCount: (c.revision_count as number) || 0,
+          productId: (c.product_id as string) || null,
+          briefPostedAt: (c.brief_posted_at as string) || null,
+          briefApprovedAt: (c.brief_approved_at as string) || null,
           activeDeadline: (() => {
             const field = activeDeadlineField(c.status as string);
             return field ? ((c[field] as string) || null) : null;
@@ -234,7 +266,7 @@ function BrandConnectionsPageInner() {
         if (newStatus === "mutual") {
           setConnections((prev) => prev.map((c) => (c.id === connectionId ? { ...c, mutualAt: new Date().toISOString() } : c)));
           toast("🎉 יש מאטץ'! אשרו את החיבור כדי להתחיל", "success");
-          setActiveTab("match");
+          setActiveTab("tasks");
         } else {
           setConnections((prev) => prev.map((c) => (c.id === connectionId ? { ...c, status: newStatus } : c)));
           if (newStatus === "approved") {
@@ -265,26 +297,43 @@ function BrandConnectionsPageInner() {
     }
   }
 
-  const bucketOf = (c: Connection) => brandBucket({ status: c.status, initiated_by: c.initiatedBy, mutual_at: c.mutualAt });
-  const filtered = connections.filter((c) => bucketOf(c) === activeTab);
-  const counts: Record<BrandBucket, number> = { chose_you: 0, my_list: 0, match: 0, active: 0, done: 0 };
-  for (const c of connections) counts[bucketOf(c)]++;
+  // "⚡ לטיפול" is a cross-cut: everything whose next step is the business's own. The other views are states.
+  const counts: Record<BrandBoardTab, number> = { tasks: 0, active: 0, hearts: 0, done: 0 };
+  for (const c of connections) {
+    if (taskOf(c)) counts.tasks++;
+    counts[stateTabOf(c)]++;
+  }
+  const byDeadline = (a: Connection, b: Connection) => {
+    const da = a.activeDeadline ? Date.parse(a.activeDeadline) : Infinity;
+    const db = b.activeDeadline ? Date.parse(b.activeDeadline) : Infinity;
+    if (da !== db) return da - db;
+    return Date.parse(b.createdAt) - Date.parse(a.createdAt);
+  };
+  const filtered = connections
+    .filter((c) => (activeTab === "tasks" ? !!taskOf(c) : stateTabOf(c) === activeTab))
+    .sort((a, b) => {
+      if (activeTab === "tasks") return (taskOf(a)!.order - taskOf(b)!.order) || byDeadline(a, b);
+      if (activeTab === "hearts") {
+        return HEART_GROUP_ORDER.indexOf(heartGroupOf(a)) - HEART_GROUP_ORDER.indexOf(heartGroupOf(b)) || Date.parse(b.createdAt) - Date.parse(a.createdAt);
+      }
+      if (activeTab === "active") return Number(!taskOf(a)) - Number(!taskOf(b)) || byDeadline(a, b);
+      return Date.parse(b.completedAt || b.createdAt) - Date.parse(a.completedAt || a.createdAt);
+    });
 
-  // First visit: the list that needs the brand most (matches to confirm, then creators who chose it, then
-  // active work); a tab the user taps, or one named in the URL, is never overridden
-  const tabPickedRef = useRef(!!tabParam && BUCKET_IDS.has(tabParam));
-  const { match: matchCount, chose_you: choseCount, my_list: listCount, active: activeCount, done: doneCount } = counts;
+  // First visit: what waits for the business, else what is in motion, else the hearts inbox; a tab the user
+  // taps, or one named in the URL, is never overridden
+  const tabPickedRef = useRef(!!boardTabFromParam(tabParam));
+  const { tasks: taskCount, active: activeCount, hearts: heartCount, done: doneCount } = counts;
   useEffect(() => {
     if (loading || openId || tabPickedRef.current) return;
     tabPickedRef.current = true;
-    const first: BrandBucket =
-      matchCount > 0 ? "match" : choseCount > 0 ? "chose_you" : activeCount > 0 ? "active" : listCount > 0 ? "my_list" : doneCount > 0 ? "done" : "chose_you";
+    const first: BrandBoardTab = taskCount > 0 ? "tasks" : activeCount > 0 ? "active" : heartCount > 0 ? "hearts" : doneCount > 0 ? "done" : "hearts";
     const t = setTimeout(() => setActiveTab(first), 0);
     return () => clearTimeout(t);
-  }, [loading, openId, matchCount, choseCount, listCount, activeCount, doneCount]);
+  }, [loading, openId, taskCount, activeCount, heartCount, doneCount]);
 
   function getActions(conn: Connection) {
-    const actions: { label: string; status: string; variant: "primary" | "secondary" | "danger"; needsModal?: boolean; confirm?: boolean }[] = [];
+    const actions: { label: string; status: string; variant: "primary" | "secondary" | "danger"; needsModal?: boolean; confirm?: boolean; route?: string }[] = [];
     switch (conn.status) {
       case "pending":
         if (conn.mutualAt) {
@@ -298,7 +347,14 @@ function BrandConnectionsPageInner() {
         }
         break;
       case "approved":
-        actions.push({ label: conn.productType === "digital" ? "שליחת גישה" : "עדכון משלוח", status: "shipped", variant: "primary", needsModal: true });
+        // The brief goes first; shipping waits for the creator's approval of it (same order as the chat)
+        if (!conn.briefPostedAt && conn.productId) {
+          actions.push({ label: "📋 שליחת הבריף", status: "brief", variant: "primary", route: `/brand/products/${conn.productId}/brief?connection=${conn.id}` });
+        } else if (conn.briefApprovedAt) {
+          actions.push({ label: conn.productType === "digital" ? "📲 שליחת גישה" : "📦 עדכון משלוח", status: "shipped", variant: "primary", needsModal: true });
+        } else {
+          actions.push({ label: "💬 לצ'אט", status: "chat", variant: "secondary", route: `/messages?connection=${conn.id}` });
+        }
         break;
       case "uploaded":
       case "in_review":
@@ -309,7 +365,9 @@ function BrandConnectionsPageInner() {
   }
 
   function runAction(conn: Connection, action: ReturnType<typeof getActions>[number]) {
-    if (action.confirm) {
+    if (action.route) {
+      router.push(action.route);
+    } else if (action.confirm) {
       setConfirmFor(conn);
     } else if (action.needsModal) {
       setSelectedConnection(conn);
@@ -323,18 +381,17 @@ function BrandConnectionsPageInner() {
     return new Date(dateStr).toLocaleDateString("he-IL");
   }
 
-  const emptyText = BRAND_BUCKETS.find((b) => b.id === activeTab)?.empty || "אין חיבורים";
+  const emptyText = BRAND_BOARD_TABS.find((b) => b.id === activeTab)?.empty || "אין חיבורים";
 
   return (
     <main className="min-h-screen bg-background pb-20">
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-neutral-100">
         <div className="max-w-2xl mx-auto px-4 py-4">
-          <h1 className="text-2xl font-bold mb-3">חיבורים</h1>
+          <h1 className="text-2xl font-bold">חיבורים</h1>
+          <p className="text-xs text-neutral-500 mt-0.5 mb-3">ניהול החיבורים עם היוצרים: מה מחכה לכם, מה בתהליך, הלבבות והארכיון</p>
           <div className="flex gap-1 bg-neutral-50 rounded-xl p-1 overflow-x-auto scrollbar-hide">
-            {BRAND_BUCKETS.map((tab) => {
+            {BRAND_BOARD_TABS.map((tab) => {
               const count = counts[tab.id];
-              // Items that wait for the brand get a loud badge; the rest a quiet count
-              const needsMe = tab.id === "match" || tab.id === "chose_you";
               return (
                 <button
                   key={tab.id}
@@ -347,12 +404,9 @@ function BrandConnectionsPageInner() {
                   }`}
                 >
                   {tab.label}
-                  {count > 0 && needsMe ? (
-                    <span
-                      className={`mr-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white ${
-                        tab.id === "match" ? "bg-emerald-500" : "ig-gradient-bg"
-                      }`}
-                    >
+                  {count > 0 && tab.id === "tasks" ? (
+                    // What waits for the business gets the loud badge; the state views a quiet count
+                    <span className="mr-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white bg-emerald-500">
                       {count}
                     </span>
                   ) : count > 0 ? (
@@ -366,7 +420,7 @@ function BrandConnectionsPageInner() {
       </header>
 
       <div className="max-w-2xl mx-auto px-4 py-4">
-        {activeTab === "match" && counts.match > 0 && (
+        {activeTab === "tasks" && filtered.some((c) => taskOf(c)?.kind === "confirm_match") && (
           <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-3 mb-4 text-sm text-emerald-800">
             🎉 שני הצדדים סימנו לב. אישור החיבור פותח צ&apos;אט, שולח ליוצר/ת את הבריף ומחייב סרטון אחד מהחבילה
             {credits ? ` (נותרו ${credits.remaining})` : ""}.
@@ -377,10 +431,10 @@ function BrandConnectionsPageInner() {
         ) : filtered.length === 0 ? (
           <div className="text-center py-16 text-neutral-400">
             <span className="text-4xl block mb-3">
-              {activeTab === "match" ? "🎉" : activeTab === "chose_you" ? "💗" : activeTab === "my_list" ? "📝" : activeTab === "active" ? "🔗" : "🏆"}
+              {activeTab === "tasks" ? "✅" : activeTab === "hearts" ? "💗" : activeTab === "active" ? "🔗" : "🏆"}
             </span>
             <p>{emptyText}</p>
-            {activeTab === "my_list" && (
+            {(activeTab === "hearts" || activeTab === "active") && (
               <Button size="sm" variant="secondary" className="mt-4" onClick={() => router.push("/brand")}>
                 לגלות יוצרים
               </Button>
@@ -391,13 +445,18 @@ function BrandConnectionsPageInner() {
             {filtered.map((conn, i) => {
               const statusInfo = conn.status === "pending" ? pendingInfo(conn) : statusLabels[conn.status] || { label: conn.status, variant: "default" as const };
               const actions = getActions(conn);
+              const task = taskOf(conn);
+              // The hearts inbox is grouped: a title before the first card of each group
+              const group = activeTab === "hearts" ? heartGroupOf(conn) : null;
+              const groupTitle = group && (i === 0 || heartGroupOf(filtered[i - 1]) !== group) ? HEART_GROUP_TITLES[group] : null;
               return (
                 <motion.div
                   key={conn.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.05 }}
+                  transition={{ delay: Math.min(i, 8) * 0.04 }}
                 >
+                  {groupTitle && <p className="text-xs font-bold text-neutral-500 mb-2 mt-1">{groupTitle}</p>}
                   <Card hover padding="md" onClick={() => setSelectedConnection(conn)}>
                     <div className="flex items-center gap-3">
                       <Avatar src={conn.creatorAvatar} name={conn.creatorName} size="md" />
@@ -426,6 +485,9 @@ function BrandConnectionsPageInner() {
                           compact
                         />
                       </div>
+                    )}
+                    {task && (
+                      <p className="mt-3 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-1.5">⚡ {task.label}</p>
                     )}
                     {actions.length > 0 && (
                       <div className="flex gap-2 mt-3 pt-3 border-t border-neutral-100">

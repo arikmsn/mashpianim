@@ -8,9 +8,16 @@ export interface VideoCardData {
   // Added at read time (signed URLs expire)
   url?: string | null;
   thumbnail_url?: string | null;
+  status?: string | null;
   // 1 = first upload, 2 = the revised one
   round?: number;
+  // Several options per round: 1, 2, 3… in upload order
+  option?: number;
+  final?: boolean;
 }
+
+// How many videos a creator may put in front of the brand per round (the brand picks; the chat stays usable)
+export const MAX_DELIVERABLES_PER_ROUND = 5;
 
 export type MessageData = BriefSnapshot | VideoCardData | Record<string, unknown>;
 

@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, after, type NextRequest } from "next/server";
 import { resolveViewer } from "@/lib/viewer";
 import { readActiveRole } from "@/lib/active-role";
 import { createClient } from "@supabase/supabase-js";
@@ -6,7 +6,8 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { isOwnConnectionVideoPath, isImagePath, canUploadConnectionVideo } from "@/lib/authz";
 import { notifyConnectionStatusChange, logActivity } from "@/lib/notifications";
 import { getTimelineSettings } from "@/lib/settings";
-import { FINAL_REVIEW_HOURS } from "@/lib/chat";
+import { canBrandReview } from "@/lib/connection-flow";
+import { FINAL_REVIEW_HOURS, MAX_DELIVERABLES_PER_ROUND } from "@/lib/chat";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -77,6 +78,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "לא ניתן להעלות סרטון בסטטוס הנוכחי של החיבור" }, { status: 400 });
     }
 
+    // Several options per round (owner, 2026-11-09): the creator may keep adding videos until the brand
+    // decides; "additional" = the round is already in front of the brand. Each round is capped.
+    const additional = canBrandReview(conn.status);
+    const { count: pendingCount } = await supabase
+      .from("videos")
+      .select("id", { count: "exact", head: true })
+      .eq("connection_id", connectionId)
+      .eq("status", "pending");
+    if ((pendingCount || 0) >= MAX_DELIVERABLES_PER_ROUND) {
+      return NextResponse.json(
+        { error: `אפשר להעלות עד ${MAX_DELIVERABLES_PER_ROUND} סרטונים לסבב — העסק יבחר מביניהם` },
+        { status: 400 }
+      );
+    }
+    const option = (pendingCount || 0) + 1;
+
     // Signing also proves the object exists
     const { data: signedData, error: signError } = await supabase.storage
       .from("videos")
@@ -111,59 +128,70 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "שגיאה בשמירת הסרטון" }, { status: 500 });
     }
 
-    // The brand's review clock starts now: review_days for the first upload (auto-approve after the grace
-    // period, see cron); the revised upload is final and closes after 24 h without an answer
+    // The brand's review clock starts with the first video of the round: review_days (auto-approve after the
+    // grace period, see cron); the revised round is final and closes after 24 h without an answer. Extra
+    // options added later leave the clock and the status alone.
     const timelines = await getTimelineSettings(supabase);
     const nowMs = Date.now();
     const round = (conn.revision_count || 0) + 1;
     const finalRound = (conn.revision_count || 0) >= timelines.max_revisions;
-    const reviewDeadline = finalRound
-      ? new Date(nowMs + FINAL_REVIEW_HOURS * 3600000).toISOString()
-      : new Date(nowMs + timelines.review_days * 86400000).toISOString();
-    const { error: updateError } = await supabase
-      .from("connections")
-      .update({
-        status: "uploaded",
-        filmed_at: conn.filmed_at || new Date(nowMs).toISOString(),
-        review_deadline: reviewDeadline,
-      } as any)
-      .eq("id", connectionId);
-    if (updateError) {
-      console.error("[videos] connection status error:", updateError);
+    if (!additional) {
+      const reviewDeadline = finalRound
+        ? new Date(nowMs + FINAL_REVIEW_HOURS * 3600000).toISOString()
+        : new Date(nowMs + timelines.review_days * 86400000).toISOString();
+      const { error: updateError } = await supabase
+        .from("connections")
+        .update({
+          status: "uploaded",
+          filmed_at: conn.filmed_at || new Date(nowMs).toISOString(),
+          review_deadline: reviewDeadline,
+        } as any)
+        .eq("id", connectionId);
+      if (updateError) {
+        console.error("[videos] connection status error:", updateError);
+      }
     }
 
     // The deliverable shows in the chat as a card (fresh URLs are attached when the chat loads)
     await supabase.from("messages").insert({
       connection_id: connectionId,
       sender_id: (dbUser as any).id,
-      text: round > 1 ? "🎬 הגרסה המתוקנת הועלתה" : "🎬 הסרטון הועלה",
+      text: additional ? `🎬 סרטון נוסף הועלה (אפשרות ${option})` : round > 1 ? "🎬 הגרסה המתוקנת הועלתה" : "🎬 הסרטון הועלה",
       is_system: false,
       kind: "video",
-      data: { video_id: (video as any)?.id, round, final: finalRound },
+      data: { video_id: (video as any)?.id, round, final: finalRound, option },
     } as any);
 
+    const newStatus = additional ? (conn.status as string) : "uploaded";
     const creatorUser = conn.creator_profiles?.users;
     const brandUser = conn.brand_profiles?.users;
-    if (creatorUser && brandUser) {
-      await notifyConnectionStatusChange("uploaded", {
-        connectionId,
-        productName: conn.products?.name || "",
-        creatorName: creatorUser.full_name || "יוצר",
-        brandName: conn.brand_profiles?.shop_name || brandUser.full_name || "עסק",
-        creatorUserId: creatorUser.id,
-        brandUserId: brandUser.id,
-        productId: conn.product_id,
-      });
-    }
-    await logActivity({
-      actorId: (dbUser as any).id,
-      action: "connection_uploaded",
-      entityType: "connection",
-      entityId: connectionId,
-      details: { from: conn.status, to: "uploaded", video_id: (video as any)?.id },
+    // The brand hears about the round once (the first video); extra options appear in the chat it already has
+    after(async () => {
+      try {
+        if (!additional && creatorUser && brandUser) {
+          await notifyConnectionStatusChange("uploaded", {
+            connectionId,
+            productName: conn.products?.name || "",
+            creatorName: creatorUser.full_name || "יוצר",
+            brandName: conn.brand_profiles?.shop_name || brandUser.full_name || "עסק",
+            creatorUserId: creatorUser.id,
+            brandUserId: brandUser.id,
+            productId: conn.product_id,
+          });
+        }
+        await logActivity({
+          actorId: (dbUser as any).id,
+          action: "connection_uploaded",
+          entityType: "connection",
+          entityId: connectionId,
+          details: { from: conn.status, to: newStatus, video_id: (video as any)?.id, option },
+        });
+      } catch (err) {
+        console.error("[videos] post-response notifications failed:", err);
+      }
     });
 
-    return NextResponse.json({ success: true, video, status: "uploaded" });
+    return NextResponse.json({ success: true, video, status: newStatus, option });
   } catch (err) {
     console.error("[videos] save-connection error:", err);
     return NextResponse.json({ error: "שגיאה בשמירת הסרטון" }, { status: 500 });

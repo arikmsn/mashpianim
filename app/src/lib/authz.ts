@@ -252,8 +252,9 @@ export function thumbnailPathFromUrl(url: unknown): string | null {
 
 // --- Connection videos ----------------------------------------------------------------------------
 
-// A creator may upload the deliverable only once the product arrived (or a revision was requested)
-export const CONNECTION_UPLOAD_STATUSES = ["delivered", "filming", "revision_requested"] as const;
+// A creator may upload deliverables once the product arrived (or a revision was requested), and keep adding
+// options while the brand has not decided yet (owner, 2026-11-09: "she will send a few and the business picks")
+export const CONNECTION_UPLOAD_STATUSES = ["delivered", "filming", "revision_requested", "uploaded", "in_review"] as const;
 
 export function canUploadConnectionVideo(status: unknown): boolean {
   return typeof status === "string" && (CONNECTION_UPLOAD_STATUSES as readonly string[]).includes(status);

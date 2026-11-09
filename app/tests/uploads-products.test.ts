@@ -73,9 +73,9 @@ describe("thumbnail helpers", () => {
 });
 
 describe("connection upload statuses", () => {
-  test("only after delivery, during filming, or when a revision was requested", () => {
-    for (const s of ["delivered", "filming", "revision_requested"]) assert.equal(canUploadConnectionVideo(s), true, s);
-    for (const s of ["pending", "approved", "shipped", "uploaded", "in_review", "completed", "cancelled", "rejected"]) {
+  test("after delivery, during filming, when a revision was requested — and while the round waits for the brand (several options, 2026-11-09)", () => {
+    for (const s of ["delivered", "filming", "revision_requested", "uploaded", "in_review"]) assert.equal(canUploadConnectionVideo(s), true, s);
+    for (const s of ["pending", "approved", "shipped", "completed", "cancelled", "rejected"]) {
       assert.equal(canUploadConnectionVideo(s), false, s);
     }
     assert.equal(canUploadConnectionVideo(null), false);

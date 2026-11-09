@@ -552,13 +552,9 @@ export default function FeedPage() {
                   onDragEnd={onDragEnd}
                   className="absolute inset-0 rounded-3xl overflow-hidden bg-white shadow-xl border border-neutral-100 touch-pan-y select-none flex flex-col"
                 >
-                  <Link
-                    href={detailsHref}
-                    prefetch
-                    draggable={false}
-                    onClick={(e) => { if (dragging.current) e.preventDefault(); }}
-                    className="relative block flex-1 min-h-[120px]"
-                  >
+                  {/* The picture is only a picture: just "פרטים" opens the product (owner, 2026-11-09 — taps while
+                      browsing kept opening the page by mistake) */}
+                  <div className="relative flex-1 min-h-[120px]">
                     {current.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={current.image} alt={current.name} draggable={false} className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
@@ -574,7 +570,7 @@ export default function FeedPage() {
                       {current.categoryLabel && <span className="bg-black/50 text-white text-xs px-2.5 py-1 rounded-full">{current.categoryLabel}</span>}
                       {current.region && <span className="bg-black/50 text-white text-xs px-2.5 py-1 rounded-full">📍 {current.region}</span>}
                     </div>
-                  </Link>
+                  </div>
                   <div className="shrink-0 p-3.5 space-y-1.5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
