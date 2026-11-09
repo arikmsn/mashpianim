@@ -7,10 +7,9 @@
 // The `videos` bucket is already configured for 150 MB (migration 009); after upgrading to Pro and raising
 // the project limit, set this to 150 (≈ 2 minutes of 1080p phone video).
 
-// 2026-11-10: the project is on Pro, but the project-wide Storage limit (Dashboard → Storage → Settings → global
-// file size limit) is still 50 MB — a 51 MB test upload was refused with EntityTooLarge. Raise this to 150 the
-// moment the owner sets that limit to 150 MB (the `videos` bucket already allows 150).
-export const MAX_VIDEO_MB = 50;
+// 2026-11-10 01:20: Supabase Pro + the project-wide Storage limit raised to 150 MB by the owner (a 51 MB probe
+// upload was accepted); the `videos` bucket allows 150 MB too (migration 009). About 2 minutes of 1080p.
+export const MAX_VIDEO_MB = 150;
 export const MAX_VIDEO_BYTES = MAX_VIDEO_MB * 1024 * 1024;
 export const MAX_IMAGE_MB = 5;
 export const MAX_IMAGE_BYTES = MAX_IMAGE_MB * 1024 * 1024;
