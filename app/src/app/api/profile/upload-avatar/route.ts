@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { MAX_IMAGE_BYTES, MAX_IMAGE_MB, detectImageType, extensionForImage } from "@/lib/uploads";
+import { resolveViewer } from "@/lib/viewer";
+import { readActiveRole } from "@/lib/active-role";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -70,9 +72,19 @@ export async function POST(request: NextRequest) {
 
     const avatarUrl = signedData?.signedUrl || "";
 
-    await (supabase.from("users") as any)
-      .update({ avatar_url: avatarUrl })
-      .eq("id", (dbUser as any).id);
+    // A business session uploads its logo (brand_profiles.logo_url); a creator session its own picture
+    // (users.avatar_url). Writing the logo onto the person's picture is what made a removed image linger for
+    // creators on 2026-11-09 — the two are kept apart now.
+    const role = (await resolveViewer(supabase, user.id, await readActiveRole()))?.role;
+    if (role === "brand") {
+      await (supabase.from("brand_profiles") as any)
+        .update({ logo_url: avatarUrl })
+        .eq("user_id", (dbUser as any).id);
+    } else {
+      await (supabase.from("users") as any)
+        .update({ avatar_url: avatarUrl })
+        .eq("id", (dbUser as any).id);
+    }
 
     return NextResponse.json({ success: true, url: avatarUrl });
   } catch (err) {

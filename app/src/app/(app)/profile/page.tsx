@@ -92,42 +92,6 @@ function brandCategoriesFrom(brandData: any): string[] {
   return brandData?.category ? [brandData.category as string] : [];
 }
 
-// Brings one field of the edit form into view (and focus) right after the form opens — the pencils on the
-// profile open the form on the detail they sit next to
-function useFocusField(open: boolean, field: string | null | undefined) {
-  useEffect(() => {
-    if (!open || !field) return;
-    const t = setTimeout(() => {
-      const el = document.getElementById(`edit-${field}`);
-      if (!el) return;
-      el.scrollIntoView({ block: "center", behavior: "smooth" });
-      (el as HTMLElement).focus({ preventScroll: true });
-    }, 260);
-    return () => clearTimeout(t);
-  }, [open, field]);
-}
-
-// The small pencil next to every editable detail on the profile (owner, 2026-11-09: editing must be visible
-// without scrolling past the videos)
-function EditPencil({ label, onClick, size = "sm" }: { label: string; onClick: () => void; size?: "sm" | "xs" }) {
-  const dim = size === "xs" ? "w-6 h-6" : "w-7 h-7";
-  const icon = size === "xs" ? 12 : 14;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={`עריכת ${label}`}
-      title={`עריכת ${label}`}
-      className={`inline-flex shrink-0 items-center justify-center ${dim} rounded-full bg-white/90 text-pink-500 shadow-sm ring-1 ring-pink-100 hover:bg-pink-50 active:scale-95 transition`}
-    >
-      <svg width={icon} height={icon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M12 20h9" />
-        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-      </svg>
-    </button>
-  );
-}
-
 function LogoutConfirmModal({
   open,
   loading,
@@ -206,13 +170,11 @@ function CreatorEditModal({
   onClose,
   initialData,
   onSave,
-  focusField = null,
 }: {
   open: boolean;
   onClose: () => void;
   initialData: CreatorEditForm;
   onSave: (data: CreatorEditForm) => Promise<void>;
-  focusField?: string | null;
 }) {
   const [form, setForm] = useState<CreatorEditForm>(initialData);
   const [saving, setSaving] = useState(false);
@@ -222,7 +184,6 @@ function CreatorEditModal({
   useEffect(() => {
     if (open) setForm(initialData);
   }, [open, initialData]);
-  useFocusField(open, focusField);
 
   const toggleCategory = (cat: string) => {
     setForm((prev) => ({
@@ -390,13 +351,11 @@ function BrandEditModal({
   onClose,
   initialData,
   onSave,
-  focusField = null,
 }: {
   open: boolean;
   onClose: () => void;
   initialData: BrandEditForm;
   onSave: (data: BrandEditForm) => Promise<void>;
-  focusField?: string | null;
 }) {
   const [form, setForm] = useState<BrandEditForm>(initialData);
   const [saving, setSaving] = useState(false);
@@ -410,7 +369,6 @@ function BrandEditModal({
       setCustomCategory("");
     }
   }, [open, initialData]);
-  useFocusField(open, focusField);
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -605,8 +563,6 @@ export default function ProfilePage() {
   const [portfolioVideos, setPortfolioVideos] = useState<PortfolioVideo[]>([]);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
-  // Which field the edit form lands on (set by the pencil that opened it)
-  const [editFocus, setEditFocus] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -650,11 +606,8 @@ export default function ProfilePage() {
   });
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
-  // Opens the edit form, optionally on one field — every detail on the profile has its own pencil
-  const openEdit = (field: string | null = null) => {
-    setEditFocus(field);
-    setEditOpen(true);
-  };
+  // The one way in to editing: "✏️ עריכת פרופיל" at the top of the header (owner, 2026-11-09 — no pencils)
+  const openEdit = () => setEditOpen(true);
 
   useEffect(() => {
     async function fetchProfile() {
@@ -970,11 +923,11 @@ export default function ProfilePage() {
         <div className="bg-gradient-to-b from-pink-100 to-background px-4 pt-8 pb-4">
           <div className="max-w-2xl mx-auto">
             <div className="flex items-center justify-between gap-3 mb-3">
-              <span className="text-xs text-neutral-500">הפרופיל של העסק · כל פרט נערך בעיפרון שלידו</span>
+              <span className="text-xs text-neutral-500">הפרופיל של העסק</span>
               <button
                 type="button"
-                onClick={() => openEdit()}
-                className="inline-flex shrink-0 items-center gap-1 px-3 py-1.5 rounded-full bg-white/90 text-pink-600 text-xs font-bold shadow-sm ring-1 ring-pink-100 active:scale-95"
+                onClick={openEdit}
+                className="inline-flex shrink-0 items-center gap-1.5 px-4 py-2 rounded-full ig-gradient-bg text-white text-sm font-bold shadow-md active:scale-95"
               >
                 ✏️ עריכת פרופיל
               </button>
@@ -985,35 +938,21 @@ export default function ProfilePage() {
                 <div className="flex items-center gap-2 mb-1">
                   <h1 className="text-xl font-bold truncate">{brandProfile.shopName}</h1>
                   <Badge variant="pink" size="sm">עסק</Badge>
-                  <EditPencil label="שם העסק" onClick={() => openEdit("shop_name")} />
                 </div>
-                <div className="flex items-center gap-1.5 text-sm text-neutral-500 mb-2">
-                  <span className="truncate">{brandProfile.name || "שם איש הקשר"}</span>
-                  <EditPencil label="שם איש הקשר" onClick={() => openEdit("full_name")} size="xs" />
-                </div>
+                <p className="text-sm text-neutral-500 mb-2 truncate">{brandProfile.name || "שם איש הקשר"}</p>
                 <div className="flex items-center gap-1 flex-wrap">
                   {brandProfile.categories.map((cat) => (
                     <Badge key={cat} variant="default" size="sm">{cat}</Badge>
                   ))}
                   {brandProfile.categories.length === 0 && <span className="text-xs text-neutral-400">עדיין בלי קטגוריות</span>}
-                  <EditPencil label="הקטגוריות" onClick={() => openEdit("categories")} size="xs" />
                 </div>
-                <div className="flex items-center gap-1.5 text-xs text-neutral-500 mt-1.5">
-                  <span>📍 {brandProfile.region || "אזור בארץ לא צוין"}</span>
-                  <EditPencil label="האזור" onClick={() => openEdit("region")} size="xs" />
-                </div>
-                <div className="flex items-start gap-1.5 text-xs text-neutral-500 mt-1.5">
-                  <span className="flex-1 line-clamp-2">{brandProfile.description || "ספרו ליוצרים על העסק במשפט או שניים"}</span>
-                  <EditPencil label="תיאור העסק" onClick={() => openEdit("description")} size="xs" />
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-neutral-500 mt-1.5">
-                  {brandProfile.websiteUrl ? (
-                    <span className="truncate" dir="ltr">{brandProfile.websiteUrl}</span>
-                  ) : (
-                    <span>🔗 הוסיפו את אתר העסק</span>
-                  )}
-                  <EditPencil label="אתר האינטרנט" onClick={() => openEdit("website_url")} size="xs" />
-                </div>
+                <p className="text-xs text-neutral-500 mt-1.5">📍 {brandProfile.region || "אזור בארץ לא צוין"}</p>
+                <p className="text-xs text-neutral-500 mt-1.5 line-clamp-2">{brandProfile.description || "ספרו ליוצרים על העסק במשפט או שניים"}</p>
+                {brandProfile.websiteUrl ? (
+                  <p className="text-xs text-neutral-500 mt-1.5 truncate" dir="ltr">{brandProfile.websiteUrl}</p>
+                ) : (
+                  <p className="text-xs text-neutral-500 mt-1.5">🔗 הוסיפו את אתר העסק</p>
+                )}
               </div>
             </div>
 
@@ -1080,7 +1019,6 @@ export default function ProfilePage() {
           open={editOpen}
           onClose={() => setEditOpen(false)}
           initialData={brandEditData}
-          focusField={editFocus}
           onSave={handleBrandSave}
         />
         <LogoutConfirmModal
@@ -1117,11 +1055,11 @@ export default function ProfilePage() {
       <div className="bg-gradient-to-b from-pink-100 to-background px-4 pt-8 pb-4">
         <div className="max-w-2xl mx-auto">
           <div className="flex items-center justify-between gap-3 mb-3">
-            <span className="text-xs text-neutral-500">הפרופיל שלי · כל פרט נערך בעיפרון שלידו</span>
+            <span className="text-xs text-neutral-500">הפרופיל שלי</span>
             <button
               type="button"
-              onClick={() => openEdit()}
-              className="inline-flex shrink-0 items-center gap-1 px-3 py-1.5 rounded-full bg-white/90 text-pink-600 text-xs font-bold shadow-sm ring-1 ring-pink-100 active:scale-95"
+              onClick={openEdit}
+              className="inline-flex shrink-0 items-center gap-1.5 px-4 py-2 rounded-full ig-gradient-bg text-white text-sm font-bold shadow-md active:scale-95"
             >
               ✏️ עריכת פרופיל
             </button>
@@ -1134,12 +1072,8 @@ export default function ProfilePage() {
                 <Badge variant="pink" size="sm">
                   {displayProfile.level}
                 </Badge>
-                <EditPencil label="השם" onClick={() => openEdit("full_name")} />
               </div>
-              <div className="flex items-start gap-1.5 mb-2">
-                <p className="flex-1 text-sm text-neutral-500 line-clamp-3">{displayProfile.bio || "ספרו על עצמכם בכמה מילים — העסקים קוראים את זה"}</p>
-                <EditPencil label="הביו" onClick={() => openEdit("bio")} size="xs" />
-              </div>
+              <p className="text-sm text-neutral-500 mb-2 line-clamp-3">{displayProfile.bio || "ספרו על עצמכם בכמה מילים — העסקים קוראים את זה"}</p>
                 <div className="flex items-center gap-3 text-xs text-neutral-500 mb-2 flex-wrap">
                   <span>📍 {creatorEditData.city || "עיר לא צוינה"}</span>
                   {creatorEditData.tiktok_handle && (
@@ -1154,7 +1088,6 @@ export default function ProfilePage() {
                       {creatorEditData.instagram_followers && ` · ${Number(creatorEditData.instagram_followers).toLocaleString("he-IL")}`}
                     </span>
                   )}
-                  <EditPencil label="העיר והרשתות" onClick={() => openEdit("city")} size="xs" />
                 </div>
               <div className="flex items-center gap-1 flex-wrap">
                 {displayProfile.categories.map((cat) => (
@@ -1163,7 +1096,6 @@ export default function ProfilePage() {
                   </Badge>
                 ))}
                 {displayProfile.categories.length === 0 && <span className="text-xs text-neutral-400">עדיין בלי תחומים</span>}
-                <EditPencil label="התחומים" onClick={() => openEdit("categories")} size="xs" />
               </div>
             </div>
           </div>
@@ -1380,7 +1312,6 @@ export default function ProfilePage() {
         open={editOpen}
         onClose={() => setEditOpen(false)}
         initialData={creatorEditData}
-        focusField={editFocus}
         onSave={handleCreatorSave}
       />
       <LogoutConfirmModal

@@ -180,7 +180,9 @@ export async function PUT(req: Request) {
         console.error("[profile] update creator error:", error);
         return NextResponse.json({ error: "שגיאה בעדכון פרופיל" }, { status: 500 });
       }
-    } else if (userData.type === "brand") {
+    } else if (sessionRole === "brand") {
+      // The role of the session, not the account type: an admin signed in as a business edits its business
+      // profile too (its saves were silently dropped until 2026-11-09)
       const safeProfile = pickAllowedFields(profileFields, BRAND_EDITABLE_FIELDS);
       // The region must be one of the app's list; anything else clears it
       if ("region" in safeProfile) safeProfile.region = cleanRegion(safeProfile.region);

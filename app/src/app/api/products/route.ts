@@ -93,12 +93,21 @@ export async function GET(request: NextRequest) {
   if (status) query = query.eq("status", status);
   if (resolvedBrandId) query = query.eq("brand_id", resolvedBrandId);
 
-  const { data, error } = await query;
+  // A business the admin disabled disappears from every feed with all its products (owner, 2026-11-09);
+  // the admin and the owner itself still see them
+  const [{ data: rawData, error }, { data: inactiveBrands }] = await Promise.all([
+    query,
+    privileged
+      ? Promise.resolve({ data: [] as { id: string }[] })
+      : admin.from("brand_profiles").select("id, users!inner(is_active)").eq("users.is_active", false),
+  ]);
 
   if (error) {
     console.error("[products] list error:", error);
     return NextResponse.json({ error: "שגיאה בטעינת מוצרים" }, { status: 500 });
   }
+  const inactiveBrandIds = new Set(((inactiveBrands || []) as { id: string }[]).map((b) => b.id));
+  const data = ((rawData || []) as any[]).filter((p) => !inactiveBrandIds.has(p.brand_id));
 
   // How many creator slots each product has used (every status from the match on counts) — BRAND-01
   const productIds = (data || []).map((p: any) => p.id);

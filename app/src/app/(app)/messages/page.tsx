@@ -13,7 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import { swrFetch, readCache, emitUnreadChanged } from "@/lib/client-cache";
 import { toDirectImageUrl } from "@/lib/images";
 import { isChatOpen, hasChatHistory, activeDeadlineField, flowNextAction } from "@/lib/connection-flow";
-import { CHAT_EVENT_TEXTS, MAX_DELIVERABLES_PER_ROUND, isBriefSnapshot, isVideoCard, isQuietConnectionUpdate, hasUnreadFromOthers, type MessageKind } from "@/lib/chat";
+import { CHAT_EVENT_TEXTS, LOCAL_MESSAGE_PREFIX, MAX_DELIVERABLES_PER_ROUND, isBriefSnapshot, isVideoCard, isQuietConnectionUpdate, hasUnreadFromOthers, mergeIncomingMessage, settleLocalMessage, type MessageKind } from "@/lib/chat";
 import type { BriefSnapshot } from "@/lib/brief";
 
 type Role = "creator" | "brand";
@@ -133,7 +133,8 @@ function mapConnection(c: Record<string, unknown>): ConnectionDetail {
     trackingNumber: (c.tracking_number as string) || null,
     deadline: field ? ((c[field] as string) || null) : null,
     brandName: (bp.shop_name as string) || (brandUser.full_name as string) || "",
-    brandAvatar: (bp.logo_url as string) || (brandUser.avatar_url as string) || null,
+    // A business is its logo; the contact person's own picture is never shown for it (owner, 2026-11-09)
+    brandAvatar: (bp.logo_url as string) || null,
     brandUserId: (bp.user_id as string) || null,
     creatorName: (creatorUser.full_name as string) || "",
     creatorAvatar: (creatorUser.avatar_url as string) || null,
@@ -168,6 +169,9 @@ function MessagesContent() {
     const r = cached?.role || cached?.user?.type;
     return r === "brand" || r === "creator" ? r : null;
   });
+  // This account's id in `users` (messages carry it as sender_id). The auth uid from useAuth is a different id,
+  // which is why every saved message used to render as the other side's.
+  const [myUserId, setMyUserId] = useState<string | null>(() => readCache<{ user?: { id?: string } }>("/api/profile")?.user?.id || null);
   const [maxRevisions, setMaxRevisions] = useState(1);
   const [acting, setActing] = useState(false);
   // The brand's "דרוש שינוי": the composer carries the request and sending it files the revision
@@ -190,18 +194,22 @@ function MessagesContent() {
   // Realtime bursts (a card plus its row update) collapse into one reload each
   const refetchTimers = useRef<{ messages?: ReturnType<typeof setTimeout>; conversations?: ReturnType<typeof setTimeout> }>({});
 
+  // Who "I" am in this chat: the users.id from /api/profile, else this side of the open connection
+  const selfId = myUserId || (role === "brand" ? connection?.brandUserId : connection?.creatorUserId) || null;
+
   useEffect(() => {
     conversationsRef.current = conversations;
   }, [conversations]);
   useEffect(() => {
-    userIdRef.current = user?.id ?? null;
+    userIdRef.current = selfId;
     roleRef.current = role;
-  }, [user?.id, role]);
+  }, [selfId, role]);
 
   useEffect(() => {
-    swrFetch<{ role?: string; user?: { type?: string } }>("/api/profile", (data) => {
+    swrFetch<{ role?: string; user?: { type?: string; id?: string } }>("/api/profile", (data) => {
       const r = data.role || data.user?.type;
       if (r === "brand" || r === "creator") setRole(r);
+      if (data.user?.id) setMyUserId(data.user.id);
     });
   }, []);
 
@@ -355,8 +363,9 @@ function MessagesContent() {
             // Cards need the signed URL / the connection flags that come with the full fetch
             scheduleMessagesRefetch(selectedId);
           } else {
-            setMessages((prev) => (prev.some((m) => m.id === mapped.id) ? prev : [...prev, mapped]));
-            markRead(selectedId);
+            // Our own message may arrive here before the send call returns: swap the optimistic copy, never duplicate
+            setMessages((prev) => mergeIncomingMessage(prev, mapped));
+            if (mapped.senderId !== userIdRef.current) markRead(selectedId);
           }
           setConversations((prev) =>
             prev.map((c) => (c.id === selectedId ? { ...c, lastMessage: mapped.text, time: "עכשיו" } : c))
@@ -440,9 +449,9 @@ function MessagesContent() {
 
     setNewMessage("");
     const optimisticMsg: Message = {
-      id: `local-${Date.now()}`,
+      id: `${LOCAL_MESSAGE_PREFIX}${Date.now()}`,
       text: msgText,
-      senderId: user?.id || "me",
+      senderId: selfId || "me",
       isSystem: false,
       createdAt: new Date().toISOString(),
       kind: "text",
@@ -459,6 +468,10 @@ function MessagesContent() {
       });
       if (res.ok) {
         setBlockedNotice(null);
+        // The saved row replaces the optimistic copy (or the optimistic copy goes if Realtime was first)
+        const data = await res.json().catch(() => null);
+        const saved = data?.message ? mapMessage(data.message as Record<string, unknown>) : null;
+        setMessages((prev) => settleLocalMessage(prev, optimisticMsg.id, saved));
         setConversations((prev) => {
           const idx = prev.findIndex((c) => c.id === selectedId);
           if (idx < 0) return prev;
@@ -844,7 +857,7 @@ function MessagesContent() {
               </div>
             ) : (
               messages.map((msg, i) => {
-                const isMe = msg.senderId === (user?.id || "me");
+                const isMe = msg.senderId === (selfId || "me");
                 const prev = messages[i - 1];
                 // A day separator before the first message of each day (QA 14)
                 const daySeparator = !prev || !sameDay(prev.createdAt, msg.createdAt) ? (

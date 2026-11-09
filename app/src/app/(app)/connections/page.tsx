@@ -48,7 +48,7 @@ function mapConnection(c: Record<string, unknown>): Connection {
     product: (c as any).products?.name || "",
     productImage: toDirectImageUrl(((c as any).products?.image_url as string) || null),
     brand: (c as any).brand_profiles?.shop_name || "עסק מאומת",
-    brandAvatar: (c as any).brand_profiles?.logo_url || (c as any).brand_profiles?.users?.avatar_url || null,
+    brandAvatar: (c as any).brand_profiles?.logo_url || null,
     brandUserId: (c as any).brand_profiles?.user_id || null,
     initiatedBy: (c as any).initiated_by === "brand" ? "brand" : "creator",
     mutualAt: (c.mutual_at as string) || null,

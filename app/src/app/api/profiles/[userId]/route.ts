@@ -96,7 +96,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         userId: t.id,
         name: profile?.shop_name || t.full_name || "עסק",
         contactName: t.full_name || "",
-        avatar: profile?.logo_url || t.avatar_url || null,
+        // The business shows its logo only — never the contact person's own picture (owner, 2026-11-09)
+        avatar: profile?.logo_url || null,
         category: profile?.category || "",
         categories: Array.isArray(profile?.categories) && profile.categories.length > 0
           ? profile.categories

@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { swrFetch, fetchJson } from "@/lib/client-cache";
 import { toDirectImageUrl } from "@/lib/images";
 import { REGISTRATION_TO_FEED, displayCategory } from "@/lib/categories";
+import { feedSeed, orderKey } from "@/lib/feed-order";
 
 interface Product {
   id: string;
@@ -39,6 +40,15 @@ interface Relation {
 }
 
 type View = "all" | "mine";
+
+// A product the creator skipped with ✕ — kept in "מוצרים שהסרתי" so it can come back to the deck
+interface PassedProduct {
+  id: string;
+  name: string;
+  image: string | null;
+  price: number;
+  categoryLabel: string;
+}
 
 const MIN_PORTFOLIO = 5;
 const SWIPE_THRESHOLD = 70;
@@ -108,6 +118,11 @@ export default function FeedPage() {
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [direction, setDirection] = useState<1 | -1>(1);
   const [busy, setBusy] = useState<string | null>(null);
+  // Products skipped with ✕ (owner, 2026-11-09: they wait in a list and can be brought back one by one)
+  const [passed, setPassed] = useState<PassedProduct[]>([]);
+  const [passedOpen, setPassedOpen] = useState(false);
+  // The deck is shuffled per visit: one seed per browser session keeps the order steady while browsing
+  const [seed] = useState(() => feedSeed());
   // The deck is painted only once products, the profile and the relations are all in
   const [profileReady, setProfileReady] = useState(false);
   const [relationsReady, setRelationsReady] = useState(false);
@@ -165,6 +180,24 @@ export default function FeedPage() {
   useEffect(() => {
     swrFetch("/api/products?status=active", applyProducts).finally(() => setLoading(false));
   }, [applyProducts]);
+
+  const applyPassed = useCallback((data: { products?: Record<string, unknown>[] }) => {
+    if (!data.products) return;
+    setPassed(
+      data.products.map((p) => ({
+        id: p.id as string,
+        name: (p.name as string) || "",
+        image: toDirectImageUrl((p.image_url as string) || null),
+        price: Number(p.price) || 0,
+        categoryLabel: displayCategory(p.category, p.category_custom),
+      }))
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    swrFetch("/api/products/pass", applyPassed);
+  }, [user, applyPassed]);
 
   const applyRelations = useCallback((data: { connections?: Record<string, unknown>[] }) => {
     const map: Record<string, Relation> = {};
@@ -234,7 +267,8 @@ export default function FeedPage() {
 
   const ownFeedCategories = useMemo<string[]>(() => userCategories.map((c) => REGISTRATION_TO_FEED[c] || c), [userCategories]);
 
-  // The deck: products with no open relation, matching the filters; own categories first, then newest
+  // The deck: products with no open relation, matching the filters; own categories first, then a random order
+  // that holds for the whole visit (owner, 2026-11-09: "הצג רנדומלית")
   const query = searchQuery.trim().toLowerCase();
   const deck = useMemo(() => {
     const fits = (p: Product) => ownFeedCategories.includes(p.category);
@@ -244,8 +278,8 @@ export default function FeedPage() {
       .filter((p) => regionFilter.length === 0 || regionFilter.includes(p.region))
       .filter((p) => !typeFilter || p.productType === typeFilter)
       .filter((p) => !query || p.name.toLowerCase().includes(query) || p.brand.toLowerCase().includes(query))
-      .sort((a, b) => Number(fits(b)) - Number(fits(a)) || b.createdAt.localeCompare(a.createdAt));
-  }, [products, relations, categoryFilter, regionFilter, typeFilter, query, ownFeedCategories]);
+      .sort((a, b) => Number(fits(b)) - Number(fits(a)) || orderKey(a.id, seed) - orderKey(b.id, seed));
+  }, [products, relations, categoryFilter, regionFilter, typeFilter, query, ownFeedCategories, seed]);
 
   const picks = useMemo(
     () => Object.values(relations).filter((r) => r.initiatedBy === "creator" || !!r.mutualAt || r.status !== "pending"),
@@ -350,6 +384,7 @@ export default function FeedPage() {
       });
       if (res.ok) {
         setProducts((prev) => prev.filter((p) => p.id !== product.id));
+        setPassed((prev) => [{ id: product.id, name: product.name, image: product.image, price: product.value, categoryLabel: product.categoryLabel }, ...prev.filter((p) => p.id !== product.id)]);
         keepSlot();
       } else {
         toast("לא הצלחנו לשמור את הדילוג", "error");
@@ -365,12 +400,33 @@ export default function FeedPage() {
     const res = await fetch("/api/products/pass", { method: "DELETE" });
     if (res.ok) {
       toast("המוצרים שדילגת עליהם חזרו", "success");
+      setPassed([]);
       const d = await fetchJson<{ products?: Record<string, unknown>[] }>("/api/products?status=active");
       if (d) applyProducts(d);
       setIndex(0);
       setCurrentId(null);
     } else {
       toast("שגיאה באיפוס", "error");
+    }
+  }
+
+  // One skipped product back into the deck
+  async function restorePass(productId: string) {
+    setBusy(`restore-${productId}`);
+    try {
+      const res = await fetch(`/api/products/pass?product_id=${encodeURIComponent(productId)}`, { method: "DELETE" });
+      if (res.ok) {
+        setPassed((prev) => prev.filter((p) => p.id !== productId));
+        toast("המוצר חזר לפיד", "success");
+        const d = await fetchJson<{ products?: Record<string, unknown>[] }>("/api/products?status=active");
+        if (d) applyProducts(d);
+      } else {
+        toast("לא הצלחנו להחזיר את המוצר", "error");
+      }
+    } catch {
+      toast("לא הצלחנו להחזיר את המוצר", "error");
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -435,6 +491,27 @@ export default function FeedPage() {
               </svg>
               {activeFilterCount > 0 && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-pink-500 ring-2 ring-white" aria-hidden="true" />}
             </button>
+            {user && (
+              // Products skipped with ✕ wait here and can come back to the deck (owner, 2026-11-09)
+              <button
+                type="button"
+                onClick={() => setPassedOpen(true)}
+                aria-label="מוצרים שהסרתי"
+                className={`relative p-2.5 rounded-xl border text-sm transition-colors ${passed.length > 0 ? "bg-neutral-50 border-neutral-200 text-neutral-600 hover:bg-neutral-100" : "bg-neutral-50 border-neutral-100 text-neutral-400 hover:bg-neutral-100"}`}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                  <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                  <line x1="1" y1="1" x2="23" y2="23" />
+                </svg>
+                {passed.length > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-neutral-500 text-white text-[9px] flex items-center justify-center font-bold ring-2 ring-white">
+                    {passed.length > 99 ? "99+" : passed.length}
+                  </span>
+                )}
+              </button>
+            )}
             <Link href="/notifications" className="relative p-2.5 rounded-xl bg-neutral-50 border border-neutral-100 text-neutral-500 hover:bg-neutral-100 transition-colors" aria-label="התראות">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -651,6 +728,37 @@ export default function FeedPage() {
           </div>
         )}
       </div>
+
+      {/* Skipped products: the list behind the eye-off button, each one can come back to the deck */}
+      <Modal open={passedOpen} onClose={() => setPassedOpen(false)} title="מוצרים שהסרתי" size="md">
+        {passed.length === 0 ? (
+          <p className="text-sm text-neutral-500 text-center py-6">עדיין לא הסרת מוצרים — כל מה שתסמני ב-✕ יחכה כאן</p>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-xs text-neutral-500">מוצרים שסימנת ✕ לא חוזרים לפיד מעצמם — מכאן אפשר להחזיר כל אחד מהם</p>
+            {passed.map((p) => (
+              <div key={p.id} className="flex items-center gap-3 p-2 rounded-xl border border-neutral-100">
+                {p.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={p.image} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                ) : (
+                  <div className="w-12 h-12 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0">📦</div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{p.name}</p>
+                  <p className="text-xs text-neutral-500">{p.categoryLabel}{p.price ? ` · ₪${p.price}` : ""}</p>
+                </div>
+                <Button size="sm" variant="secondary" loading={busy === `restore-${p.id}`} onClick={() => restorePass(p.id)}>
+                  החזרה לפיד
+                </Button>
+              </div>
+            ))}
+            <Button fullWidth variant="ghost" onClick={async () => { await resetPasses(); setPassedOpen(false); }}>
+              להחזיר הכול לפיד
+            </Button>
+          </div>
+        )}
+      </Modal>
 
       {/* Full filter: categories and regions that have products, product type (no counts — the deck is what it is) */}
       <Modal open={filtersOpen} onClose={() => setFiltersOpen(false)} title="סינון" size="md">

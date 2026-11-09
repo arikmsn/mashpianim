@@ -26,7 +26,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
   const { data, error } = await admin
     .from("products")
-    .select("*, brand_profiles(shop_name, user_id, logo_url)")
+    .select("*, brand_profiles(shop_name, user_id, logo_url, users(is_active))")
     .eq("id", id)
     .single();
 
@@ -36,6 +36,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
   const row = data as any;
   const ownerUserId = row.brand_profiles?.user_id as string | undefined;
+  const brandDisabled = row.brand_profiles?.users?.is_active === false;
 
   // Owner and admins see everything; anyone else sees the public shape only
   // `viewer.type` here is the role this session is signed in as (creator / brand / admin)
@@ -47,6 +48,11 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     const resolved = await resolveViewer(admin, user.id, await readActiveRole());
     viewer = resolved ? { id: resolved.userId, type: resolved.role } : null;
     privileged = !!viewer && (viewer.type === "admin" || viewer.id === ownerUserId);
+  }
+
+  // A disabled business's products exist only for the admin and the business itself (owner, 2026-11-09)
+  if (brandDisabled && !privileged) {
+    return NextResponse.json({ error: "מוצר לא נמצא" }, { status: 404 });
   }
 
   // Creator slots taken (every status from the match on) — same numbers as the list route

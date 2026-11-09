@@ -47,13 +47,48 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ success: true });
 }
 
-// DELETE — forget every skip ("להחזיר מוצרים שדילגתי עליהם")
-export async function DELETE() {
+// GET — the products this creator skipped, newest skip first ("מוצרים שהסרתי"; owner, 2026-11-09). Public
+// shape only, no business fields: the skip list reveals nothing the feed would not.
+export async function GET() {
   const ctx = await creatorOfSession();
   if ("error" in ctx) return ctx.error;
   const { admin, creatorProfileId } = ctx;
 
-  const { error } = await admin.from("creator_passes").delete().eq("creator_id", creatorProfileId);
+  const { data, error } = await admin
+    .from("creator_passes")
+    .select("product_id, created_at, products(id, name, image_url, price, category, category_custom, product_type, status)")
+    .eq("creator_id", creatorProfileId)
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("[products/pass] list error:", error.message);
+    return NextResponse.json({ error: "שגיאה בטעינה" }, { status: 500 });
+  }
+  const products = ((data || []) as any[])
+    .filter((row) => row.products && row.products.status === "active")
+    .map((row) => ({
+      id: row.products.id,
+      name: row.products.name,
+      image_url: row.products.image_url,
+      price: row.products.price,
+      category: row.products.category,
+      category_custom: row.products.category_custom,
+      product_type: row.products.product_type,
+      passed_at: row.created_at,
+    }));
+  return NextResponse.json({ products });
+}
+
+// DELETE — forget a skip (`?product_id=`) so the product returns to the feed, or every skip without it
+// ("להחזיר מוצרים שדילגתי עליהם")
+export async function DELETE(request: NextRequest) {
+  const ctx = await creatorOfSession();
+  if ("error" in ctx) return ctx.error;
+  const { admin, creatorProfileId } = ctx;
+
+  const productId = request.nextUrl.searchParams.get("product_id");
+  let query = admin.from("creator_passes").delete().eq("creator_id", creatorProfileId);
+  if (productId) query = query.eq("product_id", productId);
+  const { error } = await query;
   if (error) {
     console.error("[products/pass] delete error:", error.message);
     return NextResponse.json({ error: "שגיאה באיפוס" }, { status: 500 });

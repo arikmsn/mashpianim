@@ -79,6 +79,33 @@ export function isQuietConnectionUpdate(prev: Record<string, unknown> | null | u
   return changedConnectionFields(prev, next).every((key) => QUIET_CONNECTION_FIELDS.has(key));
 }
 
+// --- Optimistic messages ------------------------------------------------------------------------------------
+// A sent message is shown at once under a local id; the saved row then arrives twice — in the POST response
+// and over Realtime. Both paths go through these two, so the chat never shows one message twice (it did on
+// 2026-11-09: the optimistic copy on one side, the Realtime copy on the other).
+export const LOCAL_MESSAGE_PREFIX = "local-";
+
+export function isLocalMessageId(id: string): boolean {
+  return id.startsWith(LOCAL_MESSAGE_PREFIX);
+}
+
+// A message that arrived over Realtime: skip it when it is already listed; swap it for the optimistic copy
+// of the same text from the same sender; otherwise append it.
+export function mergeIncomingMessage<T extends { id: string; text: string; senderId: string }>(list: T[], incoming: T): T[] {
+  if (list.some((m) => m.id === incoming.id)) return list;
+  const localIdx = list.findIndex((m) => isLocalMessageId(m.id) && m.senderId === incoming.senderId && m.text === incoming.text);
+  if (localIdx >= 0) return list.map((m, i) => (i === localIdx ? incoming : m));
+  return [...list, incoming];
+}
+
+// The POST response for an optimistic message: swap the local copy for the saved row, or drop the local copy
+// when Realtime already delivered the saved row.
+export function settleLocalMessage<T extends { id: string }>(list: T[], localId: string, saved: T | null | undefined): T[] {
+  if (!saved) return list;
+  if (list.some((m) => m.id === saved.id)) return list.filter((m) => m.id !== localId);
+  return list.map((m) => (m.id === localId ? saved : m));
+}
+
 // Does the chat hold messages from the other side that this viewer hasn't marked read yet? Mirrors
 // /api/messages/unread (sender ≠ me, newer than my read marker). An unknown viewer counts as "yes".
 export function hasUnreadFromOthers(
