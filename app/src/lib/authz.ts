@@ -102,6 +102,7 @@ export const PUBLIC_PRODUCT_FIELDS = [
   "categories",
   "logo_url",
   "brand_region",
+  "brand_revealed",
 ] as const;
 
 export function toPublicProduct(product: Record<string, unknown>): Record<string, unknown> {

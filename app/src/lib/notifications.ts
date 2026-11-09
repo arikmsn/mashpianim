@@ -128,7 +128,7 @@ export function getConnectionStatusMessages(
         userId: creatorUserId,
         type: "connection_rejected",
         title: "בקשת חיבור נדחתה",
-        body: `${brandName} דחו את הבקשה שלך למוצר "${productName}"`,
+        body: `העסק דחה את הבקשה שלך למוצר "${productName}". אפשר להמשיך לסמן לב למוצרים אחרים.`,
         data: forCreator,
       },
     },

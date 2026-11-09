@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { toPublicProduct } from "@/lib/authz";
-import { OCCUPYING_STATUSES, normalizeMaxCreators, spotsLeft } from "@/lib/connection-flow";
+import { OCCUPYING_STATUSES, normalizeMaxCreators, spotsLeft, brandRevealedToCreator, hideBrand } from "@/lib/connection-flow";
 import { resolveViewer } from "@/lib/viewer";
 import { readActiveRole } from "@/lib/active-role";
 import { resolveProductCategory, cleanCustomCategory } from "@/lib/categories";
@@ -68,13 +68,19 @@ export async function GET(request: NextRequest) {
     privileged = !!owned;
   }
 
-  // Products a creator skipped ("✕") stay out of their feed
+  // Products a creator skipped ("✕") stay out of their feed; the business behind a product is revealed to a
+  // creator only through a connection the business chose (heart first / heart back / match)
   let passed = new Set<string>();
+  const revealed = new Set<string>();
   if (viewer && viewer.type === "creator") {
     const { data: cp } = await admin.from("creator_profiles").select("id").eq("user_id", viewer.id).maybeSingle();
     if (cp) {
-      const { data: passes } = await admin.from("creator_passes").select("product_id").eq("creator_id", (cp as any).id);
+      const [{ data: passes }, { data: rels }] = await Promise.all([
+        admin.from("creator_passes").select("product_id").eq("creator_id", (cp as any).id),
+        admin.from("connections").select("product_id, status, initiated_by, mutual_at, approved_at").eq("creator_id", (cp as any).id),
+      ]);
       passed = new Set(((passes || []) as { product_id: string }[]).map((p) => p.product_id));
+      for (const c of (rels || []) as any[]) if (brandRevealedToCreator(c)) revealed.add(c.product_id);
     }
   }
 
@@ -130,12 +136,14 @@ export async function GET(request: NextRequest) {
         categories: p.category ? [p.category] : brandCats,
         logo_url: p.brand_profiles?.logo_url || null,
         brand_region: p.brand_profiles?.region || null,
+        brand_revealed: true,
       };
       if (privileged) return shaped;
+      const visible = revealed.has(p.id) ? shaped : hideBrand(shaped);
       // Signed-in creators also get the brand's brief (shown on the product page); anonymous callers don't
       return viewer?.type === "creator"
-        ? { ...toPublicProduct(shaped), brief: p.brief ?? null, brief_data: p.brief_data ?? null }
-        : toPublicProduct(shaped);
+        ? { ...toPublicProduct(visible), brief: p.brief ?? null, brief_data: p.brief_data ?? null }
+        : toPublicProduct(visible);
     })
     // Creators browsing the feed don't see products whose creator limit is reached (no limit = always shown),
     // nor ones they skipped

@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { toPublicProduct, pickProductUpdates } from "@/lib/authz";
-import { CLOSED_STATUSES, OCCUPYING_STATUSES, normalizeMaxCreators, spotsLeft } from "@/lib/connection-flow";
+import { CLOSED_STATUSES, OCCUPYING_STATUSES, normalizeMaxCreators, spotsLeft, brandRevealedToCreator, hideBrand } from "@/lib/connection-flow";
 import { getTimelineSettings } from "@/lib/settings";
 import { resolveViewer } from "@/lib/viewer";
 import { readActiveRole } from "@/lib/active-role";
@@ -67,6 +67,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     brand_name: row.brand_profiles?.shop_name || "",
     brand_user_id: ownerUserId || null,
     logo_url: row.brand_profiles?.logo_url || null,
+    brand_revealed: true,
   };
 
   // Signed-in creators read the brand's brief on the product page (to decide whether to heart);
@@ -99,10 +100,13 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     }
   }
 
+  // The business stays anonymous until it chose this creator (heart first / heart back / match)
+  const visible = privileged || brandRevealedToCreator(connection as any) ? product : hideBrand(product as Record<string, unknown>);
+
   const timelines = await getTimelineSettings(admin);
 
   return NextResponse.json({
-    product,
+    product: visible,
     connection,
     settings: {
       shipping_days: timelines.shipping_days,

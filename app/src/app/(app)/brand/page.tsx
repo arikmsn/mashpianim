@@ -678,7 +678,7 @@ export default function BrandDiscoverPage() {
         )}
       </Modal>
 
-      <ProfileModal userId={viewProfileId} onClose={() => setViewProfileId(null)} title="פרופיל היוצר/ת" />
+      <ProfileModal userId={viewProfileId} onClose={() => setViewProfileId(null)} title="פרופיל היוצר/ת" as="creator" />
       <FeedbackModal
         key="purchase"
         open={purchaseOpen}

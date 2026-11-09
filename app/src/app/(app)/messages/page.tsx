@@ -752,7 +752,7 @@ function MessagesContent() {
             </div>
           )}
 
-          <ProfileModal userId={viewProfileId} onClose={() => setViewProfileId(null)} />
+          <ProfileModal userId={viewProfileId} onClose={() => setViewProfileId(null)} as={role === "brand" ? "creator" : "brand"} />
 
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
             {messages.length === 0 ? (

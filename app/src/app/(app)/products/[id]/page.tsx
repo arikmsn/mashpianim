@@ -32,6 +32,7 @@ interface ProductDetail {
   brand_name: string;
   brand_user_id: string | null;
   logo_url: string | null;
+  brand_revealed?: boolean;
   max_creators: number | null;
   occupied: number;
   spots_left: number | null;
@@ -298,19 +299,29 @@ export default function ProductPage() {
                 <Badge variant="pink" size="lg">₪{product.price}</Badge>
               </div>
 
-              <button
-                type="button"
-                onClick={() => product.brand_user_id && setViewBrand(true)}
-                disabled={!product.brand_user_id}
-                className="w-full flex items-center gap-3 text-right p-2 -m-2 rounded-xl hover:bg-neutral-50 transition-colors disabled:cursor-default"
-              >
-                <Avatar src={product.logo_url} name={product.brand_name} size="md" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-neutral-900 truncate">{product.brand_name}</p>
-                  <p className="text-xs text-neutral-400">העסק שמאחורי המוצר</p>
+              {product.brand_revealed === false || !product.brand_user_id ? (
+                <div className="w-full flex items-center gap-3 text-right p-2 -m-2 rounded-xl bg-neutral-50/60">
+                  <span className="w-10 h-10 rounded-full bg-neutral-100 flex items-center justify-center text-lg">🏪</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-neutral-900">עסק מאומת</p>
+                    <p className="text-xs text-neutral-400">שם העסק ייחשף כשהעסק יסמן אותך בחזרה</p>
+                  </div>
+                  <span className="text-neutral-300" aria-hidden="true">🔒</span>
                 </div>
-                {product.brand_user_id && <span className="text-xs text-pink-500 font-medium">פרופיל העסק ›</span>}
-              </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setViewBrand(true)}
+                  className="w-full flex items-center gap-3 text-right p-2 -m-2 rounded-xl hover:bg-neutral-50 transition-colors"
+                >
+                  <Avatar src={product.logo_url} name={product.brand_name} size="md" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-neutral-900 truncate">{product.brand_name}</p>
+                    <p className="text-xs text-neutral-400">העסק שמאחורי המוצר</p>
+                  </div>
+                  <span className="text-xs text-pink-500 font-medium">פרופיל העסק ›</span>
+                </button>
+              )}
             </div>
           </Card>
 
@@ -493,7 +504,7 @@ export default function ProductPage() {
       )}
 
       {zoomImage && image && product && <ImageLightbox src={image} alt={product.name} onClose={() => setZoomImage(false)} />}
-      <ProfileModal userId={viewBrand ? product?.brand_user_id || null : null} onClose={() => setViewBrand(false)} title="פרופיל העסק" />
+      <ProfileModal userId={viewBrand ? product?.brand_user_id || null : null} onClose={() => setViewBrand(false)} title="פרופיל העסק" as="brand" />
 
       <Modal open={gateOpen} onClose={() => setGateOpen(false)} size="sm">
         <div className="text-center space-y-4">

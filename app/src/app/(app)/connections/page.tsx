@@ -47,7 +47,7 @@ function mapConnection(c: Record<string, unknown>): Connection {
     productId: (c.product_id as string) || null,
     product: (c as any).products?.name || "",
     productImage: toDirectImageUrl(((c as any).products?.image_url as string) || null),
-    brand: (c as any).brand_profiles?.shop_name || "",
+    brand: (c as any).brand_profiles?.shop_name || "עסק מאומת",
     brandAvatar: (c as any).brand_profiles?.logo_url || (c as any).brand_profiles?.users?.avatar_url || null,
     brandUserId: (c as any).brand_profiles?.user_id || null,
     initiatedBy: (c as any).initiated_by === "brand" ? "brand" : "creator",
@@ -345,7 +345,7 @@ function ConnectionsPageInner() {
         )}
       </div>
 
-      <ProfileModal userId={viewBrandId} onClose={() => setViewBrandId(null)} title="פרופיל העסק" />
+      <ProfileModal userId={viewBrandId} onClose={() => setViewBrandId(null)} title="פרופיל העסק" as="brand" />
 
       <Modal open={gateOpen} onClose={() => setGateOpen(false)} size="sm">
         <div className="text-center space-y-4">

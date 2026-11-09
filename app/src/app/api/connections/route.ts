@@ -8,7 +8,7 @@ import { readActiveRole } from "@/lib/active-role";
 import { markMutual, countPortfolioVideos, portfolioGateError, MIN_PORTFOLIO_VIDEOS, notifyHeartSent, notifyBrandOfHeart } from "@/lib/match";
 import { isUniqueViolation } from "@/lib/match-errors";
 import { getTimelineSettings } from "@/lib/settings";
-import { OCCUPYING_STATUSES, isProductFull } from "@/lib/connection-flow";
+import { OCCUPYING_STATUSES, isProductFull, brandRevealedToCreator } from "@/lib/connection-flow";
 
 function getAdminClient() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -88,6 +88,10 @@ export async function GET() {
 
   const enriched = (data || []).map((conn: any) => {
     const entry = byConn.get(conn.id);
+    // A creator's unanswered / declined heart: the business behind it stays anonymous
+    if (viewer.role === "creator" && !brandRevealedToCreator(conn)) {
+      conn = { ...conn, brand_profiles: { user_id: null, shop_name: "", logo_url: null, users: null }, brand_revealed: false };
+    }
     return {
       ...conn,
       unread_count: entry?.unread || 0,

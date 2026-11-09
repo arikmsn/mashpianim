@@ -75,14 +75,14 @@ function StatBox({ value, label, tone = "neutral" }: { value: number | string; l
   );
 }
 
-export function usePublicProfile(userId: string | null | undefined) {
+export function usePublicProfile(userId: string | null | undefined, as?: "brand" | "creator") {
   const [data, setData] = useState<PublicProfile | null>(null);
   const [error, setError] = useState<{ userId: string; message: string } | null>(null);
 
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
-    fetch(`/api/profiles/${encodeURIComponent(userId)}`)
+    fetch(`/api/profiles/${encodeURIComponent(userId)}${as ? `?as=${as}` : ""}`)
       .then(async (res) => {
         if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || "שגיאה בטעינת הפרופיל");
         return res.json();
@@ -90,7 +90,7 @@ export function usePublicProfile(userId: string | null | undefined) {
       .then((json) => { if (!cancelled) { setData(json); setError(null); } })
       .catch((e) => { if (!cancelled) setError({ userId, message: e.message }); });
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [userId, as]);
 
   const current = data && data.profile.userId === userId ? data : null;
   const currentError = error && error.userId === userId ? error.message : null;
@@ -509,8 +509,8 @@ export function BrandProfileView({ profile, compact = false }: { profile: BrandP
   );
 }
 
-export function PublicProfileContent({ userId, compact = false }: { userId: string | null | undefined; compact?: boolean }) {
-  const { data, loading, error } = usePublicProfile(userId);
+export function PublicProfileContent({ userId, compact = false, as }: { userId: string | null | undefined; compact?: boolean; as?: "brand" | "creator" }) {
+  const { data, loading, error } = usePublicProfile(userId, as);
   if (!userId) return null;
   if (loading) return <ProfileSkeleton />;
   if (error || !data) {
@@ -521,10 +521,10 @@ export function PublicProfileContent({ userId, compact = false }: { userId: stri
     : <BrandProfileView profile={data.profile} compact={compact} />;
 }
 
-export function ProfileModal({ userId, onClose, title }: { userId: string | null; onClose: () => void; title?: string }) {
+export function ProfileModal({ userId, onClose, title, as }: { userId: string | null; onClose: () => void; title?: string; as?: "brand" | "creator" }) {
   return (
     <Modal open={!!userId} onClose={onClose} title={title || "פרופיל"} size="md" className="max-h-[90vh] overflow-y-auto">
-      <PublicProfileContent userId={userId} />
+      <PublicProfileContent userId={userId} as={as} />
     </Modal>
   );
 }

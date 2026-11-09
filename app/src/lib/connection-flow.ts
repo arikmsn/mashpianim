@@ -195,3 +195,23 @@ export function activeDeadlineField(status: unknown): "ship_deadline" | "deliver
       return null;
   }
 }
+
+// --- Who the business is ---------------------------------------------------------------------------
+// A creator learns which business stands behind a product only once that business has chosen her: it
+// hearted her first, hearted her back (mutual), or confirmed the match. A heart she sent that is still
+// unanswered, declined or withdrawn reveals nothing (owner's rule, 2026-11-09).
+export function brandRevealedToCreator(
+  conn: { status?: unknown; initiated_by?: unknown; mutual_at?: unknown; approved_at?: unknown } | null | undefined
+): boolean {
+  if (!conn) return false;
+  if (conn.initiated_by === "brand") return true;
+  if (conn.mutual_at) return true;
+  if (conn.approved_at) return true;
+  return typeof conn.status === "string" && (OCCUPYING_STATUSES as readonly string[]).includes(conn.status);
+}
+
+// The public product shape with the business hidden
+export const HIDDEN_BRAND_NAME = "";
+export function hideBrand<T extends Record<string, unknown>>(product: T): T {
+  return { ...product, brand_name: HIDDEN_BRAND_NAME, brand_user_id: null, logo_url: null, brand_revealed: false };
+}

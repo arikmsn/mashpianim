@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence, type PanInfo } from "framer-motion";
-import { Avatar, Badge, Button, Modal, useToast } from "@/components/ui";
+import { Badge, Button, Modal, useToast } from "@/components/ui";
 import { useAuth } from "@/hooks/use-auth";
 import { useNotifications } from "@/hooks/use-notifications";
 import { createClient } from "@/lib/supabase/client";
@@ -512,7 +512,7 @@ export default function FeedPage() {
                         )}
                         <div className="p-2.5">
                           <p className="text-sm font-bold truncate">{r.product.name}</p>
-                          <p className="text-xs text-neutral-500 truncate">{r.product.brand} · ₪{r.product.value}</p>
+                          <p className="text-xs text-neutral-500 truncate">{r.product.brand || "עסק מאומת"} · ₪{r.product.value}</p>
                           <span className={`inline-block mt-1.5 text-[10px] font-bold text-white px-2 py-0.5 rounded-full ${label.tone}`}>{label.text}</span>
                         </div>
                       </Link>
@@ -579,10 +579,7 @@ export default function FeedPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <h2 className="text-lg font-bold text-neutral-900 truncate leading-tight">{current.name}</h2>
-                        <Link href={detailsHref} prefetch className="flex items-center gap-2 mt-1 text-sm text-neutral-500">
-                          <Avatar src={current.brandAvatar} name={current.brand} size="sm" />
-                          <span className="truncate">{current.brand}</span>
-                        </Link>
+                        <p className="mt-1 text-xs text-neutral-400 truncate">🏪 עסק מאומת · השם ייחשף כשהעסק יסמן אותך בחזרה</p>
                       </div>
                       <Badge variant="pink" size="lg">₪{current.value}</Badge>
                     </div>
