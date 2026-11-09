@@ -572,7 +572,9 @@ export default function HomePage() {
               <p className="text-neutral-400 text-sm mt-1">{c.footer.tagline}</p>
             </div>
             <div className="flex gap-6 text-sm text-neutral-400">
-              <Link href="/terms" className="hover:text-white transition-colors">תנאי שימוש</Link>
+              <Link href="/terms" className="hover:text-white transition-colors">תנאי שירות</Link>
+              <Link href="/privacy" className="hover:text-white transition-colors">פרטיות</Link>
+              <Link href="/refunds" className="hover:text-white transition-colors">החזרים</Link>
               <Link href="/login" className="hover:text-white transition-colors">התחברות</Link>
             </div>
           </div>

@@ -49,7 +49,7 @@ export async function updateSession(request: NextRequest) {
   if (user === "unavailable") return supabaseResponse;
 
   // Public routes that don't require auth
-  const publicRoutes = ["/", "/login", "/register", "/about", "/terms"];
+  const publicRoutes = ["/", "/login", "/register", "/about", "/terms", "/privacy", "/refunds"];
   const isPublicRoute = publicRoutes.some((route) => pathname === route) || pathname.startsWith("/auth/");
 
   if (!user && !isPublicRoute) {

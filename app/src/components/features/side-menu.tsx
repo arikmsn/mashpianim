@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { readCache, swrFetch } from "@/lib/client-cache";
 import { FeedbackModal } from "./feedback-modal";
 import { RoleSwitchModal, roleLabel, type AppRole } from "./role-switch";
+import { LegalModal } from "./legal";
 
 interface ProfilePayload {
   user?: { full_name?: string | null; avatar_url?: string | null; type?: string | null } | null;
@@ -26,6 +27,7 @@ export function SideMenu({ open, onClose }: { open: boolean; onClose: () => void
   const [me, setMe] = useState<ProfilePayload | null>(() => readCache<ProfilePayload>("/api/profile") || null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [roleOpen, setRoleOpen] = useState(false);
+  const [legalOpen, setLegalOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -130,6 +132,15 @@ export function SideMenu({ open, onClose }: { open: boolean; onClose: () => void
               </nav>
 
               <div className="border-t border-neutral-100 p-3">
+                {/* The terms the account accepted, any time (owner, 2026-11-09) */}
+                <MenuItem
+                  icon="📄"
+                  label="תנאי השירות, פרטיות והחזרים"
+                  onClick={() => {
+                    onClose();
+                    setLegalOpen(true);
+                  }}
+                />
                 {confirmLogout ? (
                   <div className="space-y-2">
                     <p className="text-sm text-center text-neutral-700">להתנתק מהחשבון?</p>
@@ -148,6 +159,7 @@ export function SideMenu({ open, onClose }: { open: boolean; onClose: () => void
       </AnimatePresence>
 
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
+      <LegalModal open={legalOpen} onClose={() => setLegalOpen(false)} />
       <RoleSwitchModal open={roleOpen} onClose={() => setRoleOpen(false)} roles={roles} current={roles.includes(role as AppRole) ? (role as AppRole) : null} />
     </>
   );

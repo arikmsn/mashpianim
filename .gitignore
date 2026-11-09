@@ -43,3 +43,7 @@ workbox-*.js
 supabase/.temp/
 app/supabase/.temp/
 .temp/
+
+# Claude Code local settings are per machine and may hold local-only values; never commit them
+.claude/settings.local.json
+app/.claude/settings.local.json

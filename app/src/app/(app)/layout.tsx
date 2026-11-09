@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { BottomNav } from "@/components/ui";
-import { SideMenu } from "@/components/features";
+import { SideMenu, TermsGate } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { swrFetch } from "@/lib/client-cache";
 
@@ -49,6 +49,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="pb-20">{children}</div>
       <BottomNav onMenu={() => setMenuOpen(true)} />
       <SideMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
+      {/* Terms of service: shown full-screen until this account accepted the current version */}
+      <TermsGate />
     </>
   );
 }
