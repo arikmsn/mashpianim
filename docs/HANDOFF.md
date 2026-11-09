@@ -36,8 +36,8 @@ Israeli UGC marketplace, Hebrew-first, RTL, mobile-first PWA. Brand name "משפ
 | Database/Auth/Storage/Realtime | Supabase, project id `rhhfzvmiwhmnviznxvlv` | RLS on every table; API routes bypass RLS with the service key and do their own authorization. Since migration `007_rls_hardening` the client roles (`anon`/`authenticated`) hold **SELECT only** (no write policies, write privileges revoked) — SELECT is kept for Realtime and a few session-client reads. Matching runs through the `match_connection()` SECURITY DEFINER function (service_role only), which deducts the credit and flips the status atomically |
 | Messaging | GreenAPI (WhatsApp) via `lib/adapters/greenapi.ts` | OTP login codes, heart/match notifications |
 | Go-live | [docs/GO-LIVE.md](GO-LIVE.md) — the owner's checklist for 2026-11-10 (Vercel Pro, Supabase Pro + 150 MB, GreenAPI Business, SUMIT payments/invoices brief) | Hebrew, action-oriented; no secrets |
-| Hosting | Vercel project `mashpianim` (team `arikmsns-projects`), **Hobby plan**; functions run in **`cdg1` (Paris)**, next to the database (`regions` in `app/vercel.json`, since 2026-11-09 — before that `iad1`, ~120 ms per database round trip) | Auto-deploys `main`. Hobby = crons once/day, 60 s function limit, one function region, non-commercial terms |
-| Cron | `app/vercel.json` → `GET /api/cron/deadlines` daily 06:00 UTC | Route accepts Vercel's `Authorization: Bearer <CRON_SECRET>` or `?secret=` |
+| Hosting | Vercel project `mashpianim` (team `arikmsns-projects`), **Pro plan since 2026-11-10**; functions run in **`cdg1` (Paris)**, next to the database (`regions` in `app/vercel.json`, since 2026-11-09 — before that `iad1`, ~120 ms per database round trip) | Auto-deploys `main`. Pro = commercial terms, crons at any frequency, 1-day runtime logs, 300 s functions |
+| Cron | `app/vercel.json` → `GET /api/cron/deadlines` **every 15 minutes** (since the Pro upgrade; once a day before) | Route accepts Vercel's `Authorization: Bearer <CRON_SECRET>` or `?secret=`; idempotent, so a frequent schedule is safe |
 | Repo | https://github.com/arikmsn/mashpianim (private), branch `main` | Commit + push = deploy |
 | Payments | Cardcom adapter stub in `lib/adapters/payments.ts` | **Not connected.** Credits are granted manually by admin |
 | Other accounts | Render (unused), Cloudflare Stream (evaluated, rejected — paid) | |
@@ -202,7 +202,7 @@ Earlier work: OTP auth, registration, feed, products, connections pipeline with 
 1. ~~Onboarding "portfolio 0/5" screen in registration~~ — done 2026-11-03 (Batch 6): a new creator lands on `/profile?onboarding=1`, which opens the first upload; the feed/profile banners keep the 0/5 progress.
 2. ~~Brief editing by the brand~~ — done 2026-11-03 (Batch 5): `products.brief`, sent at match instead of the template.
 3. Ranking signals beyond category/portfolio/completions (city, followers, response time) in `/api/creators` and the feed.
-4. Supabase Pro ($25/mo): needed before 2-minute videos (then set `MAX_VIDEO_MB` from 50 to 150) and before storage/egress exceed the free tier (1 GB / 5 GB). Launch on Free is acceptable short-term.
+4. ~~Supabase Pro~~ — on Pro since 2026-11-10 (`lib/capacity.ts` `SUPABASE_PLAN = "pro"`). Left: the owner raises the project-wide Storage file size limit to 150 MB in the dashboard, then `MAX_VIDEO_MB` goes from 50 to 150. (Original note: needed before 2-minute videos and before storage/egress exceed the free tier.) Launch on Free is acceptable short-term.
 
 **Product (this month)**
 5. ~~Enforce `products.max_creators`~~ — done 2026-11-03 (Batch 6): editable in the product form (1–50, default 3); the feed hides full products and shows `occupied/max`; new hearts and `match_connection()` refuse a full product (`product_full` / `PRODUCT_FULL`).

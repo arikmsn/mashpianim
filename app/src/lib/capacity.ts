@@ -8,8 +8,8 @@ const GB = 1024 * MB;
 
 export type SupabasePlan = "free" | "pro";
 
-// Flip to "pro" once the project is upgraded (the limits below are the plan's included quotas)
-export const SUPABASE_PLAN: SupabasePlan = "free";
+// The project moved to Pro on 2026-11-10 (owner); the limits below are the plan's included quotas
+export const SUPABASE_PLAN: SupabasePlan = "pro";
 
 export const PLAN_LIMITS: Record<SupabasePlan, { label: string; storageBytes: number; dbBytes: number }> = {
   free: { label: "Free", storageBytes: 1 * GB, dbBytes: 500 * MB },
