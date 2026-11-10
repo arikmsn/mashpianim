@@ -11,7 +11,7 @@ https://claude.ai/artifact/NGJAQESGe2XRZxzU6VSkRx (Hebrew, living document — j
 Israeli UGC marketplace, Hebrew-first, RTL, mobile-first PWA. Brand name "משפיען אונליין / Mashpian", domain https://www.mashpian.online.
 
 - **Creators** (יוצרי תוכן) get free products in exchange for a short vertical UGC video.
-- **Brands** (בעלי עסקים) buy "credits" — 1 credit = 1 video — and upload products.
+- **Brands** (בעלי עסקים) buy "credits" — 1 credit = 1 video — and upload products. **Until the payment provider is connected (owner decision 2026-11-10) there is no self-service purchase:** a new business starts with **0 credits**, every "רכישת סרטונים" entry shows the notice "אנא פנו אלינו בצור קשר (שבתוך האתר) לקבלת גישה." and opens the in-app contact form (`components/features/credits-access.tsx`, `lib/credits.ts`), and an admin loads the package in `/admin/brands`.
 - **Matching is Tinder-style and mutual** (decided 2026-11-02):
   - A brand hearts a creator *for a specific product*; a creator hearts a product.
   - A heart is a `connections` row with `status='pending'` and `initiated_by` = `'brand'` | `'creator'`.
@@ -80,6 +80,7 @@ app/src/
     features/profile-views.tsx  CreatorProfileView, BrandProfileView (shows the signed-in creator's hearts on the brand's products + heart/cancel buttons), PublicProfileContent, ProfileModal, usePublicProfile
     features/side-menu.tsx      SideMenu — the drawer behind ☰ (2026-11-09): avatar + name, הפרופיל שלי, התראות, צור קשר / דיווח על תקלה, החלפת ממשק (accounts with several roles), "תנאי השירות, פרטיות והחזרים" (LegalModal), התנתקות with a confirm step
     features/legal.tsx          TermsGate (full-screen acceptance sheet rendered by the app layout until the account accepted the current TERMS_VERSION; decline = sign out) and LegalModal (three-tab viewer); legal-document.tsx renders a document / the public page (server-safe)
+    features/credits-access.tsx CreditsAccess — "רכישת סרטונים" until online payment exists: a sheet with the package state (lib/credits.ts creditsSummary) and the owner's notice, then the in-app contact form (FeedbackModal, kind contact, subject "רכישת סרטונים — בקשת גישה"); startAtContact skips the sheet when the caller already showed the notice (confirm-match modal)
     features/brief-view.tsx     BriefCard (the chat card: three headline sections + "לבריף המלא" + approval) and BriefFull (the whole template rendered)
     pwa/                        service-worker registration, install prompt
   hooks/
@@ -207,7 +208,7 @@ Earlier work: OTP auth, registration, feed, products, connections pipeline with 
 **Product (this month)**
 5. ~~Enforce `products.max_creators`~~ — done 2026-11-03 (Batch 6): editable in the product form (1–50, default 3); the feed hides full products and shows `occupied/max`; new hearts and `match_connection()` refuse a full product (`product_full` / `PRODUCT_FULL`).
 6. ~~Auto-close chat~~ — decided and done 2026-11-03 (Batch 5): the chat closes when the connection completes (brand approval or auto-approval), history stays readable.
-7. Cardcom payments (adapter stub exists); until then admin grants credits.
+7. Payments — SUMIT planned (hosted payment page + invoices; see `docs/GO-LIVE.md` §5); the payment/invoice adapters are stubs. Until then (owner decision 2026-11-10, `38c6fe3`): every business starts with 0 credits; each purchase entry point (brand home pill + credits card, profile card, confirm-match modal, the heart-picker hint, the `NO_CREDITS` API error, the business welcome WhatsApp) carries "אנא פנו אלינו בצור קשר (שבתוך האתר) לקבלת גישה." and opens the in-app contact form with the subject "רכישת סרטונים — בקשת גישה"; the request reaches the admins as a bell notification (`/admin/feedback`) and the package is loaded in `/admin/brands`.
 8. ~~Admin moderation of portfolio videos~~ — done 2026-11-03 (Batch 5): takedown/restore in `/admin/moderation`.
 
 **Technical debt / risks**
@@ -223,7 +224,7 @@ Earlier work: OTP auth, registration, feed, products, connections pipeline with 
 ## 9. Decisions already made (don't re-litigate)
 
 - Phone OTP only; no Google.
-- Hearts from both sides; credit deducted at match; a brand with 0 credits can still send hearts but the match is blocked with an explanatory error until credits are added.
+- Hearts from both sides; credit deducted at match; a brand with 0 credits can still send hearts but the match is blocked with an explanatory error until credits are added. Since 2026-11-10 a new business starts with 0 credits (no starter package) and credits come only from an admin after an in-app contact request — until online payment exists.
 - A heart to a creator with <5 videos expires like any other (7 days); no special hold.
 - Creator home stays the product feed; brand home is the creator gallery.
 - Cloudflare Stream rejected for now (paid); browser-side posters instead. Revisit if posters are not enough.
