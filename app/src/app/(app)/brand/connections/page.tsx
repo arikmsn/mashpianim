@@ -4,8 +4,9 @@ import { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, Badge, Button, Modal, Avatar, Input, Textarea, useToast } from "@/components/ui";
-import { ConnectionTimeline, PublicProfileContent, FeedbackModal } from "@/components/features";
+import { ConnectionTimeline, PublicProfileContent, CreditsAccess } from "@/components/features";
 import { createClient } from "@/lib/supabase/client";
+import { CREDITS_CONTACT_NOTICE } from "@/lib/credits";
 import { swrFetch, fetchJson } from "@/lib/client-cache";
 import { activeDeadlineField, canBrandReview, brandBoardTab, brandTask, boardTabFromParam, BRAND_BOARD_TABS, type BrandBoardTab, type BrandTask } from "@/lib/connection-flow";
 import { toDirectImageUrl } from "@/lib/images";
@@ -530,8 +531,8 @@ function BrandConnectionsPageInner() {
             </div>
             {credits && credits.remaining === 0 ? (
               <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-sm text-red-700 space-y-2">
-                <p>אין סרטונים נותרים בחבילה — כדי לאשר צריך לרכוש.</p>
-                <Button size="sm" fullWidth onClick={() => { setConfirmFor(null); setPurchaseOpen(true); }}>לרכישת סרטונים</Button>
+                <p>אין סרטונים בחבילה — כדי לאשר צריך לטעון סרטונים. {CREDITS_CONTACT_NOTICE}</p>
+                <Button size="sm" fullWidth onClick={() => { setConfirmFor(null); setPurchaseOpen(true); }}>✉️ לצור קשר</Button>
               </div>
             ) : (
               <Button fullWidth loading={updating === confirmFor.id} onClick={() => updateStatus(confirmFor.id, "approved")}>
@@ -816,14 +817,13 @@ function BrandConnectionsPageInner() {
         })()}
       </Modal>
 
-      <FeedbackModal
-        key="purchase"
+      {/* The confirm modal already carried the notice, so this opens the contact form straight away */}
+      <CreditsAccess
         open={purchaseOpen}
         onClose={() => setPurchaseOpen(false)}
-        title="רכישת סרטונים"
-        initialKind="contact"
-        initialSubject="רכישת סרטונים (קרדיטים)"
-        intro="תשלום אונליין יתווסף בקרוב. כתבו כמה סרטונים תרצו ונחזור אליכם עם הצעה ואישור הטעינה — בדרך כלל באותו יום."
+        total={credits?.total || 0}
+        used={credits ? credits.total - credits.remaining : 0}
+        startAtContact
       />
     </main>
   );

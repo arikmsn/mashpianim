@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Avatar, Badge, Button, Card, Modal, Input, Textarea, FilePicker, useToast } from "@/components/ui";
-import { FeedbackModal, RoleSwitchModal, roleLabel, type AppRole } from "@/components/features";
+import { CreditsAccess, FeedbackModal, RoleSwitchModal, roleLabel, type AppRole } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch, clearCache, readCache, writeCache, fetchJson } from "@/lib/client-cache";
@@ -13,6 +13,7 @@ import { uploadToStorage } from "@/lib/storage-upload";
 import { videoFileProblem, MAX_VIDEO_MB } from "@/lib/uploads";
 import { formatDateHe } from "@/lib/dates";
 import { ISRAEL_REGIONS } from "@/lib/regions";
+import { creditsCardHint } from "@/lib/credits";
 
 interface PortfolioVideo {
   id: string;
@@ -976,16 +977,18 @@ export default function ProfilePage() {
                 </span>
                 <Button size="sm" variant="secondary" onClick={() => setPurchaseOpen(true)}>רכישת סרטונים</Button>
               </div>
+              {creditsCardHint(brandProfile.totalCredits, brandProfile.usedCredits) && (
+                <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5 mt-2">
+                  {creditsCardHint(brandProfile.totalCredits, brandProfile.usedCredits)}
+                </p>
+              )}
             </Card>
-            {/* Until online payment is connected, buying credits is a contact request handled by the team */}
-            <FeedbackModal
-              key="purchase"
+            {/* No online purchase yet: the owner's notice, then the in-app contact form; the team loads credits from the admin */}
+            <CreditsAccess
               open={purchaseOpen}
               onClose={() => setPurchaseOpen(false)}
-              title="רכישת סרטונים"
-              initialKind="contact"
-              initialSubject="רכישת סרטונים (קרדיטים)"
-              intro="תשלום אונליין יתווסף בקרוב. כתבו כמה סרטונים תרצו ונחזור אליכם עם הצעה ואישור הטעינה — בדרך כלל באותו יום."
+              total={brandProfile.totalCredits}
+              used={brandProfile.usedCredits}
             />
           </div>
         </div>

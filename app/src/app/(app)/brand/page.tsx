@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, type PanInfo } from "framer-motion";
 import { Avatar, Badge, Button, Card, Modal, useToast } from "@/components/ui";
-import { ProfileModal, FeedbackModal } from "@/components/features";
+import { ProfileModal, CreditsAccess } from "@/components/features";
 import { swrFetch, fetchJson } from "@/lib/client-cache";
+import { CREDITS_CONTACT_NOTICE, creditsCardHint } from "@/lib/credits";
 import { toDirectImageUrl } from "@/lib/images";
 import { createClient } from "@/lib/supabase/client";
 
@@ -377,7 +378,8 @@ export default function BrandDiscoverPage() {
             </div>
             <button
               type="button"
-              onClick={() => router.push("/profile")}
+              onClick={() => setPurchaseOpen(true)}
+              title="סרטונים בחבילה"
               className={`text-xs font-bold px-3 py-1.5 rounded-full ${credits.remaining > 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}
             >
               🎬 {credits.remaining} סרטונים
@@ -603,6 +605,11 @@ export default function BrandDiscoverPage() {
               רכישה
             </Button>
           </div>
+          {creditsCardHint(credits.total, credits.total - credits.remaining) && (
+            <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5 mx-2 mb-1">
+              {creditsCardHint(credits.total, credits.total - credits.remaining)}
+            </p>
+          )}
         </Card>
       </div>
 
@@ -666,7 +673,7 @@ export default function BrandDiscoverPage() {
             </div>
             {credits.remaining === 0 && (
               <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
-                אין לכם סרטונים נותרים בחבילה. אפשר לשלוח לבבות, אבל אישור החיבור (שמחייב סרטון אחד) יחכה לרכישה.
+                אין לכם סרטונים בחבילה. אפשר לשלוח לבבות, אבל אישור החיבור (שמחייב סרטון אחד) יחכה לטעינת סרטונים. {CREDITS_CONTACT_NOTICE}
               </p>
             )}
             <div className="flex gap-2">
@@ -680,15 +687,8 @@ export default function BrandDiscoverPage() {
       </Modal>
 
       <ProfileModal userId={viewProfileId} onClose={() => setViewProfileId(null)} title="פרופיל היוצר/ת" as="creator" />
-      <FeedbackModal
-        key="purchase"
-        open={purchaseOpen}
-        onClose={() => setPurchaseOpen(false)}
-        title="רכישת סרטונים"
-        initialKind="contact"
-        initialSubject="רכישת סרטונים (קרדיטים)"
-        intro="תשלום אונליין יתווסף בקרוב. כתבו כמה סרטונים תרצו ונחזור אליכם עם הצעה ואישור הטעינה — בדרך כלל באותו יום."
-      />
+      {/* No online purchase yet: the owner's notice, then the in-app contact form; the team loads credits from the admin */}
+      <CreditsAccess open={purchaseOpen} onClose={() => setPurchaseOpen(false)} total={credits.total} used={credits.total - credits.remaining} />
     </main>
   );
 }

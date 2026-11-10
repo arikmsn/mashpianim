@@ -137,7 +137,8 @@ export async function POST(request: NextRequest) {
           categories: ["טכנולוגיה"],
           website_url: "https://example.com",
           description: "חשבון בדיקה למפרסם",
-          total_credits: 10,
+          // Same start as a real business (0 credits, see lib/credits.ts); for QA load a package from /admin/brands
+          total_credits: 0,
           used_credits: 0,
         });
       }

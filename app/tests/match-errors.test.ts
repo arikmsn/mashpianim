@@ -6,7 +6,8 @@ describe("match_connection() error mapping", () => {
   test("no credits is a 400 with the credits message", () => {
     const r = mapMatchError("P0001: NO_CREDITS");
     assert.equal(r.status, 400);
-    assert.match(r.error, /סרטונים זמינים/);
+    assert.match(r.error, /אין סרטונים בחבילה/);
+    assert.match(r.error, /צור קשר/);
   });
 
   test("not pending is a 400", () => {

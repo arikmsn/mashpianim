@@ -152,6 +152,10 @@ export async function POST(request: NextRequest) {
           description: profile.description || null,
           logo_url: profile.logoUrl || null,
           region: cleanRegion(profile.region),
+          // No starter package: a business begins with 0 credits and asks for a package through the in-app
+          // contact form; an admin loads it (see lib/credits.ts). Explicit so a later DB default can't change it.
+          total_credits: 0,
+          used_credits: 0,
         });
         if (profileError) {
           console.error("[register] brand profile error:", profileError);

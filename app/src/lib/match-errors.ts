@@ -1,8 +1,11 @@
 // Maps errors raised by the match_connection() database function to API responses.
+import { CREDITS_CONTACT_NOTICE } from "./credits.ts";
+
 export function mapMatchError(message: string | null | undefined): { error: string; status: number } {
   const m = message || "";
   if (m.includes("NO_CREDITS")) {
-    return { error: "לעסק אין סרטונים זמינים כרגע. המאטץ' יישמר וייפתח ברגע שיתווספו סרטונים.", status: 400 };
+    // The brand presses the paid step; until online payment exists the package is loaded by the team
+    return { error: `אין סרטונים בחבילה שלכם — ההתאמה נשמרת ותיפתח ברגע שייטענו סרטונים. ${CREDITS_CONTACT_NOTICE}`, status: 400 };
   }
   if (m.includes("CONNECTION_NOT_PENDING")) {
     return { error: "החיבור כבר לא ממתין", status: 400 };

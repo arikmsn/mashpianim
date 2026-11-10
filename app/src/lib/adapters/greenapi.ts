@@ -120,6 +120,8 @@ export class GreenAPIProvider implements MessagingProvider {
         `• אשרו בקשות ושלחו מוצרים`,
         `• קבלו סרטוני UGC אותנטיים לשיווק!`,
         ``,
+        `🎬 סרטונים בחבילה: הטעינה נעשית דרכנו — פנו אלינו ב״צור קשר״ שבתוך האתר לקבלת גישה.`,
+        ``,
         `🔗 כנסו לממשק הניהול: https://www.mashpian.online/brand`,
         ``,
         `בהצלחה! 🚀`,
