@@ -5,13 +5,17 @@ export interface RateLimitRule {
   windowSeconds: number;
 }
 
+// Per-phone limits are the real abuse lever (3 OTP sends per 10 min per number). The per-IP limits are
+// deliberately loose since 2026-11-10: creators sign up in groups from one venue, and Israeli mobile carriers
+// put many phones behind one CGNAT address, so a tight per-IP limit blocks real people before it blocks an
+// attacker (the WhatsApp cost of a spray is still bounded per number).
 export const RATE_LIMITS = {
   sendOtpPhone: { limit: 3, windowSeconds: 10 * 60 },
-  sendOtpIp: { limit: 10, windowSeconds: 10 * 60 },
+  sendOtpIp: { limit: 40, windowSeconds: 10 * 60 },
   verifyOtpPhone: { limit: 10, windowSeconds: 10 * 60 },
-  verifyOtpIp: { limit: 30, windowSeconds: 10 * 60 },
+  verifyOtpIp: { limit: 120, windowSeconds: 10 * 60 },
   devLoginIp: { limit: 10, windowSeconds: 15 * 60 },
-  registerIp: { limit: 10, windowSeconds: 60 * 60 },
+  registerIp: { limit: 60, windowSeconds: 60 * 60 },
   // In-app reports (bugs / requests / contact) per signed-in user
   feedbackUser: { limit: 5, windowSeconds: 60 * 60 },
 } as const satisfies Record<string, RateLimitRule>;
