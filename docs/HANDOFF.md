@@ -222,6 +222,7 @@ Earlier work: OTP auth, registration, feed, products, connections pipeline with 
 14. Automated tests: `npm test` (65 unit tests, see `app/tests/README.md`). Manual flows need a real WhatsApp OTP or the non-production dev-login (`creator` / `brand` test accounts). Since Batch 6 `verify-otp` signs the user in server-side (cookies) and no longer returns a password.
 15. Message read-receipts are per connection (`*_read_at`), not per message.
 16. The admin "moderation/content" pages were not reviewed in this round.
+17. **Accessibility** — no accessibility statement yet and no WCAG AA pass (no reduced-motion handling, no modal focus trap, focus styles in one file, a few images without alt). Required by Israeli law for a live service site (ת"י 5568 / WCAG 2.0 AA + הצהרת נגישות). Scoped in STATUS open item 11; the statement page slots into the existing legal-document system (`lib/legal.ts`, `LegalPage`, `LegalModal`).
 
 ## 9. Decisions already made (don't re-litigate)
 
