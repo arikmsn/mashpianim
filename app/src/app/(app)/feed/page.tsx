@@ -13,7 +13,7 @@ import { toDirectImageUrl } from "@/lib/images";
 import { REGISTRATION_TO_FEED, displayCategory } from "@/lib/categories";
 import { feedSeed, orderKey } from "@/lib/feed-order";
 import { shouldShowWelcome } from "@/lib/onboarding";
-import { useOnboarding, WelcomeSheet, MomentSheet, FIRST_HEART_MOMENT, type OnboardingUser } from "@/components/features";
+import { useOnboarding, useOnboardingContent, WelcomeSheet, MomentSheet, firstHeartMoment, type OnboardingUser } from "@/components/features";
 
 interface Product {
   id: string;
@@ -117,6 +117,7 @@ export default function FeedPage() {
   const [me, setMe] = useState<(OnboardingUser & { type?: string }) | null>(null);
   const [sessionRole, setSessionRole] = useState<string | null>(null);
   const onboarding = useOnboarding(me);
+  const onboardingContent = useOnboardingContent();
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
   const [firstHeart, setFirstHeart] = useState<{ mutual: boolean } | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -883,6 +884,7 @@ export default function FeedPage() {
       <WelcomeSheet
         open={welcomeOpen}
         portfolioCount={portfolioCount}
+        content={onboardingContent.welcome}
         onDone={(how) => {
           setWelcomeDismissed(true);
           onboarding.mark("welcome", how);
@@ -890,7 +892,7 @@ export default function FeedPage() {
       />
       <MomentSheet
         open={!!firstHeart}
-        moment={FIRST_HEART_MOMENT(!!firstHeart?.mutual)}
+        moment={firstHeartMoment(!!firstHeart?.mutual, onboardingContent.moments)}
         onPrimary={() => {
           setFirstHeart(null);
           router.push("/connections");

@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Badge, Avatar, Card, Button, Modal, useToast } from "@/components/ui";
-import { ProfileModal, useOnboarding, MomentSheet, FIRST_MATCH_MOMENT, type OnboardingUser } from "@/components/features";
+import { ProfileModal, useOnboarding, useOnboardingContent, MomentSheet, firstMatchMoment, type OnboardingUser } from "@/components/features";
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch, fetchJson } from "@/lib/client-cache";
 import { toDirectImageUrl } from "@/lib/images";
@@ -102,6 +102,7 @@ function ConnectionsPageInner() {
   // First-time walkthrough: the first match ever gets a one-time explanation (flags come with /api/profile)
   const [me, setMe] = useState<OnboardingUser | null>(null);
   const onboarding = useOnboarding(me);
+  const onboardingContent = useOnboardingContent();
   const [firstMatchClosed, setFirstMatchClosed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [viewBrandId, setViewBrandId] = useState<string | null>(null);
@@ -384,7 +385,7 @@ function ConnectionsPageInner() {
 
       <MomentSheet
         open={!!firstMatch}
-        moment={FIRST_MATCH_MOMENT}
+        moment={firstMatchMoment(onboardingContent.moments)}
         onPrimary={() => {
           const id = firstMatch?.id;
           closeFirstMatch();

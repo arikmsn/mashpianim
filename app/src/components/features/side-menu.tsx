@@ -9,7 +9,7 @@ import { readCache, swrFetch } from "@/lib/client-cache";
 import { FeedbackModal } from "./feedback-modal";
 import { RoleSwitchModal, roleLabel, type AppRole } from "./role-switch";
 import { LegalModal } from "./legal";
-import { WelcomeSheet, useOnboarding, type OnboardingUser } from "./onboarding";
+import { WelcomeSheet, useOnboarding, useOnboardingContent, type OnboardingUser } from "./onboarding";
 
 interface ProfilePayload {
   user?: ({ full_name?: string | null; avatar_url?: string | null; type?: string | null } & OnboardingUser) | null;
@@ -31,6 +31,7 @@ export function SideMenu({ open, onClose }: { open: boolean; onClose: () => void
   const [legalOpen, setLegalOpen] = useState(false);
   const [howOpen, setHowOpen] = useState(false);
   const onboarding = useOnboarding(me?.user || null);
+  const onboardingContent = useOnboardingContent();
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -176,6 +177,7 @@ export function SideMenu({ open, onClose }: { open: boolean; onClose: () => void
       <WelcomeSheet
         open={howOpen}
         portfolioCount={me?.profile?.portfolio_count ?? null}
+        content={onboardingContent.welcome}
         onDone={(how) => {
           setHowOpen(false);
           onboarding.mark("welcome", how);

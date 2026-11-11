@@ -1,22 +1,38 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Button, Modal } from "@/components/ui";
-import { PROFILE_UPDATED_EVENT, readCache, writeCache } from "@/lib/client-cache";
+import { PROFILE_UPDATED_EVENT, readCache, swrFetch, writeCache } from "@/lib/client-cache";
 import {
+  DEFAULT_ONBOARDING_CONTENT,
   hasSeen,
   markSeen,
+  mergeOnboardingContent,
   normalizeOnboarding,
   welcomeCards,
   type MomentCopy,
+  type OnboardingContent,
   type OnboardingHow,
   type OnboardingState,
   type OnboardingStep,
   type OnboardingUser,
 } from "@/lib/onboarding";
 
-export { firstHeartMoment as FIRST_HEART_MOMENT, FIRST_MATCH_MOMENT, type OnboardingUser } from "@/lib/onboarding";
+export { firstHeartMoment, firstMatchMoment, type OnboardingUser } from "@/lib/onboarding";
+
+// The editable walkthrough copy (admin → content), merged with the defaults. Shares the cached /api/admin/content
+// fetch with the landing page, so this adds no extra round trip in practice.
+export function useOnboardingContent(): OnboardingContent {
+  const [content, setContent] = useState<OnboardingContent>(() => {
+    const cached = readCache<{ content?: unknown }>("/api/admin/content");
+    return cached ? mergeOnboardingContent(cached.content) : DEFAULT_ONBOARDING_CONTENT;
+  });
+  useEffect(() => {
+    swrFetch<{ content?: unknown }>("/api/admin/content", (data) => setContent(mergeOnboardingContent(data?.content)));
+  }, []);
+  return content;
+}
 
 // Reads the account's walkthrough flags from the profile the screen already loaded, and marks moments as seen:
 // optimistic locally, mirrored into the cached /api/profile (so other screens agree at once), then POST.
@@ -62,22 +78,24 @@ const SWIPE_PX = 40;
 interface WelcomeSheetProps {
   open: boolean;
   portfolioCount: number | null | undefined;
+  // The editable welcome copy (OnboardingContent.welcome); omit for the built-in defaults
+  content?: Record<string, string>;
   // "done" = finished the cards, "skipped" = "דלג" or closed early; both count as seen
   onDone: (how: "done" | "skipped") => void;
 }
 
 // The 20-second welcome: one card at a time, dots, swipe or "הבא", "דלג" always visible. The Modal mounts its
 // children only while open, so the card index below starts from the first card on every opening.
-export function WelcomeSheet({ open, portfolioCount, onDone }: WelcomeSheetProps) {
+export function WelcomeSheet({ open, portfolioCount, content, onDone }: WelcomeSheetProps) {
   return (
     <Modal open={open} onClose={() => onDone("skipped")} size="sm">
-      <WelcomeCards portfolioCount={portfolioCount} onDone={onDone} />
+      <WelcomeCards portfolioCount={portfolioCount} content={content} onDone={onDone} />
     </Modal>
   );
 }
 
-function WelcomeCards({ portfolioCount, onDone }: Omit<WelcomeSheetProps, "open">) {
-  const cards = useMemo(() => welcomeCards(portfolioCount), [portfolioCount]);
+function WelcomeCards({ portfolioCount, content, onDone }: Omit<WelcomeSheetProps, "open">) {
+  const cards = useMemo(() => welcomeCards(portfolioCount, content), [portfolioCount, content]);
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState(1);
   const touchX = useRef<number | null>(null);

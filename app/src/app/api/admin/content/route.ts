@@ -2,8 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { verifyAdmin, isSupabaseConfigured } from "@/lib/admin-auth";
 import { createClient } from "@/lib/supabase/server";
 import { logActivity } from "@/lib/notifications";
+import { ONBOARDING_CONTENT_DEFAULTS } from "@/lib/onboarding";
 
 const defaultContent: Record<string, Record<string, string>> = {
+  // The creator walkthrough copy, editable like the landing text (lib/onboarding.ts is the source of truth)
+  ...ONBOARDING_CONTENT_DEFAULTS,
   hero: {
     badge: "הפלטפורמה ליוצרי תוכן ומותגים בישראל",
     title_line1: "יוצרים תוכן.",

@@ -10,7 +10,10 @@ import {
   isMatchedStatus,
   welcomeCards,
   firstHeartMoment,
-  FIRST_MATCH_MOMENT,
+  firstMatchMoment,
+  mergeOnboardingContent,
+  ONBOARDING_WELCOME_SECTION,
+  ONBOARDING_MOMENTS_SECTION,
   MIN_PORTFOLIO_FOR_HEARTS,
 } from "../src/lib/onboarding.ts";
 import { TERMS_VERSION } from "../src/lib/legal.ts";
@@ -84,7 +87,28 @@ describe("first-time walkthrough flags", () => {
   test("moment copy mentions the next screen", () => {
     assert.match(firstHeartMoment(false).lines.join(" "), /חיבורים/);
     assert.match(firstHeartMoment(true).title, /מאטץ/);
-    assert.match(FIRST_MATCH_MOMENT.lines.join(" "), /בריף/);
-    assert.equal(FIRST_MATCH_MOMENT.primary, "לצ'אט עם העסק");
+    assert.match(firstMatchMoment().lines.join(" "), /בריף/);
+    assert.equal(firstMatchMoment().primary, "לצ'אט עם העסק");
+  });
+
+  test("admin overrides replace the copy, blanks and unknown keys fall back to defaults", () => {
+    const merged = mergeOnboardingContent({
+      [ONBOARDING_WELCOME_SECTION]: { card_heart_title: "לב מותאם", card_heart_body: "   ", bogus: "x" },
+      [ONBOARDING_MOMENTS_SECTION]: { match_title: "מאטץ' מותאם" },
+    });
+    // overridden
+    assert.equal(welcomeCards(5, merged.welcome)[0].title, "לב מותאם");
+    assert.equal(firstMatchMoment(merged.moments).title, "מאטץ' מותאם");
+    // blank override is ignored (keeps the default), unknown key is dropped
+    assert.match(welcomeCards(5, merged.welcome)[0].body, /גללו/);
+    assert.equal((merged.welcome as Record<string, string>).bogus, undefined);
+    // the portfolio card's default still appears when under the threshold
+    assert.equal(welcomeCards(2, merged.welcome).length, 4);
+  });
+
+  test("mergeOnboardingContent(null) yields the built-in defaults", () => {
+    const d = mergeOnboardingContent(null);
+    assert.equal(welcomeCards(5, d.welcome)[0].title, welcomeCards(5)[0].title);
+    assert.equal(firstMatchMoment(d.moments).primary, firstMatchMoment().primary);
   });
 });

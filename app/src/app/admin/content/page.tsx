@@ -2,12 +2,17 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardTitle, Button, useToast } from "@/components/ui";
+import { ONBOARDING_CONTENT_DEFAULTS, ONBOARDING_WELCOME_SECTION, ONBOARDING_MOMENTS_SECTION } from "@/lib/onboarding";
 
 type ContentSection = {
   id: string;
   label: string;
   fields: { key: string; label: string; type: "text" | "textarea"; value: string }[];
 };
+
+// The creator walkthrough copy (lib/onboarding.ts is the source of truth for the default values)
+const W = ONBOARDING_CONTENT_DEFAULTS[ONBOARDING_WELCOME_SECTION];
+const M = ONBOARDING_CONTENT_DEFAULTS[ONBOARDING_MOMENTS_SECTION];
 
 const defaultContent: ContentSection[] = [
   {
@@ -90,6 +95,37 @@ const defaultContent: ContentSection[] = [
     fields: [
       { key: "tagline", label: "תיאור קצר", type: "text", value: "הפלטפורמה ליוצרי תוכן ומותגים" },
       { key: "copyright", label: "זכויות יוצרים", type: "text", value: "Mashpian. כל הזכויות שמורות." },
+    ],
+  },
+  {
+    id: ONBOARDING_WELCOME_SECTION,
+    label: "הסבר ליוצר — כרטיסי פתיחה (כניסה ראשונה)",
+    fields: [
+      { key: "card_portfolio_title", label: "כרטיס תיק עבודות — כותרת (מוצג רק למי שאין לו 5 סרטונים)", type: "text", value: W.card_portfolio_title },
+      { key: "card_portfolio_body", label: "כרטיס תיק עבודות — טקסט", type: "textarea", value: W.card_portfolio_body },
+      { key: "card_heart_title", label: "כרטיס לב — כותרת", type: "text", value: W.card_heart_title },
+      { key: "card_heart_body", label: "כרטיס לב — טקסט", type: "textarea", value: W.card_heart_body },
+      { key: "card_match_title", label: "כרטיס מאטץ' — כותרת", type: "text", value: W.card_match_title },
+      { key: "card_match_body", label: "כרטיס מאטץ' — טקסט", type: "textarea", value: W.card_match_body },
+      { key: "card_deliver_title", label: "כרטיס בריף ומוצר — כותרת", type: "text", value: W.card_deliver_title },
+      { key: "card_deliver_body", label: "כרטיס בריף ומוצר — טקסט", type: "textarea", value: W.card_deliver_body },
+    ],
+  },
+  {
+    id: ONBOARDING_MOMENTS_SECTION,
+    label: "הסבר ליוצר — הודעות (לב ראשון, מאטץ' ראשון)",
+    fields: [
+      { key: "heart_title", label: "אחרי הלב הראשון — כותרת", type: "text", value: M.heart_title },
+      { key: "heart_body", label: "אחרי הלב הראשון — טקסט", type: "textarea", value: M.heart_body },
+      { key: "heart_more", label: "אחרי הלב הראשון — שורת המשך", type: "textarea", value: M.heart_more },
+      { key: "heart_primary", label: "אחרי הלב הראשון — כפתור ראשי", type: "text", value: M.heart_primary },
+      { key: "heart_secondary", label: "אחרי הלב הראשון — כפתור משני", type: "text", value: M.heart_secondary },
+      { key: "heart_mutual_title", label: "לב ראשון כשהעסק כבר שלח לב — כותרת", type: "text", value: M.heart_mutual_title },
+      { key: "heart_mutual_body", label: "לב ראשון כשהעסק כבר שלח לב — טקסט", type: "textarea", value: M.heart_mutual_body },
+      { key: "match_title", label: "המאטץ' הראשון — כותרת", type: "text", value: M.match_title },
+      { key: "match_body", label: "המאטץ' הראשון — טקסט", type: "textarea", value: M.match_body },
+      { key: "match_primary", label: "המאטץ' הראשון — כפתור ראשי", type: "text", value: M.match_primary },
+      { key: "match_secondary", label: "המאטץ' הראשון — כפתור משני", type: "text", value: M.match_secondary },
     ],
   },
 ];
