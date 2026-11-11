@@ -5,17 +5,35 @@
 // a creator and a business (product quality, shipping, the video, any consideration) and takes no responsibility
 // for it. No company number yet. Bump TERMS_VERSION when the wording changes in a way users must re-accept.
 
+// Unchanged on 2026-11-11: the accessibility clause added to the terms is informational, so nobody is asked to re-accept
 export const TERMS_VERSION = "2026-11-10";
-export const LEGAL_UPDATED_LABEL = "עודכן לאחרונה: 10 בנובמבר 2026";
+export const LEGAL_UPDATED_LABEL = "עודכן לאחרונה: 11 בנובמבר 2026";
 export const PLATFORM_NAME = "משפיען אונליין";
 export const PLATFORM_DOMAIN = "mashpian.online";
 
-export type LegalSlug = "terms" | "privacy" | "refunds";
+// Accessibility coordinator contact (owner, 2026-11-11). No personal name by the owner's choice: requests are
+// routed to the coordinator. Keep statementDate current whenever the statement's wording changes.
+export const ACCESSIBILITY_CONTACT = {
+  email: "info@mashpian.online",
+  phoneDisplay: "055-5700948",
+  phoneHref: "tel:+972555700948",
+  statementDate: "11 בנובמבר 2026",
+} as const;
+
+export type LegalSlug = "terms" | "privacy" | "refunds" | "accessibility";
+
+export interface LegalLink {
+  label: string;
+  // tel: / mailto: / an internal path such as "/accessibility"
+  href: string;
+}
 
 export interface LegalSection {
   title: string;
   paragraphs?: string[];
   bullets?: string[];
+  // Clickable contacts or references, rendered after the bullets
+  links?: LegalLink[];
   // A closing paragraph after the bullets
   after?: string[];
 }
@@ -155,6 +173,13 @@ export const TERMS: LegalDocument = {
       title: "14. יצירת קשר",
       paragraphs: ["לשאלות, לבקשות ולדיווחים אפשר לפנות אלינו דרך \"צור קשר / דיווח על תקלה\" באפליקציה."],
     },
+    {
+      title: "15. נגישות",
+      paragraphs: [
+        "אנו פועלים להנגשת הפלטפורמה לאנשים עם מוגבלות בהתאם לחוק שוויון זכויות לאנשים עם מוגבלות, התשנ\"ח-1998, לתקנות שוויון זכויות לאנשים עם מוגבלות (התאמות נגישות לשירות), התשע\"ג-2013, ולתקן הישראלי ת\"י 5568 (WCAG 2.0 ברמה AA). רמת הנגישות של האתר, המגבלות הידועות ודרכי הפנייה לרכז/ת הנגישות מפורטות בהצהרת הנגישות.",
+      ],
+      links: [{ label: "להצהרת הנגישות", href: "/accessibility" }],
+    },
   ],
 };
 
@@ -292,5 +317,67 @@ export const REFUNDS: LegalDocument = {
   ],
 };
 
-export const LEGAL_DOCUMENTS: Record<LegalSlug, LegalDocument> = { terms: TERMS, privacy: PRIVACY, refunds: REFUNDS };
-export const LEGAL_ORDER: LegalSlug[] = ["terms", "privacy", "refunds"];
+// הצהרת נגישות (owner, 2026-11-11). Honest about the state: the site is in an ongoing accessibility process and the
+// WCAG AA pass is tracked in docs/STATUS.md (open item 11) — section 3 must shrink as that work lands. Required by
+// Israeli law for a live service site (תקנות שוויון זכויות לאנשים עם מוגבלות — התאמות נגישות לשירות, 2013; ת"י 5568).
+export const ACCESSIBILITY: LegalDocument = {
+  slug: "accessibility",
+  title: "הצהרת נגישות",
+  shortTitle: "נגישות",
+  intro: `${PLATFORM_NAME} רואה חשיבות רבה במתן שירות שוויוני ונגיש לכלל המשתמשים, ובהם אנשים עם מוגבלות. אנו פועלים להנגשת הפלטפורמה בהתאם לחוק שוויון זכויות לאנשים עם מוגבלות, התשנ"ח-1998, ולתקנות שוויון זכויות לאנשים עם מוגבלות (התאמות נגישות לשירות), התשע"ג-2013, ושואפים לעמוד בדרישות התקן הישראלי ת"י 5568 לנגישות תכנים באינטרנט ברמה AA, המבוסס על הנחיות WCAG 2.0.`,
+  sections: [
+    {
+      title: "1. מצב הנגישות באתר",
+      paragraphs: [
+        `השירות של ${PLATFORM_NAME} ניתן באופן מקוון, דרך האתר והאפליקציה בכתובת ${PLATFORM_DOMAIN}. האתר נמצא בתהליך הנגשה מתמשך: חלק מההתאמות כבר מיושמות, ואחרות נמצאות בעבודה. הצהרה זו מתעדכנת ככל שהתהליך מתקדם.`,
+      ],
+    },
+    {
+      title: "2. התאמות שבוצעו",
+      bullets: [
+        "האתר בנוי בעברית מימין לשמאל, עם סימון שפה וכיוון עבור טכנולוגיות מסייעות ומבנה כותרות היררכי.",
+        "לשדות הטפסים (כניסה, הרשמה, פרופיל, מוצרים) יש תוויות, והודעות השגיאה הן מילוליות וברורות.",
+        "הפעולות המרכזיות (לב למוצר, הסרה, צפייה בפרטים, אישור, שליחה) ניתנות להפעלה בכפתורים ולא רק במחוות מגע.",
+        "חלונות קופצים מסומנים כדיאלוגים עבור קוראי מסך ונסגרים גם באמצעות מקש Escape.",
+        "לתמונות המרכזיות באתר יש טקסט חלופי, והאתר תומך בהגדלת התצוגה באמצעות הדפדפן.",
+        "האתר מותאם לשימוש בטלפון נייד ובמחשב.",
+      ],
+    },
+    {
+      title: "3. מגבלות ידועות ומה בעבודה",
+      bullets: [
+        "תמיכה בהעדפת הפחתת תנועה (prefers-reduced-motion) באנימציות ובמעברים — בעבודה.",
+        "לכידת פוקוס מלאה בחלונות קופצים וסימון פוקוס בולט ואחיד בכל המסכים — בעבודה.",
+        "בדיקת ניגודיות צבעים מלאה בכל המסכים וקישור \"דלג לתוכן\" — בעבודה.",
+        "סרטונים ותמונות שמעלים המשתמשים (תיקי עבודות, מוצרים) הם תוכן של המשתמשים ואינם מלווים בהכרח בכתוביות או בתיאור חלופי.",
+        "אימות הכניסה נעשה באמצעות קוד שנשלח בוואטסאפ, שירות של צד שלישי שאינו בשליטתנו.",
+      ],
+      after: ["אם נתקלתם בחסם שאינו מופיע כאן, נשמח שתעדכנו אותנו — זה עוזר לנו לתעדף את העבודה."],
+    },
+    {
+      title: "4. פנייה בנושא נגישות",
+      paragraphs: [`נתקלתם בקושי, בתקלה או בחסם נגישות? פניות בנושא נגישות מופנות לרכז/ת הנגישות של ${PLATFORM_NAME}:`],
+      links: [
+        { label: `טלפון: ${ACCESSIBILITY_CONTACT.phoneDisplay}`, href: ACCESSIBILITY_CONTACT.phoneHref },
+        { label: `דוא"ל: ${ACCESSIBILITY_CONTACT.email}`, href: `mailto:${ACCESSIBILITY_CONTACT.email}` },
+      ],
+      after: [
+        "כדי שנוכל לטפל במהירות, כדאי לציין את העמוד או הפעולה שבהם נתקלתם בבעיה, את סוג המכשיר והדפדפן, ואת הטכנולוגיה המסייעת אם יש כזו. נשתדל להשיב בתוך 5 ימי עסקים. אפשר לפנות גם דרך \"צור קשר / דיווח על תקלה\" באפליקציה.",
+        "מי שמתקשה להשתמש באתר יוכל לקבל את השירות באמצעי חלופי, בתיאום טלפוני או בדוא\"ל.",
+      ],
+    },
+    {
+      title: "5. הזכות לפנות לנציבות",
+      paragraphs: ["ללא קשר לפנייה אלינו, לכל אדם עומדת הזכות לפנות לנציבות שוויון זכויות לאנשים עם מוגבלות במשרד המשפטים בכל עניין הנוגע לנגישות."],
+    },
+    {
+      title: "6. עדכון ההצהרה",
+      paragraphs: [
+        `הצהרת נגישות זו עודכנה לאחרונה בתאריך ${ACCESSIBILITY_CONTACT.statementDate}. ההצהרה נבדקת ומתעדכנת מעת לעת, ולפחות אחת לשנה או עם שינוי מהותי באתר.`,
+      ],
+    },
+  ],
+};
+
+export const LEGAL_DOCUMENTS: Record<LegalSlug, LegalDocument> = { terms: TERMS, privacy: PRIVACY, refunds: REFUNDS, accessibility: ACCESSIBILITY };
+export const LEGAL_ORDER: LegalSlug[] = ["terms", "privacy", "refunds", "accessibility"];

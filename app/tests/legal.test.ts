@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { needsTermsAcceptance, TERMS, PRIVACY, REFUNDS, LEGAL_DOCUMENTS, LEGAL_ORDER, TERMS_VERSION } from "../src/lib/legal.ts";
+import { needsTermsAcceptance, TERMS, PRIVACY, REFUNDS, ACCESSIBILITY, ACCESSIBILITY_CONTACT, LEGAL_DOCUMENTS, LEGAL_ORDER, TERMS_VERSION } from "../src/lib/legal.ts";
 
 describe("terms acceptance (owner, 2026-11-09)", () => {
   test("who still has to accept", () => {
@@ -32,7 +32,27 @@ describe("terms acceptance (owner, 2026-11-09)", () => {
     // Refunds: the 14-day window, the 12-month validity, no refunds for products/videos
     const refunds = text(REFUNDS);
     for (const phrase of ["14 ימים", "12 חודשים", "אינו מוחזר", "סבב תיקונים אחד"]) assert.ok(refunds.includes(phrase), `refunds mention: ${phrase}`);
-    assert.deepEqual(LEGAL_ORDER, ["terms", "privacy", "refunds"]);
+    assert.deepEqual(LEGAL_ORDER, ["terms", "privacy", "refunds", "accessibility"]);
     for (const slug of LEGAL_ORDER) assert.equal(LEGAL_DOCUMENTS[slug].slug, slug);
+  });
+
+  test("accessibility statement (owner, 2026-11-11): the standard, an honest status, a reachable coordinator, a date; the terms point to it", () => {
+    const text = (doc: typeof TERMS) =>
+      [doc.intro, ...doc.sections.flatMap((s) => [s.title, ...(s.paragraphs || []), ...(s.bullets || []), ...(s.links || []).map((l) => l.label), ...(s.after || [])])].join("\n");
+    const a = text(ACCESSIBILITY);
+    for (const phrase of ["5568", "WCAG 2.0", "AA", 'התשע"ג-2013', "בתהליך הנגשה", "רכז/ת הנגישות", "בעבודה", "נציבות שוויון זכויות", ACCESSIBILITY_CONTACT.phoneDisplay, ACCESSIBILITY_CONTACT.email, ACCESSIBILITY_CONTACT.statementDate]) {
+      assert.ok(a.includes(phrase), `accessibility statement mentions: ${phrase}`);
+    }
+    // The contacts are clickable (tel / mailto) and carry no personal name — requests go to the coordinator
+    const links = ACCESSIBILITY.sections.flatMap((s) => s.links || []);
+    assert.ok(links.some((l) => l.href === ACCESSIBILITY_CONTACT.phoneHref), "tel link");
+    assert.ok(links.some((l) => l.href === `mailto:${ACCESSIBILITY_CONTACT.email}`), "mailto link");
+    assert.match(ACCESSIBILITY_CONTACT.phoneHref, /^tel:\+972\d{9}$/);
+    assert.equal(LEGAL_DOCUMENTS.accessibility.slug, "accessibility");
+    // The terms gained an informational clause that links to the statement — without re-gating every user
+    const terms = text(TERMS);
+    assert.ok(terms.includes("נגישות") && terms.includes("5568"), "terms mention accessibility and the standard");
+    assert.ok(TERMS.sections.some((s) => (s.links || []).some((l) => l.href === "/accessibility")), "terms link to /accessibility");
+    assert.equal(TERMS_VERSION, "2026-11-10", "an informational clause must not force re-acceptance (bump deliberately when obligations change)");
   });
 });

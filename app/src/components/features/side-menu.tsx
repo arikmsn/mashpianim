@@ -149,7 +149,7 @@ export function SideMenu({ open, onClose }: { open: boolean; onClose: () => void
                 {/* The terms the account accepted, any time (owner, 2026-11-09) */}
                 <MenuItem
                   icon="📄"
-                  label="תנאי השירות, פרטיות והחזרים"
+                  label="תנאי שירות, פרטיות, החזרים ונגישות"
                   onClick={() => {
                     onClose();
                     setLegalOpen(true);

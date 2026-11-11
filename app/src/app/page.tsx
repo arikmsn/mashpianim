@@ -575,6 +575,7 @@ export default function HomePage() {
               <Link href="/terms" className="hover:text-white transition-colors">תנאי שירות</Link>
               <Link href="/privacy" className="hover:text-white transition-colors">פרטיות</Link>
               <Link href="/refunds" className="hover:text-white transition-colors">החזרים</Link>
+              <Link href="/accessibility" className="hover:text-white transition-colors">נגישות</Link>
               <Link href="/login" className="hover:text-white transition-colors">התחברות</Link>
             </div>
           </div>

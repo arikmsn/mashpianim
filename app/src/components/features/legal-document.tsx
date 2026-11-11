@@ -21,6 +21,24 @@ export function LegalDocumentView({ doc, compact = false }: { doc: LegalDocument
               ))}
             </ul>
           )}
+          {section.links && (
+            // Clickable contacts / references (tel:, mailto:, internal). pink-700 keeps AA contrast on white.
+            <ul className="mt-2 space-y-1">
+              {section.links.map((l) => (
+                <li key={l.href}>
+                  {l.href.startsWith("/") ? (
+                    <Link href={l.href} className="text-pink-700 font-medium underline underline-offset-2">
+                      {l.label}
+                    </Link>
+                  ) : (
+                    <a href={l.href} className="text-pink-700 font-medium underline underline-offset-2">
+                      {l.label}
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
           {section.after?.map((p, i) => (
             <p key={`after-${i}`} className="mt-2">{p}</p>
           ))}
