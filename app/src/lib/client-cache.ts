@@ -124,6 +124,9 @@ export async function swrFetch<T>(
 
 // Lightweight cross-component signals (e.g. "unread count changed").
 export const UNREAD_EVENT = "mashpian:unread-changed";
+// Fired after the cached /api/profile was rewritten locally (terms accepted, walkthrough moment marked) so screens
+// that keep a copy of the profile can re-read it without a network round trip
+export const PROFILE_UPDATED_EVENT = "mashpian:profile-updated";
 
 export function emitUnreadChanged(delta?: number) {
   if (typeof window === "undefined") return;

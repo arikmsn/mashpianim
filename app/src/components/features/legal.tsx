@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button, useToast } from "@/components/ui";
 import { useAuth } from "@/hooks/use-auth";
-import { readCache, swrFetch, writeCache } from "@/lib/client-cache";
+import { PROFILE_UPDATED_EVENT, readCache, swrFetch, writeCache } from "@/lib/client-cache";
 import { LEGAL_DOCUMENTS, LEGAL_ORDER, LEGAL_UPDATED_LABEL, TERMS, needsTermsAcceptance, type LegalSlug } from "@/lib/legal";
 import { LegalDocumentView } from "./legal-document";
 
@@ -115,6 +115,7 @@ export function TermsGate() {
       }
       const next: ProfilePayload = { ...me, user: { ...me?.user, terms_accepted_at: data.terms_accepted_at, terms_version: data.terms_version } };
       writeCache("/api/profile", next);
+      window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
       setMe(next);
     } catch {
       toast("לא הצלחנו לשמור את האישור — נסו שוב", "error");

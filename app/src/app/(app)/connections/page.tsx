@@ -4,10 +4,11 @@ import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Badge, Avatar, Card, Button, Modal, useToast } from "@/components/ui";
-import { ProfileModal } from "@/components/features";
+import { ProfileModal, useOnboarding, MomentSheet, FIRST_MATCH_MOMENT, type OnboardingUser } from "@/components/features";
 import { createClient } from "@/lib/supabase/client";
 import { swrFetch, fetchJson } from "@/lib/client-cache";
 import { toDirectImageUrl } from "@/lib/images";
+import { isMatchedStatus } from "@/lib/onboarding";
 
 // "בתהליך": brands that chose the creator and no final match yet; "הסתיימו": everything that was matched
 type TabType = "process" | "done";
@@ -98,6 +99,10 @@ function ConnectionsPageInner() {
   const openId = searchParams.get("open");
   const [activeTab, setActiveTab] = useState<TabType>("process");
   const [connections, setConnections] = useState<Connection[]>([]);
+  // First-time walkthrough: the first match ever gets a one-time explanation (flags come with /api/profile)
+  const [me, setMe] = useState<OnboardingUser | null>(null);
+  const onboarding = useOnboarding(me);
+  const [firstMatchClosed, setFirstMatchClosed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [viewBrandId, setViewBrandId] = useState<string | null>(null);
   const [respondingId, setRespondingId] = useState<string | null>(null);
@@ -135,7 +140,8 @@ function ConnectionsPageInner() {
   }, [applyConnections]);
 
   useEffect(() => {
-    swrFetch<{ user?: { type?: string }; role?: string; profile?: { portfolio_count?: number } }>("/api/profile", (data) => {
+    swrFetch<{ user?: OnboardingUser & { type?: string }; role?: string; profile?: { portfolio_count?: number } }>("/api/profile", (data) => {
+      setMe(data.user || null);
       if ((data.role || data.user?.type) === "creator") {
         setPortfolioCount(typeof data.profile?.portfolio_count === "number" ? data.profile.portfolio_count : 0);
       }
@@ -212,6 +218,19 @@ function ConnectionsPageInner() {
       return () => clearTimeout(t);
     }
   }, [loading, openId, counts.process, counts.done]);
+
+  // The first match ever: a one-time explanation that leads to the brief in the chat. Derived from the list and the
+  // account's flags; closing it (any way) marks the moment, and the overlay covers the bottom bar until then.
+  const firstMatch =
+    onboarding.ready && !loading && !firstMatchClosed && !onboarding.seen("first_match")
+      ? connections
+          .filter((c) => isMatchedStatus(c.status))
+          .sort((a, b) => (b.approvedAt || b.createdAt).localeCompare(a.approvedAt || a.createdAt))[0] || null
+      : null;
+  function closeFirstMatch() {
+    setFirstMatchClosed(true);
+    onboarding.mark("first_match", "done");
+  }
 
   const tabs: { key: TabType; label: string }[] = [
     { key: "process", label: "בתהליך" },
@@ -362,6 +381,17 @@ function ConnectionsPageInner() {
           <Button fullWidth onClick={() => router.push("/profile")}>להעלאת סרטונים</Button>
         </div>
       </Modal>
+
+      <MomentSheet
+        open={!!firstMatch}
+        moment={FIRST_MATCH_MOMENT}
+        onPrimary={() => {
+          const id = firstMatch?.id;
+          closeFirstMatch();
+          if (id) router.push(`/messages?connection=${id}`);
+        }}
+        onClose={closeFirstMatch}
+      />
     </main>
   );
 }

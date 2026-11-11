@@ -9,10 +9,11 @@ import { readCache, swrFetch } from "@/lib/client-cache";
 import { FeedbackModal } from "./feedback-modal";
 import { RoleSwitchModal, roleLabel, type AppRole } from "./role-switch";
 import { LegalModal } from "./legal";
+import { WelcomeSheet, useOnboarding, type OnboardingUser } from "./onboarding";
 
 interface ProfilePayload {
-  user?: { full_name?: string | null; avatar_url?: string | null; type?: string | null } | null;
-  profile?: { shop_name?: string | null; logo_url?: string | null } | null;
+  user?: ({ full_name?: string | null; avatar_url?: string | null; type?: string | null } & OnboardingUser) | null;
+  profile?: { shop_name?: string | null; logo_url?: string | null; portfolio_count?: number | null } | null;
   role?: string;
   roles?: string[];
 }
@@ -28,6 +29,8 @@ export function SideMenu({ open, onClose }: { open: boolean; onClose: () => void
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [roleOpen, setRoleOpen] = useState(false);
   const [legalOpen, setLegalOpen] = useState(false);
+  const [howOpen, setHowOpen] = useState(false);
+  const onboarding = useOnboarding(me?.user || null);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -111,6 +114,16 @@ export function SideMenu({ open, onClose }: { open: boolean; onClose: () => void
               <nav className="flex-1 overflow-y-auto py-2">
                 <MenuItem icon="👤" label="הפרופיל שלי" onClick={() => go("/profile")} />
                 <MenuItem icon="🔔" label="התראות" onClick={() => go("/notifications")} />
+                {role === "creator" && (
+                  <MenuItem
+                    icon="❓"
+                    label="איך זה עובד?"
+                    onClick={() => {
+                      onClose();
+                      setHowOpen(true);
+                    }}
+                  />
+                )}
                 <MenuItem
                   icon="📨"
                   label="צור קשר / דיווח על תקלה"
@@ -159,6 +172,15 @@ export function SideMenu({ open, onClose }: { open: boolean; onClose: () => void
       </AnimatePresence>
 
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
+      {/* Replay of the welcome cards; marks the moment only if the account never saw it */}
+      <WelcomeSheet
+        open={howOpen}
+        portfolioCount={me?.profile?.portfolio_count ?? null}
+        onDone={(how) => {
+          setHowOpen(false);
+          onboarding.mark("welcome", how);
+        }}
+      />
       <LegalModal open={legalOpen} onClose={() => setLegalOpen(false)} />
       <RoleSwitchModal open={roleOpen} onClose={() => setRoleOpen(false)} roles={roles} current={roles.includes(role as AppRole) ? (role as AppRole) : null} />
     </>

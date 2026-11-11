@@ -8,10 +8,12 @@ import { Badge, Button, Modal, useToast } from "@/components/ui";
 import { useAuth } from "@/hooks/use-auth";
 import { useNotifications } from "@/hooks/use-notifications";
 import { createClient } from "@/lib/supabase/client";
-import { swrFetch, fetchJson } from "@/lib/client-cache";
+import { swrFetch, fetchJson, readCache, PROFILE_UPDATED_EVENT } from "@/lib/client-cache";
 import { toDirectImageUrl } from "@/lib/images";
 import { REGISTRATION_TO_FEED, displayCategory } from "@/lib/categories";
 import { feedSeed, orderKey } from "@/lib/feed-order";
+import { shouldShowWelcome } from "@/lib/onboarding";
+import { useOnboarding, WelcomeSheet, MomentSheet, FIRST_HEART_MOMENT, type OnboardingUser } from "@/components/features";
 
 interface Product {
   id: string;
@@ -110,6 +112,13 @@ export default function FeedPage() {
   const [userCategories, setUserCategories] = useState<string[]>([]);
   const [relations, setRelations] = useState<Record<string, Relation>>({});
   const [gateOpen, setGateOpen] = useState(false);
+  // First-time walkthrough (owner, 2026-11-11): the welcome cards once per account after the terms gate, and a
+  // one-time sheet after the first heart. Flags live in users.onboarding and arrive with /api/profile.
+  const [me, setMe] = useState<(OnboardingUser & { type?: string }) | null>(null);
+  const [sessionRole, setSessionRole] = useState<string | null>(null);
+  const onboarding = useOnboarding(me);
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  const [firstHeart, setFirstHeart] = useState<{ mutual: boolean } | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [regionFilter, setRegionFilter] = useState<string[]>([]);
@@ -133,7 +142,7 @@ export default function FeedPage() {
   const router = useRouter();
 
   useEffect(() => {
-    swrFetch<{ user?: { type?: string }; role?: string; profile?: { categories?: string[]; category?: string; portfolio_count?: number } }>(
+    swrFetch<{ user?: OnboardingUser & { type?: string }; role?: string; profile?: { categories?: string[]; category?: string; portfolio_count?: number } }>(
       "/api/profile",
       (data) => {
         // The feed is the creator home; a session signed in as a brand belongs on /brand
@@ -143,6 +152,8 @@ export default function FeedPage() {
           return;
         }
         const profile = data.profile || {};
+        setMe(data.user || null);
+        setSessionRole(typeof role === "string" ? role : null);
         setUserCategories(profile.categories || (profile.category ? [profile.category] : []));
         if (role === "creator") {
           setPortfolioCount(typeof profile.portfolio_count === "number" ? profile.portfolio_count : 0);
@@ -153,6 +164,18 @@ export default function FeedPage() {
       if (fresh === null) setProfileReady(true); // offline / error: don't block the screen
     });
   }, [router]);
+
+  // Terms accepted in the gate (or a moment marked elsewhere) → the cached profile changed → re-read it
+  useEffect(() => {
+    const onProfile = () => setMe(readCache<{ user?: OnboardingUser & { type?: string } }>("/api/profile")?.user || null);
+    window.addEventListener(PROFILE_UPDATED_EVENT, onProfile);
+    return () => window.removeEventListener(PROFILE_UPDATED_EVENT, onProfile);
+  }, []);
+
+  // The welcome cards stay open until the account marks them (done or skipped). Dismissal is an explicit flag set
+  // in the handler, not derived — so the sheet closes at once even while /api/profile is still refetching.
+  const welcomeOpen =
+    onboarding.ready && profileReady && !welcomeDismissed && shouldShowWelcome({ role: sessionRole, user: me, state: onboarding.state });
 
   const applyProducts = useCallback((data: { products?: Record<string, unknown>[] }) => {
     if (!data.products) return;
@@ -343,7 +366,13 @@ export default function FeedPage() {
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         const connectionId = data.connection?.id as string;
-        toast(data.mutual ? "🎉 יש מאטץ'! העסק יאשר את החיבור ואז ייפתח הצ'אט" : "❤️ הלב נשלח! נעדכן אותך כשהעסק יאשר", "success");
+        if (onboarding.ready && !onboarding.seen("first_heart")) {
+          // The first heart ever: a one-time sheet explains what happens next (instead of the toast)
+          setFirstHeart({ mutual: !!data.mutual });
+          onboarding.mark("first_heart", "done");
+        } else {
+          toast(data.mutual ? "🎉 יש מאטץ'! העסק יאשר את החיבור ואז ייפתח הצ'אט" : "❤️ הלב נשלח! נעדכן אותך כשהעסק יאשר", "success");
+        }
         setRelations((prev) => ({
           ...prev,
           [product.id]: {
@@ -849,6 +878,25 @@ export default function FeedPage() {
           <button type="button" onClick={() => setGateOpen(false)} className="text-sm text-neutral-400">אחר כך</button>
         </div>
       </Modal>
+
+      {/* First-time walkthrough: the welcome cards (once per account) and the first-heart moment */}
+      <WelcomeSheet
+        open={welcomeOpen}
+        portfolioCount={portfolioCount}
+        onDone={(how) => {
+          setWelcomeDismissed(true);
+          onboarding.mark("welcome", how);
+        }}
+      />
+      <MomentSheet
+        open={!!firstHeart}
+        moment={FIRST_HEART_MOMENT(!!firstHeart?.mutual)}
+        onPrimary={() => {
+          setFirstHeart(null);
+          router.push("/connections");
+        }}
+        onClose={() => setFirstHeart(null)}
+      />
     </main>
   );
 }
