@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createNotification, notificationData } from "@/lib/notifications";
 import { getGreenAPI } from "@/lib/adapters/greenapi";
+import { whatsappNotificationsEnabled } from "@/lib/messaging-switch";
 import { mapMatchError } from "@/lib/match-errors";
 import { sanitizeBriefData, type BriefSnapshot } from "@/lib/brief";
 
@@ -30,6 +31,9 @@ export { buildBriefMessage } from "@/lib/brief";
 
 async function sendWhatsApp(phone: string | null | undefined, body: string) {
   if (!phone) return;
+  // Heart / match messages go out only while WHATSAPP_NOTIFICATIONS=on (off by default since the 2026-11-12
+  // restriction of the owner's number); the in-app notification was already written by the caller
+  if (!whatsappNotificationsEnabled()) return;
   const api = getGreenAPI();
   if (!api) return;
   try {

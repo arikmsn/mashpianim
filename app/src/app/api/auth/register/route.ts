@@ -3,6 +3,7 @@ import { cleanRegion } from "@/lib/regions";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { getGreenAPI } from "@/lib/adapters/greenapi";
+import { whatsappNotificationsEnabled } from "@/lib/messaging-switch";
 import { isAllowedRegistrationType } from "@/lib/authz";
 import { checkRateLimit, rateLimitedResponse, clientIp, RATE_LIMITS } from "@/lib/rate-limit";
 import { setActiveRoleCookie } from "@/lib/active-role";
@@ -164,9 +165,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Welcome message only for brand-new accounts
+    // Welcome message only for brand-new accounts — and only while WhatsApp notifications are switched on
+    // (WHATSAPP_NOTIFICATIONS=on; off by default since the 2026-11-12 restriction of the owner's number)
     const greenAPI = getGreenAPI();
-    if (greenAPI && phone && isNewUser) {
+    if (greenAPI && phone && isNewUser && whatsappNotificationsEnabled()) {
       const name = profile.fullName || "";
       if (effectiveType === "creator") {
         greenAPI.sendWelcomeCreator(phone, name).catch((err) =>
