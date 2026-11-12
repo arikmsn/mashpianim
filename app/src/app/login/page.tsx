@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { clearCache } from "@/lib/client-cache";
 import { normalizeIsraeliMobile, PHONE_ERROR } from "@/lib/phone";
+import { otherOtpChannel, otpChannelLabel, type OtpChannel } from "@/lib/otp-channel";
 import { refreshAuth } from "@/hooks/use-auth";
 import { useToast } from "@/components/ui";
 import { RoleOptions, chooseRole, type AppRole } from "@/components/features";
@@ -27,6 +28,8 @@ function LoginContent() {
   const [availableRoles, setAvailableRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(false);
   const [formattedPhone, setFormattedPhone] = useState("");
+  // Where the last code went (the server decides: WhatsApp, or SMS when asked for / when WhatsApp fails)
+  const [channel, setChannel] = useState<OtpChannel>("whatsapp");
   const tapRef = useRef({ count: 0, timer: 0 });
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/feed";
@@ -70,9 +73,10 @@ function LoginContent() {
     }
   }
 
-  async function handleSendOTP(e: React.FormEvent) {
-    e.preventDefault();
-    // Only an Israeli mobile number can receive the WhatsApp code; say so before touching the server
+  // Sends the code. `requested` is the channel the user asked for (undefined = the server's default); the server
+  // answers with the channel it actually used — it falls back to SMS when the WhatsApp send fails.
+  async function sendCode(requested?: OtpChannel) {
+    // Only an Israeli mobile number can receive the code; say so before touching the server
     if (!normalizeIsraeliMobile(phone)) {
       toast(PHONE_ERROR, "error");
       return;
@@ -82,19 +86,26 @@ function LoginContent() {
       const res = await fetch("/api/auth/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify(requested ? { phone, channel: requested } : { phone }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      const used: OtpChannel = data.channel === "sms" ? "sms" : "whatsapp";
+      setChannel(used);
       setFormattedPhone(data.phone);
       setStep("otp");
-      toast("קוד אימות נשלח בוואטסאפ!", "success");
+      toast(`קוד אימות נשלח ${otpChannelLabel(used)}!`, "success");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "שגיאה בשליחת הקוד";
       toast(msg, "error");
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSendOTP(e: React.FormEvent) {
+    e.preventDefault();
+    await sendCode();
   }
 
   async function handleVerifyOTP(e: React.FormEvent) {
@@ -228,7 +239,7 @@ function LoginContent() {
                 required
                 autoFocus
               />
-              <p className="text-xs text-neutral-400 mt-2 text-center">נשלח קוד אימות בוואטסאפ</p>
+              <p className="text-xs text-neutral-400 mt-2 text-center">נשלח לכם קוד אימות בוואטסאפ או ב-SMS</p>
               <button
                 type="submit"
                 disabled={loading}
@@ -242,7 +253,7 @@ function LoginContent() {
           {step === "otp" && (
             <form onSubmit={handleVerifyOTP}>
               <div className="text-center mb-4">
-                <p className="text-sm text-neutral-500 mt-2">שלחנו קוד בוואטסאפ ל-</p>
+                <p className="text-sm text-neutral-500 mt-2">שלחנו קוד {otpChannelLabel(channel)} ל-</p>
                 <p className="font-mono text-sm font-medium" dir="ltr">{formattedPhone}</p>
               </div>
               <input
@@ -267,6 +278,15 @@ function LoginContent() {
               </button>
               <button type="button" onClick={() => { setStep("phone"); setOtp(""); }} className="w-full mt-2 text-sm text-neutral-400 hover:text-neutral-600">
                 שנו מספר טלפון
+              </button>
+              {/* The other channel, one tap away: WhatsApp can silently fail for a number it never chatted with */}
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => sendCode(otherOtpChannel(channel))}
+                className="w-full mt-3 text-sm font-medium text-pink-600 hover:text-pink-700 disabled:opacity-50"
+              >
+                לא קיבלתם? שלחו לי את הקוד {otpChannelLabel(otherOtpChannel(channel))}
               </button>
             </form>
           )}

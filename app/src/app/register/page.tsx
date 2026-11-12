@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui";
 import { clearCache } from "@/lib/client-cache";
 import { refreshAuth } from "@/hooks/use-auth";
 import { ISRAEL_REGIONS } from "@/lib/regions";
+import { otpChannelLabel, otherOtpChannel, type OtpChannel } from "@/lib/otp-channel";
 
 type UserType = "creator" | "brand" | null;
 
@@ -143,6 +144,8 @@ const CATEGORIES = [
 function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { onBack: () => void; preVerifiedUserId?: string | null; preVerifiedPhone?: string | null }) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  // Where the last code went (the server decides: WhatsApp, or SMS when asked for / when WhatsApp fails)
+  const [otpChannel, setOtpChannel] = useState<OtpChannel>("whatsapp");
   const [form, setForm] = useState({
     fullName: "",
     phone: preVerifiedPhone || "",
@@ -168,22 +171,21 @@ function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { 
     }));
   }
 
-  async function handleSubmit() {
-    if (preVerifiedUserId) {
-      await registerProfile(preVerifiedUserId);
-      return;
-    }
+  // Sends the code. `requested` is the channel the user asked for (undefined = the server's default); the server
+  // answers with the channel it actually used — it falls back to SMS when the WhatsApp send fails.
+  async function sendCode(requested?: OtpChannel) {
     setLoading(true);
     try {
       const otpRes = await fetch("/api/auth/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: form.phone }),
+        body: JSON.stringify(requested ? { phone: form.phone, channel: requested } : { phone: form.phone }),
       });
       const otpData = await otpRes.json();
       if (!otpRes.ok) throw new Error(otpData.error);
-
-      toast("קוד אימות נשלח בוואטסאפ! 💬", "success");
+      const used: OtpChannel = otpData.channel === "sms" ? "sms" : "whatsapp";
+      setOtpChannel(used);
+      toast(`קוד אימות נשלח ${otpChannelLabel(used)}!`, "success");
       setStep(5);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "שגיאה בשליחת קוד";
@@ -191,6 +193,14 @@ function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { 
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSubmit() {
+    if (preVerifiedUserId) {
+      await registerProfile(preVerifiedUserId);
+      return;
+    }
+    await sendCode();
   }
 
   async function registerProfile(userId: string) {
@@ -422,8 +432,10 @@ function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { 
         <OTPStep
           phone={form.phone}
           loading={loading}
+          channel={otpChannel}
           onVerify={handleVerifyAndRegister}
           onBack={() => setStep(4)}
+          onResend={(ch) => sendCode(ch)}
         />
       )}
     </div>
@@ -433,6 +445,8 @@ function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { 
 function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { onBack: () => void; preVerifiedUserId?: string | null; preVerifiedPhone?: string | null }) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  // Where the last code went (the server decides: WhatsApp, or SMS when asked for / when WhatsApp fails)
+  const [otpChannel, setOtpChannel] = useState<OtpChannel>("whatsapp");
   const [customCategory, setCustomCategory] = useState("");
   const [form, setForm] = useState({
     fullName: "",
@@ -449,22 +463,21 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
-  async function handleSubmit() {
-    if (preVerifiedUserId) {
-      await registerProfile(preVerifiedUserId);
-      return;
-    }
+  // Sends the code. `requested` is the channel the user asked for (undefined = the server's default); the server
+  // answers with the channel it actually used — it falls back to SMS when the WhatsApp send fails.
+  async function sendCode(requested?: OtpChannel) {
     setLoading(true);
     try {
       const otpRes = await fetch("/api/auth/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: form.phone }),
+        body: JSON.stringify(requested ? { phone: form.phone, channel: requested } : { phone: form.phone }),
       });
       const otpData = await otpRes.json();
       if (!otpRes.ok) throw new Error(otpData.error);
-
-      toast("קוד אימות נשלח בוואטסאפ! 💬", "success");
+      const used: OtpChannel = otpData.channel === "sms" ? "sms" : "whatsapp";
+      setOtpChannel(used);
+      toast(`קוד אימות נשלח ${otpChannelLabel(used)}!`, "success");
       setStep(3);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "שגיאה בשליחת קוד";
@@ -472,6 +485,14 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSubmit() {
+    if (preVerifiedUserId) {
+      await registerProfile(preVerifiedUserId);
+      return;
+    }
+    await sendCode();
   }
 
   async function registerProfile(userId: string) {
@@ -702,8 +723,10 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
         <OTPStep
           phone={form.phone}
           loading={loading}
+          channel={otpChannel}
           onVerify={handleVerifyAndRegister}
           onBack={() => setStep(2)}
+          onResend={(ch) => sendCode(ch)}
         />
       )}
     </div>
@@ -713,21 +736,26 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
 function OTPStep({
   phone,
   loading,
+  channel,
   onVerify,
   onBack,
+  onResend,
 }: {
   phone: string;
   loading: boolean;
+  // Where the code went; the screen offers the other channel one tap away
+  channel: OtpChannel;
   onVerify: (code: string) => void;
   onBack: () => void;
+  onResend: (channel: OtpChannel) => void;
 }) {
   const [code, setCode] = useState("");
 
   return (
     <div>
       <div className="text-center mb-4">
-        <span className="text-3xl">💬</span>
-        <p className="text-sm text-neutral-500 mt-2">שלחנו קוד אימות בוואטסאפ</p>
+        <span className="text-3xl">{channel === "sms" ? "✉️" : "💬"}</span>
+        <p className="text-sm text-neutral-500 mt-2">שלחנו קוד אימות {otpChannelLabel(channel)}</p>
         <p className="font-mono text-sm font-medium" dir="ltr">{phone}</p>
       </div>
       <input
@@ -748,6 +776,15 @@ function OTPStep({
         className="w-full mt-4 px-6 py-3 rounded-xl bg-pink-500 text-white font-medium hover:bg-pink-600 transition-colors disabled:opacity-50"
       >
         {loading ? "מאמת..." : "אישור והרשמה"}
+      </button>
+      {/* The other channel, one tap away: WhatsApp can silently fail for a number it never chatted with */}
+      <button
+        type="button"
+        disabled={loading}
+        onClick={() => onResend(otherOtpChannel(channel))}
+        className="w-full mt-3 text-sm font-medium text-pink-600 hover:text-pink-700 disabled:opacity-50"
+      >
+        לא קיבלתם? שלחו לי את הקוד {otpChannelLabel(otherOtpChannel(channel))}
       </button>
       <button
         onClick={onBack}

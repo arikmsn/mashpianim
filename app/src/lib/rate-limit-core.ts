@@ -12,6 +12,8 @@ export interface RateLimitRule {
 export const RATE_LIMITS = {
   sendOtpPhone: { limit: 3, windowSeconds: 10 * 60 },
   sendOtpIp: { limit: 40, windowSeconds: 10 * 60 },
+  // SMS codes cost money per message (Twilio): a tighter per-IP cap on top of the limits above
+  sendOtpSmsIp: { limit: 10, windowSeconds: 10 * 60 },
   verifyOtpPhone: { limit: 10, windowSeconds: 10 * 60 },
   verifyOtpIp: { limit: 120, windowSeconds: 10 * 60 },
   devLoginIp: { limit: 10, windowSeconds: 15 * 60 },
