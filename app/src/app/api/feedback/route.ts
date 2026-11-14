@@ -3,7 +3,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/admin-auth";
 import { createNotification, logActivity } from "@/lib/notifications";
-import { validateFeedback, FEEDBACK_KIND_LABELS } from "@/lib/feedback";
+import { validateFeedback, FEEDBACK_KIND_LABELS, isThreadsNotReadyError } from "@/lib/feedback";
 import { checkRateLimit, rateLimitedResponse, RATE_LIMITS } from "@/lib/rate-limit";
 
 function getSupabaseAdmin() {
@@ -27,16 +27,17 @@ async function currentUser(): Promise<{ id: string; full_name: string | null; ty
   return (data as { id: string; full_name: string | null; type: string } | null) || null;
 }
 
-// The signed-in user's own reports (newest first)
+// The signed-in user's own reports (newest first), each with its reply count (threads, migration 020)
 export async function GET() {
   if (!isSupabaseConfigured()) return NextResponse.json({ feedback: [] });
   const me = await currentUser();
   const admin = getSupabaseAdmin();
   if (!me || !admin) return NextResponse.json({ error: "לא מחובר" }, { status: 401 });
 
+  // `*` so the list keeps working whether or not 020 (last_message_*) has run
   const { data, error } = await admin
     .from("feedback")
-    .select("id, kind, subject, message, status, admin_note, created_at, updated_at")
+    .select("*")
     .eq("user_id", me.id)
     .order("created_at", { ascending: false })
     .limit(50);
@@ -44,7 +45,39 @@ export async function GET() {
     console.error("[feedback] list error:", error);
     return NextResponse.json({ error: "שגיאה בטעינה" }, { status: 500 });
   }
-  return NextResponse.json({ feedback: data || [] });
+  const rows = (data || []) as any[];
+
+  const replies: Record<string, number> = {};
+  let threadsAvailable = true;
+  if (rows.length > 0) {
+    const { data: msgs, error: mErr } = await admin
+      .from("feedback_messages")
+      .select("feedback_id")
+      .in("feedback_id", rows.map((r) => r.id));
+    if (mErr) {
+      threadsAvailable = false;
+      if (!isThreadsNotReadyError(mErr)) console.error("[feedback] replies count:", mErr.message);
+    } else {
+      for (const m of (msgs || []) as { feedback_id: string }[]) replies[m.feedback_id] = (replies[m.feedback_id] || 0) + 1;
+    }
+  }
+
+  return NextResponse.json({
+    feedback: rows.map((r) => ({
+      id: r.id,
+      kind: r.kind,
+      subject: r.subject,
+      message: r.message,
+      status: r.status,
+      admin_note: r.admin_note ?? null,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+      last_message_at: r.last_message_at ?? null,
+      last_message_from: r.last_message_from ?? null,
+      replies: replies[r.id] || 0,
+    })),
+    threads_available: threadsAvailable,
+  });
 }
 
 // New report: validated, rate limited per user, stored via the service role, admins notified
@@ -78,8 +111,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "שגיאה בשליחת הפנייה" }, { status: 500 });
   }
 
-  // Every admin gets a bell notification that links to /admin/feedback
-  const { data: admins } = await admin.from("users").select("id").eq("type", "admin");
+  // Every admin — admin-type accounts and the is_admin flag (019) alike — gets a bell notification that links to /admin/feedback
+  const { data: admins } = await admin.from("users").select("id").or("type.eq.admin,is_admin.eq.true");
   const kindLabel = FEEDBACK_KIND_LABELS[check.value.kind];
   await Promise.all(
     ((admins || []) as { id: string }[]).map((a) =>
@@ -101,5 +134,5 @@ export async function POST(request: NextRequest) {
     details: { kind: check.value.kind, page: check.value.page },
   });
 
-  return NextResponse.json({ feedback: row }, { status: 201 });
+  return NextResponse.json({ feedback: { ...(row as any), replies: 0, last_message_at: null, last_message_from: null } }, { status: 201 });
 }

@@ -5,8 +5,11 @@ import { Badge, Button, useToast } from "@/components/ui";
 import {
   FEEDBACK_KIND_LABELS,
   FEEDBACK_STATUS_LABELS,
+  REPLY_MAX,
+  validateReplyText,
   type FeedbackKind,
   type FeedbackStatus,
+  type ThreadMessage,
 } from "@/lib/feedback";
 
 interface FeedbackRow {
@@ -19,6 +22,9 @@ interface FeedbackRow {
   status: FeedbackStatus;
   admin_note: string | null;
   created_at: string;
+  last_message_at: string | null;
+  last_message_from: "user" | "admin" | null;
+  thread: ThreadMessage[];
   users?: { full_name: string | null; type: string; phone: string | null } | null;
 }
 
@@ -36,12 +42,20 @@ const kindIcons: Record<FeedbackKind, string> = { bug: "🐞", request: "💡", 
 const statusVariant: Record<FeedbackStatus, "warning" | "info" | "success"> = { new: "warning", in_progress: "info", closed: "success" };
 const userTypeLabel: Record<string, string> = { creator: "יוצר/ת", brand: "עסק", admin: "מנהל" };
 
+function when(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+// Reports as threads (owner list 2026-11-14, item 6): what the user sent, what we answered, their follow-ups,
+// and a composer for the next reply. The reply moves the report to "בטיפול" and notifies the user.
 export default function AdminFeedbackPage() {
   const [filter, setFilter] = useState<Filter>("open");
   // null = loading (set together with the filter, so the effect only fetches)
   const [rows, setRows] = useState<FeedbackRow[] | null>(null);
   const [newCount, setNewCount] = useState(0);
-  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [threadsAvailable, setThreadsAvailable] = useState(true);
+  const [replies, setReplies] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -52,6 +66,7 @@ export default function AdminFeedbackPage() {
       if (res?.ok) {
         setRows((data.feedback as FeedbackRow[]) || []);
         setNewCount(typeof data.newCount === "number" ? data.newCount : 0);
+        setThreadsAvailable(data.threads_available !== false);
       } else {
         setRows([]);
         toast((data as { error?: string }).error || "שגיאה בטעינה", "error");
@@ -90,6 +105,32 @@ export default function AdminFeedbackPage() {
     }
   }
 
+  async function sendReply(r: FeedbackRow) {
+    const check = validateReplyText(replies[r.id]);
+    if (!check.ok) {
+      toast(check.error, "error");
+      return;
+    }
+    setBusy(r.id);
+    try {
+      const res = await fetch("/api/admin/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: r.id, text: check.text }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast("התגובה נשלחה למשתמש/ת", "success");
+        setReplies((prev) => ({ ...prev, [r.id]: "" }));
+        load(filter);
+      } else {
+        toast((data as { error?: string }).error || "שגיאה בשליחת התגובה", "error");
+      }
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div className="max-w-4xl">
       <div className="flex items-center justify-between mb-6">
@@ -98,6 +139,12 @@ export default function AdminFeedbackPage() {
           <p className="text-sm text-neutral-500">דיווחים, בקשות ופניות שנשלחו מתוך האפליקציה{newCount > 0 ? ` · ${newCount} חדשות` : ""}</p>
         </div>
       </div>
+
+      {!threadsAvailable && (
+        <div className="mb-4 rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 text-sm text-amber-800">
+          התגובות בשרשור יופעלו אחרי הפעלת מיגרציה 020 (<code>feedback_messages</code>). בינתיים אפשר לשנות סטטוס בלבד.
+        </div>
+      )}
 
       <div className="flex gap-2 mb-4 overflow-x-auto">
         {filters.map((f) => (
@@ -127,63 +174,86 @@ export default function AdminFeedbackPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {rows.map((r) => (
-            <div key={r.id} className="bg-white rounded-2xl border border-neutral-100 p-4 space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-bold text-neutral-900">
-                    {kindIcons[r.kind]} {r.subject}
-                  </p>
-                  <p className="text-xs text-neutral-500 mt-0.5">
-                    {FEEDBACK_KIND_LABELS[r.kind]} · {r.users?.full_name || "משתמש/ת"} ({userTypeLabel[r.users?.type || ""] || r.users?.type || "?"})
-                    {r.users?.phone ? ` · ${r.users.phone}` : ""} · {new Date(r.created_at).toLocaleString("he-IL")}
-                  </p>
+          {rows.map((r) => {
+            const name = r.users?.full_name || "משתמש/ת";
+            const awaitingUs = r.last_message_from === "user";
+            return (
+              <div key={r.id} className={`bg-white rounded-2xl border p-4 space-y-3 ${awaitingUs ? "border-pink-200" : "border-neutral-100"}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-bold text-neutral-900">
+                      {kindIcons[r.kind]} {r.subject}
+                    </p>
+                    <p className="text-xs text-neutral-500 mt-0.5">
+                      {FEEDBACK_KIND_LABELS[r.kind]} · {name} ({userTypeLabel[r.users?.type || ""] || r.users?.type || "?"})
+                      {r.users?.phone ? ` · ${r.users.phone}` : ""} · {when(r.created_at)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {awaitingUs && <Badge variant="pink" size="sm">💬 המשתמש/ת הגיב/ה</Badge>}
+                    <Badge variant={statusVariant[r.status] || "default"} size="sm">
+                      {FEEDBACK_STATUS_LABELS[r.status] || r.status}
+                    </Badge>
+                  </div>
                 </div>
-                <Badge variant={statusVariant[r.status] || "default"} size="sm">
-                  {FEEDBACK_STATUS_LABELS[r.status] || r.status}
-                </Badge>
-              </div>
-              <p className="text-sm text-neutral-700 whitespace-pre-line">{r.message}</p>
-              {(r.page || r.user_agent) && (
-                <p className="text-[11px] text-neutral-400 break-all">
-                  {r.page ? `מסך: ${r.page}` : ""}
-                  {r.page && r.user_agent ? " · " : ""}
-                  {r.user_agent || ""}
-                </p>
-              )}
-              <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
-                <textarea
-                  value={notes[r.id] ?? r.admin_note ?? ""}
-                  onChange={(e) => setNotes((prev) => ({ ...prev, [r.id]: e.target.value }))}
-                  placeholder="הערה / תשובה למשתמש (נשלחת כהתראה כשמשנים סטטוס)"
-                  rows={2}
-                  className="flex-1 px-3 py-2 rounded-xl border border-neutral-200 text-sm outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-500/10 resize-y"
-                />
-                <div className="flex gap-2 flex-wrap">
-                  {r.status !== "in_progress" && (
-                    <Button size="sm" variant="secondary" loading={busy === r.id} onClick={() => update(r.id, { status: "in_progress", admin_note: notes[r.id] ?? r.admin_note ?? "" })}>
-                      בטיפול
+
+                {/* The thread: the report first, then every reply in time order */}
+                <div className="space-y-2">
+                  {(r.thread || []).map((m) => (
+                    <div key={m.id} className={`flex ${m.from_admin ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${m.from_admin ? "bg-pink-50 border border-pink-100 text-neutral-800 rounded-bl-md" : "bg-neutral-100 text-neutral-800 rounded-br-md"}`}>
+                        <p className={`text-[10px] mb-0.5 font-semibold ${m.from_admin ? "text-pink-600" : "text-neutral-500"}`}>
+                          {m.from_admin ? (m.id === "legacy-note" ? "אנחנו (הערה)" : "אנחנו") : name}
+                        </p>
+                        <p className="whitespace-pre-line break-words">{m.text}</p>
+                        <p className="text-[10px] mt-1 text-left text-neutral-400" dir="ltr">{when(m.created_at)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {(r.page || r.user_agent) && (
+                  <p className="text-[11px] text-neutral-400 break-all">
+                    {r.page ? `מסך: ${r.page}` : ""}
+                    {r.page && r.user_agent ? " · " : ""}
+                    {r.user_agent || ""}
+                  </p>
+                )}
+
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+                  <textarea
+                    value={replies[r.id] ?? ""}
+                    maxLength={REPLY_MAX}
+                    disabled={!threadsAvailable}
+                    onChange={(e) => setReplies((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                    placeholder={threadsAvailable ? "תגובה למשתמש/ת — תישלח כהתראה ותופיע בפנייה שלו/ה" : "התגובות יופעלו אחרי מיגרציה 020"}
+                    rows={2}
+                    className="flex-1 px-3 py-2 rounded-xl border border-neutral-200 text-sm outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-500/10 resize-y disabled:bg-neutral-50"
+                  />
+                  <div className="flex gap-2 flex-wrap">
+                    <Button size="sm" loading={busy === r.id} disabled={!threadsAvailable || !(replies[r.id] || "").trim()} onClick={() => sendReply(r)}>
+                      💬 שליחת תגובה
                     </Button>
-                  )}
-                  {r.status !== "closed" && (
-                    <Button size="sm" loading={busy === r.id} onClick={() => update(r.id, { status: "closed", admin_note: notes[r.id] ?? r.admin_note ?? "" })}>
-                      סגירה
-                    </Button>
-                  )}
-                  {r.status === "closed" && (
-                    <Button size="sm" variant="secondary" loading={busy === r.id} onClick={() => update(r.id, { status: "new" })}>
-                      פתיחה מחדש
-                    </Button>
-                  )}
-                  {notes[r.id] !== undefined && notes[r.id] !== (r.admin_note ?? "") && (
-                    <Button size="sm" variant="ghost" loading={busy === r.id} onClick={() => update(r.id, { admin_note: notes[r.id] })}>
-                      שמירת הערה
-                    </Button>
-                  )}
+                    {r.status !== "in_progress" && (
+                      <Button size="sm" variant="secondary" loading={busy === r.id} onClick={() => update(r.id, { status: "in_progress" })}>
+                        בטיפול
+                      </Button>
+                    )}
+                    {r.status !== "closed" && (
+                      <Button size="sm" variant="secondary" loading={busy === r.id} onClick={() => update(r.id, { status: "closed" })}>
+                        סגירה
+                      </Button>
+                    )}
+                    {r.status === "closed" && (
+                      <Button size="sm" variant="secondary" loading={busy === r.id} onClick={() => update(r.id, { status: "new" })}>
+                        פתיחה מחדש
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

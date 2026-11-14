@@ -20,7 +20,11 @@ export function notificationHref(n: NotificationLike, role: ViewerRole, isAdmin 
 
   if (n.type === "feedback_received") return isAdmin ? "/admin/feedback" : null;
   if (n.type === "capacity_warning") return isAdmin ? "/admin" : null;
-  if (n.type === "feedback_updated") return "/profile";
+  // A reply or a status change on one of the user's reports opens that thread in the contact form (profile)
+  if (n.type === "feedback_updated" || n.type === "feedback_reply") {
+    const feedbackId = str(n.data?.feedbackId);
+    return feedbackId ? `/profile?feedback=${feedbackId}` : "/profile";
+  }
   if (n.type === "portfolio_video_removed") return "/profile";
 
   if (CHAT_NOTIFICATION_TYPES.has(n.type)) {

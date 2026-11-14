@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Avatar, Badge, Button, Card, Modal, Input, Textarea, FilePicker, useToast } from "@/components/ui";
 import { CreditsAccess, FeedbackModal, RoleSwitchModal, roleLabel, type AppRole } from "@/components/features";
@@ -555,6 +555,17 @@ function BrandEditModal({
   );
 }
 
+// Opens the report thread a notification pointed at (?feedback=<id>). Its own component inside a Suspense
+// boundary because useSearchParams needs one; the parent's opener is a prop, so nothing is set in an effect here.
+function FeedbackDeepLink({ onOpen }: { onOpen: (id: string) => void }) {
+  const searchParams = useSearchParams();
+  const id = searchParams.get("feedback");
+  useEffect(() => {
+    if (id) onOpen(id);
+  }, [id, onOpen]);
+  return null;
+}
+
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<"videos" | "badges">("videos");
   const [profile, setProfile] = useState<CreatorProfile | null>(null);
@@ -575,6 +586,12 @@ export default function ProfilePage() {
   // Portfolio video open in the player modal (the list shows posters only)
   const [playingVideo, setPlayingVideo] = useState<PortfolioVideo | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  // The report thread a notification deep link asked to open (/profile?feedback=<id>)
+  const [feedbackThreadId, setFeedbackThreadId] = useState<string | null>(null);
+  const openFeedbackThread = useCallback((id: string) => {
+    setFeedbackThreadId(id);
+    setFeedbackOpen(true);
+  }, []);
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   // Every role the account holds; more than one → the profile offers switching
   const [accountRoles, setAccountRoles] = useState<AppRole[]>([]);
@@ -1016,7 +1033,10 @@ export default function ProfilePage() {
           </Button>
         </div>
 
-        <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
+        <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} initialFeedbackId={feedbackThreadId} />
+        <Suspense fallback={null}>
+          <FeedbackDeepLink onOpen={openFeedbackThread} />
+        </Suspense>
         <RoleSwitchModal open={roleSwitchOpen} onClose={() => setRoleSwitchOpen(false)} roles={accountRoles} current="brand" />
         <BrandEditModal
           open={editOpen}
@@ -1309,7 +1329,10 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
+      <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} initialFeedbackId={feedbackThreadId} />
+      <Suspense fallback={null}>
+        <FeedbackDeepLink onOpen={openFeedbackThread} />
+      </Suspense>
       <RoleSwitchModal open={roleSwitchOpen} onClose={() => setRoleSwitchOpen(false)} roles={accountRoles} current="creator" />
       <CreatorEditModal
         open={editOpen}
