@@ -1,5 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
+import { contactWarnings, messageSide } from "../src/lib/admin-connections.ts";
+import { detectContactInfo as hardHits } from "../src/lib/moderation/chat-filter.ts";
 import { applyConnectionFilter, connectionStatusLabel, isActiveStatus, isAdminConnectionFilter, isMatchedStatus } from "../src/lib/admin-connections.ts";
 
 describe("admin connections helpers (owner list, 2026-11-14)", () => {
@@ -32,5 +34,55 @@ describe("admin connections helpers (owner list, 2026-11-14)", () => {
     assert.deepEqual(applyConnectionFilter(rows, "blocked").map((r) => r.id), [4]);
     assert.equal(isAdminConnectionFilter("active"), true);
     assert.equal(isAdminConnectionFilter("x"), false);
+  });
+});
+
+describe("admin transcript (batch B)", () => {
+  test("message side", () => {
+    assert.equal(messageSide({ sender_id: "c1", is_system: false }, "c1", "b1"), "creator");
+    assert.equal(messageSide({ sender_id: "b1", is_system: false }, "c1", "b1"), "brand");
+    assert.equal(messageSide({ sender_id: "b1", is_system: true }, "c1", "b1"), "system");
+    assert.equal(messageSide({ sender_id: "admin", is_system: false }, "c1", "b1"), "admin");
+    assert.equal(messageSide({ sender_id: null }, null, null), "admin");
+  });
+
+  test("clean chat talk raises nothing", () => {
+    for (const t of [
+      "הסרטון יהיה מוכן ביום שלישי",
+      "אפשרות 1 מתוך 5, המחיר 199 ש\"ח",
+      "נפגשים ב-14:30, הקוד 1234",
+      "קיבלתי את החבילה, תודה!",
+      "דרוש שינוי: הלוגו לא נראה בפריים",
+      "אני מצלמת מחר בבוקר ומעלה עד הערב",
+      "ההתקשרות איתכם נעימה מאוד",
+      "",
+      null,
+    ]) {
+      assert.deepEqual(contactWarnings(t, hardHits), [], String(t));
+    }
+  });
+
+  test("hard hits from the send-time filter come first", () => {
+    assert.deepEqual(contactWarnings("תתקשרי 050-1234567", hardHits).slice(0, 1), ["מספר טלפון"]);
+    assert.ok(contactWarnings("me@example.com", hardHits).includes("כתובת אימייל"));
+  });
+
+  test("evasions the filter lets through are flagged", () => {
+    assert.ok(contactWarnings("0 5 0 - 1 2 3 4 5 6 7", hardHits).includes("מספר טלפון (ברווחים או בסימנים)"));
+    assert.ok(contactWarnings("05.0.12.34.567 תשמרי", hardHits).includes("מספר טלפון (ברווחים או בסימנים)"));
+    assert.ok(contactWarnings("אפס חמש אפס אחת שתיים שלוש ארבע", hardHits).includes("מספר טלפון במילים"));
+    assert.ok(contactWarnings("zero five zero one two three", hardHits).includes("מספר טלפון במילים"));
+    assert.ok(contactWarnings("תשלחי לי בוואטסאפ", hardHits).includes("אזכור של ערוץ קשר חיצוני"));
+    assert.ok(contactWarnings("יש לך מייל?", hardHits).includes("אזכור של ערוץ קשר חיצוני"));
+    assert.ok(contactWarnings("תתקשר אליי בערב", hardHits).includes("אזכור של ערוץ קשר חיצוני"));
+    assert.ok(contactWarnings("נדבר מחוץ לאפליקציה", hardHits).includes("הצעה לעבור לערוץ חיצוני"));
+    assert.ok(contactWarnings("תכתבי לי בפרטי", hardHits).includes("הצעה לעבור לערוץ חיצוני"));
+    assert.ok(contactWarnings("השם שלי שטרודל ג'ימייל", hardHits).includes("כתובת אימייל במילים"));
+    assert.ok(contactWarnings("הכל באתר linktr.ee/me", hardHits).includes("קישור / דומיין"));
+  });
+
+  test("Hebrew words are bounded (סמסונג is a phone brand, not an SMS)", () => {
+    assert.deepEqual(contactWarnings("צילמתי בסמסונג החדש", hardHits), []);
+    assert.deepEqual(contactWarnings("ההתקשרות הזו נעימה", hardHits), []);
   });
 });

@@ -8,6 +8,7 @@ import { notifyConnectionStatusChange, logActivity } from "@/lib/notifications";
 import { getTimelineSettings } from "@/lib/settings";
 import { canBrandReview } from "@/lib/connection-flow";
 import { FINAL_REVIEW_HOURS, MAX_DELIVERABLES_PER_ROUND } from "@/lib/chat";
+import { CHAT_BLOCKED_CODE, CHAT_BLOCKED_TEXT, isChatBlocked } from "@/lib/chat-block";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
     const { data: connection } = await supabase
       .from("connections")
       .select(`
-        id, status, filmed_at, product_id, revision_count,
+        id, status, blocked_at, filmed_at, product_id, revision_count,
         products(name),
         creator_profiles!connections_creator_id_fkey(user_id, users(id, full_name)),
         brand_profiles!connections_brand_id_fkey(user_id, shop_name, users(id, full_name))
@@ -76,6 +77,9 @@ export async function POST(request: NextRequest) {
     }
     if (!canUploadConnectionVideo(conn.status)) {
       return NextResponse.json({ error: "לא ניתן להעלות סרטון בסטטוס הנוכחי של החיבור" }, { status: 400 });
+    }
+    if (isChatBlocked(conn)) {
+      return NextResponse.json({ error: CHAT_BLOCKED_TEXT, code: CHAT_BLOCKED_CODE }, { status: 403 });
     }
 
     // Several options per round (owner, 2026-11-09): the creator may keep adding videos until the brand

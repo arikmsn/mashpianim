@@ -8,6 +8,7 @@ import { getTimelineSettings } from "@/lib/settings";
 import { isChatOpen } from "@/lib/connection-flow";
 import { sanitizeBriefData, type BriefSnapshot } from "@/lib/brief";
 import { CHAT_EVENT_TEXTS } from "@/lib/chat";
+import { CHAT_BLOCKED_CODE, CHAT_BLOCKED_TEXT, isChatBlocked } from "@/lib/chat-block";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const { data: raw } = await admin
     .from("connections")
     .select(`
-      id, status, brief_posted_at, brief_approved_at, shipped_at, product_id,
+      id, status, blocked_at, brief_posted_at, brief_approved_at, shipped_at, product_id,
       products(id, name, brief, brief_data, brand_profiles(user_id, shop_name, users(id, full_name))),
       creator_profiles!connections_creator_id_fkey(user_id, users(id, full_name))
     `)
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const conn = raw as any;
   if (!conn) return NextResponse.json({ error: "חיבור לא נמצא" }, { status: 404 });
   if (!isChatOpen(conn.status)) return NextResponse.json({ error: "הצ'אט סגור — החיבור הסתיים", code: "chat_closed" }, { status: 400 });
+  if (viewer.role !== "admin" && isChatBlocked(conn)) return NextResponse.json({ error: CHAT_BLOCKED_TEXT, code: CHAT_BLOCKED_CODE }, { status: 403 });
 
   const brandUserId = conn.products?.brand_profiles?.user_id as string | undefined;
   const creatorUserId = conn.creator_profiles?.user_id as string | undefined;

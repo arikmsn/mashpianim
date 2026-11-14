@@ -11,6 +11,7 @@ import { isConnectionParticipant } from "@/lib/authz";
 import { getTimelineSettings } from "@/lib/settings";
 import { isChatOpen } from "@/lib/connection-flow";
 import { CHAT_EVENT_TEXTS } from "@/lib/chat";
+import { CHAT_BLOCKED_CODE, CHAT_BLOCKED_TEXT, isChatBlocked } from "@/lib/chat-block";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -207,6 +208,11 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   }
   if (userType === "creator" && creatorProfile?.user_id !== (dbUser as any).id) {
     return NextResponse.json({ error: "אין הרשאה לחיבור זה" }, { status: 403 });
+  }
+
+  // An admin stopped this connection (chat block, 2026-11-14): the parties wait for the clarification; admins may still act
+  if (userType !== "admin" && isChatBlocked(connection as any)) {
+    return NextResponse.json({ error: CHAT_BLOCKED_TEXT, code: CHAT_BLOCKED_CODE }, { status: 403 });
   }
 
   // Hearts. One-sided: only the other side answers (heart back = "mutual"; a creator's "approved" means the
@@ -539,7 +545,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const { data: conn } = await admin
     .from("connections")
     .select(`
-      status,
+      status, blocked_at,
       creator_profiles!connections_creator_id_fkey(user_id),
       brand_profiles!connections_brand_id_fkey(user_id)
     `)
@@ -561,6 +567,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   if (!isChatOpen((conn as any).status)) {
     return NextResponse.json({ error: "הצ'אט סגור — החיבור הסתיים", code: "chat_closed" }, { status: 400 });
+  }
+  if (isChatBlocked(conn as any)) {
+    return NextResponse.json({ error: CHAT_BLOCKED_TEXT, code: CHAT_BLOCKED_CODE }, { status: 403 });
   }
 
   // Ordinary chat can never produce a system message; sender is always the session user

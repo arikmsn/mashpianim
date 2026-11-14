@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { formatMessageTime, sameDay, dayLabel } from "@/lib/chat-time";
 import { motion } from "framer-motion";
 import { Avatar, Button, Input, Modal, Textarea, useToast } from "@/components/ui";
-import { ProfileModal, ConnectionTimeline } from "@/components/features";
+import { ProfileModal, ConnectionTimeline, FeedbackModal } from "@/components/features";
 import { BriefCard, BriefFull } from "@/components/features/brief-view";
 import { useAuth } from "@/hooks/use-auth";
 import { useDeliverableUpload } from "@/hooks/use-deliverable-upload";
@@ -15,6 +15,7 @@ import { toDirectImageUrl } from "@/lib/images";
 import { isChatOpen, hasChatHistory, activeDeadlineField, flowNextAction } from "@/lib/connection-flow";
 import { CHAT_EVENT_TEXTS, LOCAL_MESSAGE_PREFIX, MAX_DELIVERABLES_PER_ROUND, isBriefSnapshot, isVideoCard, isQuietConnectionUpdate, hasUnreadFromOthers, mergeIncomingMessage, settleLocalMessage, type MessageKind } from "@/lib/chat";
 import type { BriefSnapshot } from "@/lib/brief";
+import { CHAT_BLOCKED_CODE, CHAT_BLOCKED_TEXT, chatBlockedSubject } from "@/lib/chat-block";
 
 type Role = "creator" | "brand";
 
@@ -31,6 +32,8 @@ interface Conversation {
   status: string;
   // completed / cancelled connections keep their chat, read-only
   closed: boolean;
+  // An admin stopped the chat (connections.blocked_at): readable, nobody writes
+  blocked: boolean;
 }
 
 interface Message {
@@ -58,6 +61,7 @@ interface ConnectionDetail {
   revisionCount: number;
   revisionNotes: string | null;
   trackingNumber: string | null;
+  blockedAt: string | null;
   deadline: string | null;
   brandName: string;
   brandAvatar: string | null;
@@ -131,6 +135,7 @@ function mapConnection(c: Record<string, unknown>): ConnectionDetail {
     revisionCount: (c.revision_count as number) || 0,
     revisionNotes: (c.revision_notes as string) || null,
     trackingNumber: (c.tracking_number as string) || null,
+    blockedAt: (c.blocked_at as string) || null,
     deadline: field ? ((c[field] as string) || null) : null,
     brandName: (bp.shop_name as string) || (brandUser.full_name as string) || "",
     // A business is its logo; the contact person's own picture is never shown for it (owner, 2026-11-09)
@@ -163,6 +168,8 @@ function MessagesContent() {
   const [sendingMessage, setSendingMessage] = useState(false);
   // Why the last message was refused (contact details / links), shown under the composer until the next send
   const [blockedNotice, setBlockedNotice] = useState<string | null>(null);
+  // The contact form from a chat an admin stopped
+  const [contactOpen, setContactOpen] = useState(false);
   const [viewProfileId, setViewProfileId] = useState<string | null>(null);
   const [role, setRole] = useState<Role | null>(() => {
     const cached = readCache<{ role?: string; user?: { type?: string } }>("/api/profile");
@@ -242,6 +249,7 @@ function MessagesContent() {
           productImage: d.productImage,
           status: d.status,
           closed: !isChatOpen(d.status),
+          blocked: !!(c.blocked_at as string | null),
         };
       });
       setConversations(mapped);
@@ -480,7 +488,12 @@ function MessagesContent() {
         });
       } else {
         const data = await res.json().catch(() => null);
-        if (res.status === 400 && data?.error) {
+        if (res.status === 403 && data?.code === CHAT_BLOCKED_CODE) {
+          // An admin stopped the chat while this was being typed: show the stop, drop the optimistic copy
+          toast(CHAT_BLOCKED_TEXT, "error");
+          setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+          fetchMessagesRef.current(selectedId);
+        } else if (res.status === 400 && data?.error) {
           toast(data.error, "error");
           // Keep the reason on screen under the composer and give the text back for editing
           setBlockedNotice(data.error);
@@ -577,6 +590,8 @@ function MessagesContent() {
   const otherAvatar = selectedConversation?.avatar ?? (role === "brand" ? connection?.creatorAvatar : connection?.brandAvatar) ?? null;
   const otherUserId = selectedConversation?.otherUserId || (role === "brand" ? connection?.creatorUserId : connection?.brandUserId) || null;
   const chatOpen = connection ? isChatOpen(connection.status) : !selectedConversation?.closed;
+  // An admin stopped this chat (lib/chat-block.ts): both sides read it, nobody writes until it is released
+  const chatBlocked = connection ? !!connection.blockedAt : !!selectedConversation?.blocked;
   const briefMessages = messages.filter((m) => m.kind === "brief" && isBriefSnapshot(m.data));
   const latestBriefVersion = briefMessages.reduce((max, m) => Math.max(max, (m.data as unknown as BriefSnapshot).version || 0), 0);
   const latestBrief = briefMessages.find((m) => (m.data as unknown as BriefSnapshot).version === latestBriefVersion)?.data as unknown as BriefSnapshot | undefined;
@@ -591,7 +606,7 @@ function MessagesContent() {
 
   // The action strip above the composer: what this side does now
   function renderActions() {
-    if (!connection || !role || !chatOpen) return null;
+    if (!connection || !role || !chatOpen || chatBlocked) return null;
     const s = connection.status;
     if (role === "creator") {
       if (s === "approved") {
@@ -759,7 +774,7 @@ function MessagesContent() {
                   <span className={`text-[15px] truncate ${conv.unread > 0 ? "font-bold text-neutral-900" : "font-semibold text-neutral-800"}`}>{conv.name}</span>
                   <span className="text-[11px] text-neutral-400 shrink-0">{conv.time}</span>
                 </div>
-                {conv.product && <span className="text-xs text-pink-500 block mb-0.5 truncate">{conv.product}{conv.closed ? " · הסתיים" : ""}</span>}
+                {conv.product && <span className="text-xs text-pink-500 block mb-0.5 truncate">{conv.product}{conv.blocked ? " · ההתקשרות נעצרה" : conv.closed ? " · הסתיים" : ""}</span>}
                 <p className={`text-sm truncate ${conv.unread > 0 ? "text-neutral-800 font-medium" : "text-neutral-500"}`}>{conv.lastMessage}</p>
               </div>
               <svg className="shrink-0 text-neutral-300" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -845,6 +860,15 @@ function MessagesContent() {
           )}
 
           <ProfileModal userId={viewProfileId} onClose={() => setViewProfileId(null)} as={role === "brand" ? "creator" : "brand"} />
+          <FeedbackModal
+            key={`blocked-${selectedId}`}
+            open={contactOpen}
+            onClose={() => setContactOpen(false)}
+            initialKind="contact"
+            initialSubject={chatBlockedSubject(connection?.productName || selectedConversation?.product)}
+            title="פנייה לבירור"
+            intro="ההתקשרות בצ'אט הזה נעצרה על ידי המערכת. כתבו לנו ונחזור אליכם."
+          />
 
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
             {messages.length === 0 ? (
@@ -980,7 +1004,15 @@ function MessagesContent() {
           </div>
 
           <div className="p-3 border-t border-neutral-100 pb-[calc(0.75rem+env(safe-area-inset-bottom))] space-y-2">
-            {!chatOpen ? (
+            {chatBlocked ? (
+              // An admin stopped the chat (owner, 2026-11-14): the sentence both sides see, and the way to us
+              <div role="alert" className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-center space-y-2">
+                <p className="text-sm font-semibold text-red-700">⛔ {CHAT_BLOCKED_TEXT}</p>
+                <button type="button" onClick={() => setContactOpen(true)} className="text-sm text-pink-600 underline underline-offset-2">
+                  📨 לפנייה אלינו לבירור
+                </button>
+              </div>
+            ) : !chatOpen ? (
               <div className="text-center text-sm text-neutral-500 bg-neutral-50 rounded-xl px-4 py-3">
                 {(connection?.status || selectedConversation?.status) === "completed" ? "✅ החיבור הושלם — הצ'אט סגור לקריאה בלבד" : "החיבור הסתיים — הצ'אט סגור לקריאה בלבד"}
               </div>

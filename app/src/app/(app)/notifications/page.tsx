@@ -39,6 +39,8 @@ const typeIcons: Record<string, string> = {
   feedback_received: "📨",
   feedback_updated: "📬",
   new_message: "💬",
+  chat_blocked: "⛔",
+  chat_unblocked: "🔓",
   system: "🔔",
 };
 
@@ -71,6 +73,8 @@ const typeColors: Record<string, string> = {
   feedback_received: "bg-blue-50 text-blue-600",
   feedback_updated: "bg-blue-50 text-blue-600",
   new_message: "bg-pink-50 text-pink-500",
+  chat_blocked: "bg-red-50 text-red-500",
+  chat_unblocked: "bg-emerald-50 text-emerald-600",
   system: "bg-neutral-50 text-neutral-500",
 };
 

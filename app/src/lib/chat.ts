@@ -143,4 +143,7 @@ export const CHAT_NOTIFICATION_TYPES = new Set([
   "shipping_deadline_warning",
   "filming_deadline_warning",
   "review_deadline_warning",
+  // An admin stopped / released the chat (lib/chat-block.ts): the tap shows the stop where it applies
+  "chat_blocked",
+  "chat_unblocked",
 ]);
