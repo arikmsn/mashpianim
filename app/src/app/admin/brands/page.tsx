@@ -15,6 +15,9 @@ type Brand = {
   // Hearts this business sent to creators, newest first (owner, 2026-11-14)
   heartsSent: number;
   heartsTo: { name: string; status: string; at: string }[];
+  // Orders through SUMIT (newest first) and what was actually paid
+  purchases: { id: string; amount: number; credits: number; status: string; at: string; method: string; ref: string | null }[];
+  purchasesPaid: number;
   joined: string;
   category?: string;
   websiteUrl?: string;
@@ -48,6 +51,8 @@ export default function AdminBrandsPage() {
             totalCredits: (b.total_credits as number) || 0,
             heartsSent: (b.hearts_sent as number) || 0,
             heartsTo: Array.isArray(b.hearts_to) ? (b.hearts_to as { name: string; status: string; at: string }[]) : [],
+            purchases: Array.isArray(b.purchases) ? (b.purchases as Brand["purchases"]) : [],
+            purchasesPaid: (b.purchases_paid as number) || 0,
             usedCredits: (b.used_credits as number) || 0,
             joined: b.created_at ? new Date(b.created_at as string).toLocaleDateString("he-IL") : "",
             category: (Array.isArray(b.categories) && (b.categories as string[]).length > 0
@@ -264,6 +269,23 @@ export default function AdminBrandsPage() {
                     <li key={i} className="flex items-center justify-between gap-2">
                       <span className="truncate">{h.name}</span>
                       <span className="text-neutral-400 shrink-0">{h.status === "pending" ? "ממתין" : h.status === "rejected" ? "נדחה" : h.status === "cancelled" ? "בוטל" : "מאטץ'"}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="bg-neutral-50 rounded-xl p-3">
+              <p className="text-xs font-bold text-neutral-700 mb-1">🧾 רכישות דרך SUMIT{selectedBrand.purchasesPaid > 0 ? ` · שולם ₪${selectedBrand.purchasesPaid.toLocaleString()}` : ""}</p>
+              {selectedBrand.purchases.length === 0 ? (
+                <p className="text-xs text-neutral-400">עדיין לא בוצעו רכישות מקוונות (טעינות ידניות לא מופיעות כאן)</p>
+              ) : (
+                <ul className="text-xs text-neutral-700 space-y-0.5 max-h-40 overflow-y-auto">
+                  {selectedBrand.purchases.map((p) => (
+                    <li key={p.id} className="flex items-center justify-between gap-2">
+                      <span className="truncate">{new Date(p.at).toLocaleDateString("he-IL")} · {p.credits} סרטונים · ₪{p.amount.toLocaleString()}</span>
+                      <span className={`shrink-0 ${p.status === "completed" ? "text-emerald-600" : p.status === "pending" ? "text-amber-600" : "text-neutral-400"}`}>
+                        {p.status === "completed" ? `שולם${p.ref ? ` · #${p.ref}` : ""}` : p.status === "pending" ? "ממתין לתשלום" : p.status === "refunded" ? "הוחזר" : "לא הושלם"}
+                      </span>
                     </li>
                   ))}
                 </ul>

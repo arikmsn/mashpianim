@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { parseCreditPrices, type CreditPrices } from "./payments.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Admin = SupabaseClient<any, any, any, any, any>;
@@ -35,6 +36,16 @@ export function parseTimelines(data: unknown): Timelines {
     review_days: Math.max(1, positiveInt(d.review_days, DEFAULT_TIMELINES.review_days, 365)),
     max_revisions: positiveInt(d.max_revisions, DEFAULT_TIMELINES.max_revisions, 10),
   };
+}
+
+// Prices of the credit packages (site_settings row id "credits"; ILS, VAT included)
+export async function getCreditPrices(admin: Admin): Promise<CreditPrices> {
+  try {
+    const { data } = await admin.from("site_settings").select("data").eq("id", "credits").maybeSingle();
+    return parseCreditPrices((data as { data?: unknown } | null)?.data);
+  } catch {
+    return parseCreditPrices(null);
+  }
 }
 
 export async function getTimelineSettings(admin: Admin): Promise<Timelines> {

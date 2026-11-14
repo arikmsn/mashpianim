@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence, type PanInfo } from "framer-motion";
 import { Avatar, Badge, Button, Card, Modal, useToast } from "@/components/ui";
 import { ProfileModal, CreditsAccess } from "@/components/features";
 import { swrFetch, fetchJson } from "@/lib/client-cache";
 import { CREDITS_CONTACT_NOTICE, creditsCardHint } from "@/lib/credits";
+import { purchaseOutcomeText } from "@/lib/payments";
 import { toDirectImageUrl } from "@/lib/images";
 import { createClient } from "@/lib/supabase/client";
 
@@ -114,6 +115,24 @@ function Thumb({ c, onClick }: { c: CreatorCard; onClick: () => void }) {
   );
 }
 
+// Back from SUMIT's payment page: say how it went, refresh the credits, clean the URL. Its own component
+// inside a Suspense boundary because useSearchParams needs one.
+function PurchaseOutcome({ onSettled }: { onSettled: (outcome: string) => void }) {
+  const searchParams = useSearchParams();
+  const outcome = searchParams.get("purchase");
+  const credits = Number(searchParams.get("credits") || "0") || null;
+  const { toast } = useToast();
+  const router = useRouter();
+  useEffect(() => {
+    const msg = purchaseOutcomeText(outcome, credits);
+    if (!outcome || !msg) return;
+    toast(msg.text, msg.tone);
+    onSettled(outcome);
+    router.replace("/brand");
+  }, [outcome, credits, toast, onSettled, router]);
+  return null;
+}
+
 export default function BrandDiscoverPage() {
   const [creators, setCreators] = useState<CreatorCard[]>([]);
   const [products, setProducts] = useState<BrandProduct[]>([]);
@@ -145,6 +164,17 @@ export default function BrandDiscoverPage() {
   const applyCounts = useCallback((data: { chose_you?: number; match?: number }) => {
     setChoseYou(data.chose_you || 0);
     setMatchesWaiting(data.match || 0);
+  }, []);
+
+  // After a purchase the package is already bigger on the server: read it again, bypassing the cache
+  const refreshCredits = useCallback((outcome: string) => {
+    if (outcome !== "success" && outcome !== "pending") return;
+    fetchJson<{ profile?: { total_credits?: number; used_credits?: number } }>("/api/profile").then((d) => {
+      if (!d?.profile) return;
+      const total = d.profile.total_credits || 0;
+      const used = d.profile.used_credits || 0;
+      setCredits({ total, remaining: Math.max(0, total - used) });
+    });
   }, []);
 
   useEffect(() => {
@@ -689,6 +719,9 @@ export default function BrandDiscoverPage() {
       <ProfileModal userId={viewProfileId} onClose={() => setViewProfileId(null)} title="פרופיל היוצר/ת" as="creator" />
       {/* No online purchase yet: the owner's notice, then the in-app contact form; the team loads credits from the admin */}
       <CreditsAccess open={purchaseOpen} onClose={() => setPurchaseOpen(false)} total={credits.total} used={credits.total - credits.remaining} />
+      <Suspense fallback={null}>
+        <PurchaseOutcome onSettled={refreshCredits} />
+      </Suspense>
     </main>
   );
 }

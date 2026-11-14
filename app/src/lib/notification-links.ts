@@ -26,6 +26,9 @@ export function notificationHref(n: NotificationLike, role: ViewerRole, isAdmin 
     return feedbackId ? `/profile?feedback=${feedbackId}` : "/profile";
   }
   if (n.type === "portfolio_video_removed") return "/profile";
+  // Purchases (SUMIT): the business lands on its home (the credits card), admins on the businesses screen
+  if (n.type === "credits_loaded") return role === "brand" ? "/brand" : "/profile";
+  if (n.type === "purchase_received") return isAdmin ? "/admin/brands" : null;
 
   if (CHAT_NOTIFICATION_TYPES.has(n.type)) {
     return connectionId ? `/messages?connection=${connectionId}` : "/messages";

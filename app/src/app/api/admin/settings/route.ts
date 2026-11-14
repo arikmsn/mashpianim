@@ -11,7 +11,7 @@ type Section = (typeof SETTINGS_SECTIONS)[number];
 const defaultSettings: Record<Section, Record<string, unknown>> = {
   general: {
     platform_name: "Mashpian",
-    support_email: "support@mashpian.online",
+    support_email: "info@mashpian.online",
     support_phone: "",
   },
   credits: {

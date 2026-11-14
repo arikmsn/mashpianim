@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { createNotification, createNotificationOnce, logActivity, notifyConnectionStatusChange, notificationData } from "@/lib/notifications";
 import { capacityStatus, type PlatformUsage } from "@/lib/capacity";
 import { getTimelineSettings } from "@/lib/settings";
+import { paymentsMode } from "@/lib/payments";
+import { reconcileSumitPayments } from "@/lib/payments-server";
 
 // A reminder of the same kind for the same connection is sent at most once per this many hours
 const WARNING_DEDUPE_HOURS = 48;
@@ -34,7 +36,18 @@ export async function GET(request: NextRequest) {
   const results = {
     expired: 0, cancelled: 0, warnings: 0, skipped_duplicates: 0, flagged: 0, purged_otps: 0, purged_rate_limits: 0,
     capacity: "unknown" as string, capacity_alerts: 0,
+    payments: null as null | { checked: number; completed: number; expired: number; error?: string },
   };
+
+  // Purchases: a business that paid at SUMIT and closed the tab never reached the return URL — the order is
+  // verified from SUMIT's own list and credited here (lib/payments-server.ts). Only when SUMIT is configured.
+  if (paymentsMode(process.env) !== "off") {
+    try {
+      results.payments = await reconcileSumitPayments(supabase);
+    } catch (err) {
+      console.error("[cron] payments reconcile failed:", err);
+    }
+  }
 
   // 0. One-sided hearts left unanswered for 7 days expire (mutual pairs wait for the brand, see step 0b)
   const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();

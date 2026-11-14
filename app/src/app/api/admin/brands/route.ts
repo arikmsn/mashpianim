@@ -40,13 +40,28 @@ export async function GET() {
     (heartsByBrand[h.brand_id] ||= []).push({ name, status: h.status || "pending", at: h.created_at });
   }
 
+  // Orders through SUMIT (021), newest first — pending, paid, failed
+  const { data: txRows, error: txErr } = await supabase
+    .from("transactions")
+    .select("id, brand_id, amount, credits, status, created_at, payment_method, payment_ref")
+    .order("created_at", { ascending: false })
+    .limit(2000);
+  if (txErr) console.error("[admin/brands] transactions:", txErr.message);
+  const purchasesByBrand: Record<string, { id: string; amount: number; credits: number; status: string; at: string; method: string; ref: string | null }[]> = {};
+  for (const t of (txRows || []) as any[]) {
+    (purchasesByBrand[t.brand_id] ||= []).push({ id: t.id, amount: Number(t.amount) || 0, credits: t.credits || 0, status: t.status, at: t.created_at, method: t.payment_method || "", ref: t.payment_ref || null });
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const brands = (data || []).map((u: any) => {
     const profile = Array.isArray(u.brand_profiles) ? u.brand_profiles[0] : u.brand_profiles;
     const hearts = profile?.id ? heartsByBrand[profile.id] || [] : [];
+    const purchases = profile?.id ? (purchasesByBrand[profile.id] || []).slice(0, 20) : [];
     return {
       hearts_sent: hearts.length,
       hearts_to: hearts,
+      purchases,
+      purchases_paid: purchases.filter((p) => p.status === "completed").reduce((sum, p) => sum + p.amount, 0),
       id: u.id,
       full_name: u.full_name,
       phone: u.phone,
