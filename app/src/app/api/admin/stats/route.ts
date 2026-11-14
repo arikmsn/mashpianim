@@ -15,7 +15,7 @@ export async function GET() {
     return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
   }
 
-  const [creatorsRes, brandsRes, connectionsRes, videosRes, transactionsRes, creditsRes, usageRes] =
+  const [creatorsRes, brandsRes, connectionsRes, videosRes, transactionsRes, creditsRes, usageRes, videosTotalRes, videosCollabRes, matchesRes] =
     await Promise.all([
       supabase.from("users").select("id", { count: "exact", head: true }).eq("type", "creator"),
       supabase.from("users").select("id", { count: "exact", head: true }).eq("type", "brand"),
@@ -38,6 +38,10 @@ export async function GET() {
         .gte("purchased_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
       // Storage + database size (migration 014); null until the function exists
       supabase.rpc("platform_usage"),
+      // Owner (2026-11-14): every video in the system, and the ones made inside a collaboration (a match)
+      supabase.from("videos").select("id", { count: "exact", head: true }),
+      supabase.from("videos").select("id", { count: "exact", head: true }).not("connection_id", "is", null),
+      supabase.from("connections").select("id", { count: "exact", head: true }).not("status", "in", '("pending","rejected","cancelled")'),
     ]);
 
   const monthlyRevenue = (transactionsRes.data || []).reduce(
@@ -61,6 +65,9 @@ export async function GET() {
       pending_videos: videosRes.count || 0,
       monthly_revenue: monthlyRevenue,
       credits_sold: creditsSold,
+      videos_total: videosTotalRes.count || 0,
+      videos_collab: videosCollabRes.count || 0,
+      matches_total: matchesRes.count || 0,
     },
     capacity,
   });

@@ -12,6 +12,9 @@ type Brand = {
   avatarUrl: string | null;
   totalCredits: number;
   usedCredits: number;
+  // Hearts this business sent to creators, newest first (owner, 2026-11-14)
+  heartsSent: number;
+  heartsTo: { name: string; status: string; at: string }[];
   joined: string;
   category?: string;
   websiteUrl?: string;
@@ -43,6 +46,8 @@ export default function AdminBrandsPage() {
             isActive: b.is_active !== false,
             avatarUrl: (b.logo_url as string) || (b.avatar_url as string) || null,
             totalCredits: (b.total_credits as number) || 0,
+            heartsSent: (b.hearts_sent as number) || 0,
+            heartsTo: Array.isArray(b.hearts_to) ? (b.hearts_to as { name: string; status: string; at: string }[]) : [],
             usedCredits: (b.used_credits as number) || 0,
             joined: b.created_at ? new Date(b.created_at as string).toLocaleDateString("he-IL") : "",
             category: (Array.isArray(b.categories) && (b.categories as string[]).length > 0
@@ -163,6 +168,7 @@ export default function AdminBrandsPage() {
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">קטגוריה</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">סרטונים (נותרו / סה״כ)</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">נוצלו</th>
+                <th className="px-4 py-3 text-xs font-medium text-neutral-400">לבבות ששלחו</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">פעולות</th>
               </tr>
             </thead>
@@ -191,6 +197,14 @@ export default function AdminBrandsPage() {
                     <span className="text-neutral-400"> / {brand.totalCredits}</span>
                   </td>
                   <td className="px-4 py-3 text-sm">{brand.usedCredits}</td>
+                  <td className="px-4 py-3 text-sm" title={brand.heartsTo.map((h) => h.name).join(", ")}>
+                    💗 {brand.heartsSent}
+                    {brand.heartsTo.length > 0 && (
+                      <span className="block text-[11px] text-neutral-400 truncate max-w-[180px]">
+                        {brand.heartsTo.slice(0, 3).map((h) => h.name).join(", ")}{brand.heartsTo.length > 3 ? ` +${brand.heartsTo.length - 3}` : ""}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1">
                       <button
@@ -240,6 +254,21 @@ export default function AdminBrandsPage() {
               </div>
             </div>
 
+            <div className="bg-neutral-50 rounded-xl p-3">
+              <p className="text-xs font-bold text-neutral-700 mb-1">💗 לבבות ששלח העסק ({selectedBrand.heartsSent})</p>
+              {selectedBrand.heartsTo.length === 0 ? (
+                <p className="text-xs text-neutral-400">עדיין לא נשלחו לבבות ליוצרים</p>
+              ) : (
+                <ul className="text-xs text-neutral-700 space-y-0.5 max-h-40 overflow-y-auto">
+                  {selectedBrand.heartsTo.map((h, i) => (
+                    <li key={i} className="flex items-center justify-between gap-2">
+                      <span className="truncate">{h.name}</span>
+                      <span className="text-neutral-400 shrink-0">{h.status === "pending" ? "ממתין" : h.status === "rejected" ? "נדחה" : h.status === "cancelled" ? "בוטל" : "מאטץ'"}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
             {selectedBrand.description && (
               <p className="text-sm text-neutral-600 bg-neutral-50 rounded-xl p-3">
                 {selectedBrand.description}

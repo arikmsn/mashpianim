@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { pickAllowedFields, USER_EDITABLE_FIELDS, CREATOR_EDITABLE_FIELDS, BRAND_EDITABLE_FIELDS } from "@/lib/authz";
@@ -48,6 +48,19 @@ export async function GET() {
 
   if (!userData) {
     return NextResponse.json({ error: "משתמש לא נמצא" }, { status: 404 });
+  }
+
+  // Last activity for the admin (users.last_seen_at, migration 019): stamped at most every 10 minutes, off the request path
+  const seenAt = userData.last_seen_at ? Date.parse(userData.last_seen_at) : 0;
+  if (!seenAt || Date.now() - seenAt > 10 * 60 * 1000) {
+    const userId = userData.id;
+    after(async () => {
+      try {
+        await (admin.from("users") as any).update({ last_seen_at: new Date().toISOString() }).eq("id", userId);
+      } catch (err) {
+        console.error("[profile] last_seen_at stamp failed:", err);
+      }
+    });
   }
 
   // `role` = the role this session is signed in as; `roles` = every role the account holds (for switching)

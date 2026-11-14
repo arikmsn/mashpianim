@@ -41,11 +41,12 @@ export async function verifyAdmin(): Promise<AdminCheck> {
     const adminClient = createSupabaseClient(supabaseUrl, supabaseServiceKey);
     const { data: dbUser } = await adminClient
       .from("users")
-      .select("id, type")
+      .select("id, type, is_admin")
       .eq("auth_user_id", user.id)
       .single();
 
-    if ((dbUser as any)?.type === "admin" && roleAllowsAdmin) {
+    // users.is_admin (019) grants the admin interface on top of a creator / brand account
+    if (((dbUser as any)?.type === "admin" || (dbUser as any)?.is_admin === true) && roleAllowsAdmin) {
       // Return service role client so admin operations bypass RLS too
       return { isAdmin: true, userId: user.id, adminId: (dbUser as any).id, supabase: adminClient as any };
     }
@@ -55,11 +56,11 @@ export async function verifyAdmin(): Promise<AdminCheck> {
   // Fallback: try with anon client (may fail if RLS blocks)
   const { data: dbUser } = await supabase
     .from("users")
-    .select("id, type")
+    .select("id, type, is_admin")
     .eq("auth_user_id", user.id)
     .single();
 
-  const isAdmin = (dbUser as any)?.type === "admin" && roleAllowsAdmin;
+  const isAdmin = ((dbUser as any)?.type === "admin" || (dbUser as any)?.is_admin === true) && roleAllowsAdmin;
   return {
     isAdmin,
     userId: user.id,

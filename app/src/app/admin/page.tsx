@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { Card, CardTitle, Badge } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { formatBytes, type CapacityStatus, type CapacityGauge, type PlatformUsage } from "@/lib/capacity";
 
-type StatItem = { label: string; value: string; change: string; trend: string; icon: string };
+// Every tile links to the screen that holds the detail (owner, 2026-11-14)
+type StatItem = { label: string; value: string; change: string; trend: string; icon: string; href: string };
 type Capacity = CapacityStatus & { usage: PlatformUsage };
 
 const gaugeTone: Record<CapacityGauge["level"], { bar: string; text: string; label: string }> = {
@@ -73,12 +75,15 @@ export default function AdminDashboard() {
         if (data.stats && !Array.isArray(data.stats)) {
           const s = data.stats;
           setStats([
-            { label: "יוצרים רשומים", value: String(s.creators_count ?? 0), change: "", trend: "up", icon: "👤" },
-            { label: "עסקים פעילים", value: String(s.brands_count ?? 0), change: "", trend: "up", icon: "🏪" },
-            { label: "חיבורים פעילים", value: String(s.active_connections ?? 0), change: "", trend: "up", icon: "🔗" },
-            { label: "סרטונים ממתינים", value: String(s.pending_videos ?? 0), change: "", trend: "down", icon: "🎬" },
-            { label: "הכנסות החודש", value: `₪${(s.monthly_revenue ?? 0).toLocaleString()}`, change: "", trend: "up", icon: "💰" },
-            { label: "פניות שנמכרו", value: String(s.credits_sold ?? 0), change: "", trend: "up", icon: "🎫" },
+            { label: "יוצרים רשומים", value: String(s.creators_count ?? 0), change: "", trend: "up", icon: "👤", href: "/admin/creators" },
+            { label: "עסקים", value: String(s.brands_count ?? 0), change: "", trend: "up", icon: "🏪", href: "/admin/brands" },
+            { label: "מאטצ'ים (סה\"כ)", value: String(s.matches_total ?? 0), change: "", trend: "up", icon: "🤝", href: "/admin/connections" },
+            { label: "חיבורים פעילים", value: String(s.active_connections ?? 0), change: "", trend: "up", icon: "🔗", href: "/admin/connections?filter=active" },
+            { label: "סרטונים במערכת", value: String(s.videos_total ?? 0), change: "", trend: "up", icon: "🎬", href: "/admin/moderation?tab=portfolio" },
+            { label: "סרטונים משת\"פ", value: String(s.videos_collab ?? 0), change: "", trend: "up", icon: "🎥", href: "/admin/moderation?tab=videos" },
+            { label: "סרטונים ממתינים לבדיקה", value: String(s.pending_videos ?? 0), change: "", trend: "down", icon: "⏳", href: "/admin/moderation?tab=videos" },
+            { label: "הכנסות החודש", value: `₪${(s.monthly_revenue ?? 0).toLocaleString()}`, change: "", trend: "up", icon: "💰", href: "/admin/brands" },
+            { label: "סרטונים שנמכרו החודש", value: String(s.credits_sold ?? 0), change: "", trend: "up", icon: "🎫", href: "/admin/brands" },
           ]);
         } else if (Array.isArray(data.stats)) {
           setStats(data.stats);
@@ -116,7 +121,8 @@ export default function AdminDashboard() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
               >
-                <Card padding="md">
+                <Link href={stat.href} className="block rounded-2xl focus-visible:outline-2 focus-visible:outline-pink-500" aria-label={`${stat.label}: ${stat.value}`}>
+                <Card padding="md" className="hover:border-pink-200 hover:shadow-md transition-all cursor-pointer">
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="text-sm text-neutral-500">{stat.label}</p>
@@ -133,9 +139,10 @@ export default function AdminDashboard() {
                     >
                       {stat.change}
                     </span>
-                    <span className="text-xs text-neutral-400 mr-1">מהשבוע שעבר</span>
+                    <span className="text-xs text-neutral-400 mr-1">לחצו לפירוט ›</span>
                   </div>
                 </Card>
+                </Link>
               </motion.div>
             ))}
       </div>

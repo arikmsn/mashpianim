@@ -16,3 +16,4 @@ export { LegalDocumentView, LegalPage } from "./legal-document";
 export { RoleSwitchModal, RoleOptions, AdminRoleSwitch, chooseRole, roleLabel, ROLE_OPTIONS, type AppRole } from "./role-switch";
 export { CreditsAccess } from "./credits-access";
 export { WelcomeSheet, MomentSheet, useOnboarding, useOnboardingContent, firstHeartMoment, firstMatchMoment, type OnboardingUser } from "./onboarding";
+export { SuspendedGate } from "./suspended-gate";

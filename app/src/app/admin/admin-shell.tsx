@@ -11,6 +11,7 @@ const navItems = [
   { href: "/admin", label: "דשבורד", icon: "📊" },
   { href: "/admin/creators", label: "יוצרים", icon: "🎬" },
   { href: "/admin/brands", label: "עסקים", icon: "🏪" },
+  { href: "/admin/connections", label: "חיבורים", icon: "🤝" },
   { href: "/admin/moderation", label: "מודרציה", icon: "🛡️" },
   { href: "/admin/content", label: "תוכן האתר", icon: "✏️" },
   { href: "/admin/feedback", label: "פניות ותקלות", icon: "📨" },

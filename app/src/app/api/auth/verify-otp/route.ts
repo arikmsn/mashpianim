@@ -100,9 +100,17 @@ export async function POST(request: NextRequest) {
     // Check our users table first (source of truth for registered users)
     const { data: dbUser } = await supabaseAdmin
       .from("users")
-      .select("id, auth_user_id, type")
+      .select("id, auth_user_id, type, is_active")
       .eq("phone", phone)
       .maybeSingle();
+
+    // A suspended account (admin → השעיה) cannot sign in; the app also shows a gate to sessions already open
+    if (dbUser && (dbUser as { is_active?: boolean | null }).is_active === false) {
+      return NextResponse.json(
+        { error: "החשבון הזה מושעה. לבירור אפשר לפנות אלינו דרך \"צור קשר\" באתר.", code: "suspended" },
+        { status: 403 }
+      );
+    }
 
     let authUserId: string;
     let userType: string | null = null;

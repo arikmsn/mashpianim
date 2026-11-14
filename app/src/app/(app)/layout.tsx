@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { BottomNav } from "@/components/ui";
-import { SideMenu, TermsGate } from "@/components/features";
+import { SideMenu, SuspendedGate, TermsGate } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { swrFetch } from "@/lib/client-cache";
 
@@ -51,6 +51,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <SideMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
       {/* Terms of service: shown full-screen until this account accepted the current version */}
       <TermsGate />
+      {/* A suspended account (admin → השעיה) sees only this, with the way to contact us */}
+      <SuspendedGate />
     </>
   );
 }

@@ -16,7 +16,7 @@ export async function GET() {
     .from("users")
     .select(`
       id, full_name, phone, is_active, avatar_url, created_at,
-      brand_profiles(shop_name, category, categories, website_url, total_credits, used_credits, description, logo_url)
+      brand_profiles(id, shop_name, category, categories, website_url, total_credits, used_credits, description, logo_url)
     `)
     .eq("type", "brand")
     .order("created_at", { ascending: false });
@@ -26,10 +26,27 @@ export async function GET() {
     return NextResponse.json({ error: "שגיאה בטעינת מותגים" }, { status: 500 });
   }
 
+  // Hearts each business sent to creators (owner, 2026-11-14): count + who (connections the brand initiated)
+  const { data: heartRows, error: heartsErr } = await supabase
+    .from("connections")
+    .select("brand_id, status, created_at, creator_profiles!connections_creator_id_fkey(users(full_name, phone))")
+    .eq("initiated_by", "brand")
+    .order("created_at", { ascending: false });
+  if (heartsErr) console.error("[admin/brands] hearts:", heartsErr.message);
+  const heartsByBrand: Record<string, { name: string; status: string; at: string }[]> = {};
+  for (const h of (heartRows || []) as any[]) {
+    const user = h.creator_profiles?.users;
+    const name = (user?.full_name || "").trim() || (user?.phone ? `ללא שם (${user.phone})` : "יוצר/ת");
+    (heartsByBrand[h.brand_id] ||= []).push({ name, status: h.status || "pending", at: h.created_at });
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const brands = (data || []).map((u: any) => {
     const profile = Array.isArray(u.brand_profiles) ? u.brand_profiles[0] : u.brand_profiles;
+    const hearts = profile?.id ? heartsByBrand[profile.id] || [] : [];
     return {
+      hearts_sent: hearts.length,
+      hearts_to: hearts,
       id: u.id,
       full_name: u.full_name,
       phone: u.phone,

@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyAdmin, isSupabaseConfigured } from "@/lib/admin-auth";
 import { logActivity } from "@/lib/notifications";
+import { aggregateCreators, EMPTY_AGG, type ConnectionRow, type VideoRow } from "@/lib/admin-creators";
 
+// Admin list of creators (owner list, 2026-11-14): name, followers, the real status, portfolio / collaboration
+// video counts, hearts received from businesses, matches, last activity. Admin-flagged creators (users.is_admin)
+// stay listed because their type is still "creator".
 export async function GET() {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ creators: [] });
@@ -15,8 +19,8 @@ export async function GET() {
   const { data, error } = await supabase
     .from("users")
     .select(`
-      id, full_name, phone, is_active, avatar_url, created_at,
-      creator_profiles(level, categories, hearts, completed_connections, tiktok_handle, instagram_handle, city, bio)
+      id, full_name, phone, is_active, is_admin, avatar_url, created_at, last_seen_at,
+      creator_profiles(id, level, categories, tiktok_handle, instagram_handle, tiktok_followers, instagram_followers, city, bio)
     `)
     .eq("type", "creator")
     .order("created_at", { ascending: false });
@@ -26,30 +30,56 @@ export async function GET() {
     return NextResponse.json({ error: "שגיאה בטעינת יוצרים" }, { status: 500 });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const creators = (data || []).map((u: any) => {
-    const profile = Array.isArray(u.creator_profiles) ? u.creator_profiles[0] : u.creator_profiles;
+  const rows = (data || []) as any[];
+  const profileOf = (u: any) => (Array.isArray(u.creator_profiles) ? u.creator_profiles[0] : u.creator_profiles);
+  const profileToUser: Record<string, string> = {};
+  for (const u of rows) {
+    const p = profileOf(u);
+    if (p?.id) profileToUser[p.id] = u.id;
+  }
+
+  // Counts come from the raw rows (a few hundred at most today); videos reference users.id, connections the profile
+  const [videosRes, connsRes] = await Promise.all([
+    supabase.from("videos").select("creator_id, connection_id, status"),
+    supabase.from("connections").select("creator_id, initiated_by, status"),
+  ]);
+  if (videosRes.error) console.error("[admin/creators] videos:", videosRes.error.message);
+  if (connsRes.error) console.error("[admin/creators] connections:", connsRes.error.message);
+  const agg = aggregateCreators((videosRes.data || []) as VideoRow[], (connsRes.data || []) as ConnectionRow[], profileToUser);
+
+  const creators = rows.map((u) => {
+    const profile = profileOf(u);
+    const a = agg[u.id] || EMPTY_AGG;
     return {
       id: u.id,
-      full_name: u.full_name,
-      phone: u.phone,
-      is_active: u.is_active,
+      name: u.full_name || "",
+      phone: u.phone || "",
+      is_active: u.is_active !== false,
+      is_admin: u.is_admin === true,
       avatar_url: u.avatar_url,
       created_at: u.created_at,
+      last_seen_at: u.last_seen_at || null,
       level: profile?.level || "creator",
-      categories: profile?.categories || [],
-      hearts: profile?.hearts || 0,
-      completed_connections: profile?.completed_connections || 0,
-      tiktok_handle: profile?.tiktok_handle,
-      instagram_handle: profile?.instagram_handle,
-      city: profile?.city,
-      bio: profile?.bio,
+      categories: Array.isArray(profile?.categories) ? profile.categories : [],
+      city: profile?.city || null,
+      bio: profile?.bio || null,
+      tiktok_handle: profile?.tiktok_handle || null,
+      instagram_handle: profile?.instagram_handle || null,
+      tiktok_followers: Number(profile?.tiktok_followers) || 0,
+      instagram_followers: Number(profile?.instagram_followers) || 0,
+      videos_portfolio: a.videosPortfolio,
+      videos_removed: a.videosRemoved,
+      videos_collab: a.videosCollab,
+      hearts_from_brands: a.heartsFromBrands,
+      matches: a.matches,
     };
   });
 
   return NextResponse.json({ creators });
 }
 
+// Suspend / reactivate (users.is_active — a suspended account cannot sign in and open sessions see a gate),
+// or change the level. Accepts `is_active` or `action: "suspend" | "activate"`.
 export async function PUT(request: NextRequest) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "המערכת לא מוגדרת" }, { status: 503 });
@@ -60,34 +90,30 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
   }
 
-  const body = await request.json();
-  const { userId, is_active, level } = body;
+  const body = (await request.json().catch(() => ({}))) as { userId?: string; is_active?: unknown; action?: unknown; level?: unknown };
+  const { userId, level } = body;
+  let isActive: boolean | undefined = typeof body.is_active === "boolean" ? body.is_active : undefined;
+  if (isActive === undefined && (body.action === "suspend" || body.action === "activate")) isActive = body.action === "activate";
 
-  if (!userId) {
-    return NextResponse.json({ error: "מזהה משתמש חסר" }, { status: 400 });
+  if (!userId || typeof userId !== "string") {
+    return NextResponse.json({ error: "חסר userId" }, { status: 400 });
+  }
+  if (isActive === undefined && level === undefined) {
+    return NextResponse.json({ error: "אין מה לעדכן" }, { status: 400 });
   }
 
-  if (is_active !== undefined) {
-    const { error } = await (supabase
-      .from("users") as any)
-      .update({ is_active })
-      .eq("id", userId);
-
+  if (isActive !== undefined) {
+    const { error } = await supabase.from("users").update({ is_active: isActive } as any).eq("id", userId);
     if (error) {
       console.error("[admin/creators] update user error:", error);
       return NextResponse.json({ error: "שגיאה בעדכון" }, { status: 500 });
     }
   }
-
-  if (level) {
-    const { error } = await (supabase
-      .from("creator_profiles") as any)
-      .update({ level })
-      .eq("user_id", userId);
-
+  if (typeof level === "string" && level) {
+    const { error } = await supabase.from("creator_profiles").update({ level } as any).eq("user_id", userId);
     if (error) {
       console.error("[admin/creators] update level error:", error);
-      return NextResponse.json({ error: "שגיאה בעדכון רמה" }, { status: 500 });
+      return NextResponse.json({ error: "שגיאה בעדכון הרמה" }, { status: 500 });
     }
   }
 
@@ -97,11 +123,8 @@ export async function PUT(request: NextRequest) {
     action: "admin_update_creator",
     entityType: "user",
     entityId: userId,
-    details: {
-      ...(is_active !== undefined ? { is_active } : {}),
-      ...(level ? { level } : {}),
-    },
+    details: { ...(isActive !== undefined ? { is_active: isActive } : {}), ...(typeof level === "string" ? { level } : {}) },
   });
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, is_active: isActive });
 }

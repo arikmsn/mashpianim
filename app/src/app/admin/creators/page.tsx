@@ -1,96 +1,89 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Avatar, Badge, Button, Card, Modal, useToast } from "@/components/ui";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Avatar, Badge, Card, useToast } from "@/components/ui";
+import { displayName, formatFollowers, lastSeenLabel, matchesSearch } from "@/lib/admin-creators";
 
+// What /api/admin/creators returns per creator
 type Creator = {
   id: string;
   name: string;
+  phone: string;
+  is_active: boolean;
+  is_admin: boolean;
+  avatar_url: string | null;
+  created_at: string;
+  last_seen_at: string | null;
   level: string;
-  status: string;
-  videos: number;
-  rating: number;
-  hearts: number;
-  joined: string;
   categories: string[];
-  bio?: string;
-  tiktokHandle?: string;
-  instagramHandle?: string;
-  city?: string;
-  phone?: string;
+  city: string | null;
+  tiktok_handle: string | null;
+  instagram_handle: string | null;
+  tiktok_followers: number;
+  instagram_followers: number;
+  videos_portfolio: number;
+  videos_removed: number;
+  videos_collab: number;
+  hearts_from_brands: number;
+  matches: number;
 };
 
-const levelColors: Record<string, "pink" | "purple" | "success"> = {
-  "יוצרת": "pink",
-  "יוצרת+": "purple",
-  "על הרדאר": "success",
-};
-
+// Creators list (owner list, 2026-11-14). The previous screen expected other field names than the API sent —
+// the name was empty, everyone showed as suspended and typing in the search crashed on a missing value. The
+// rows are now mapped 1:1 from the API, and the search is null-safe.
 export default function AdminCreatorsPage() {
   const [creators, setCreators] = useState<Creator[]>([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "suspended">("all");
   const [loading, setLoading] = useState(true);
-  const [selectedCreator, setSelectedCreator] = useState<Creator | null>(null);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
-    async function fetchCreators() {
-      try {
-        const res = await fetch("/api/admin/creators");
-        if (!res.ok) throw new Error("API error");
-        const data = await res.json();
-        setCreators(data.creators || []);
-      } catch {
-        // API unavailable
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchCreators();
-  }, []);
+    fetch("/api/admin/creators")
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("API error"))))
+      .then((data) => setCreators((data.creators || []) as Creator[]))
+      .catch(() => toast("שגיאה בטעינת היוצרים", "error"))
+      .finally(() => setLoading(false));
+  }, [toast]);
 
-  async function handleToggleStatus(creator: Creator) {
-    const newAction = creator.status === "active" ? "suspend" : "activate";
-    setActionLoading(creator.id);
+  async function toggleActive(c: Creator) {
+    const next = !c.is_active;
+    if (!next && !window.confirm(`להשעות את ${displayName(c.name, c.phone)}? היא/הוא לא יוכלו להיכנס למערכת עד שתפעילו מחדש.`)) return;
+    setBusy(c.id);
     try {
       const res = await fetch("/api/admin/creators", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: creator.id, action: newAction }),
+        body: JSON.stringify({ userId: c.id, is_active: next }),
       });
       if (!res.ok) throw new Error("API error");
-      setCreators((prev) =>
-        prev.map((c) =>
-          c.id === creator.id
-            ? { ...c, status: newAction === "suspend" ? "suspended" : "active" }
-            : c
-        )
-      );
-      toast(
-        newAction === "suspend" ? `${creator.name} הושעה` : `${creator.name} הופעל/ה מחדש`,
-        "success"
-      );
+      setCreators((prev) => prev.map((x) => (x.id === c.id ? { ...x, is_active: next } : x)));
+      toast(next ? `${displayName(c.name, c.phone)} הופעל/ה מחדש` : `${displayName(c.name, c.phone)} הושעה`, "success");
     } catch {
       toast("שגיאה בעדכון הסטטוס", "error");
     } finally {
-      setActionLoading(null);
+      setBusy(null);
     }
   }
 
   const filtered = creators.filter((c) => {
-    if (filter !== "all" && c.status !== filter) return false;
-    if (search && !c.name.includes(search)) return false;
-    return true;
+    if (filter === "active" && !c.is_active) return false;
+    if (filter === "suspended" && c.is_active) return false;
+    return matchesSearch(c, search);
   });
+
+  const counts = { all: creators.length, active: creators.filter((c) => c.is_active).length, suspended: creators.filter((c) => !c.is_active).length };
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold">ניהול יוצרים</h1>
-          <p className="text-neutral-500 text-sm mt-1">{creators.length} יוצרים רשומים</p>
+          <h1 className="text-2xl font-bold text-neutral-900">יוצרים</h1>
+          <p className="text-neutral-500 text-sm mt-1">
+            {counts.all} יוצרים · {counts.active} פעילים · {counts.suspended} מושעים
+          </p>
         </div>
       </div>
 
@@ -98,7 +91,7 @@ export default function AdminCreatorsPage() {
         <div className="flex items-center gap-4">
           <input
             type="text"
-            placeholder="חיפוש לפי שם..."
+            placeholder="חיפוש לפי שם או טלפון..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="flex-1 px-4 py-2.5 rounded-xl bg-neutral-50 border border-neutral-100 text-sm outline-none focus:border-pink-300"
@@ -108,9 +101,7 @@ export default function AdminCreatorsPage() {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  filter === f ? "bg-white shadow-sm text-pink-500" : "text-neutral-500"
-                }`}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${filter === f ? "bg-white shadow-sm text-pink-500" : "text-neutral-500"}`}
               >
                 {f === "all" ? "הכל" : f === "active" ? "פעילים" : "מושעים"}
               </button>
@@ -134,74 +125,75 @@ export default function AdminCreatorsPage() {
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-neutral-100 overflow-hidden">
-          <table className="w-full">
+        <div className="bg-white rounded-2xl border border-neutral-100 overflow-x-auto">
+          <table className="w-full min-w-[960px]">
             <thead>
               <tr className="border-b border-neutral-100 text-right">
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">יוצר/ת</th>
-                <th className="px-4 py-3 text-xs font-medium text-neutral-400">רמה</th>
+                <th className="px-4 py-3 text-xs font-medium text-neutral-400">עוקבים</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">סטטוס</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">סרטונים</th>
-                <th className="px-4 py-3 text-xs font-medium text-neutral-400">דירוג</th>
-                <th className="px-4 py-3 text-xs font-medium text-neutral-400">לבבות</th>
+                <th className="px-4 py-3 text-xs font-medium text-neutral-400">לבבות מעסקים</th>
+                <th className="px-4 py-3 text-xs font-medium text-neutral-400">מאטצ&apos;ים</th>
+                <th className="px-4 py-3 text-xs font-medium text-neutral-400">כניסה אחרונה</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">פעולות</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((creator) => (
-                <tr key={creator.id} className="border-b border-neutral-50 hover:bg-pink-50/30 transition-colors">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <Avatar name={creator.name} size="sm" />
-                      <div>
-                        <p className="text-sm font-medium">{creator.name}</p>
-                        <p className="text-xs text-neutral-400">{creator.categories.join(", ")}</p>
+              {filtered.map((c) => {
+                const name = displayName(c.name, c.phone);
+                return (
+                  <tr key={c.id} className="border-b border-neutral-50 hover:bg-pink-50/30 transition-colors">
+                    <td className="px-4 py-3">
+                      <Link href={`/admin/creators/${c.id}`} className="flex items-center gap-3 group">
+                        <Avatar src={c.avatar_url} name={name} size="sm" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium group-hover:text-pink-600 truncate">
+                            {name}
+                            {c.is_admin && <span className="mr-2 text-[10px] font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">מנהל/ת</span>}
+                          </p>
+                          <p className="text-xs text-neutral-400" dir="ltr">{c.phone}</p>
+                        </div>
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-neutral-700 whitespace-nowrap">
+                      <div>📸 {formatFollowers(c.instagram_followers)}</div>
+                      <div>🎵 {formatFollowers(c.tiktok_followers)}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge variant={c.is_active ? "success" : "danger"} size="sm" dot>
+                        {c.is_active ? "פעיל/ה" : "מושעה"}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-neutral-700 whitespace-nowrap">
+                      <div>תיק: <b>{c.videos_portfolio}</b>{c.videos_removed > 0 && <span className="text-neutral-400"> (+{c.videos_removed} הוסרו)</span>}</div>
+                      <div>שת&quot;פ: <b>{c.videos_collab}</b></div>
+                    </td>
+                    <td className="px-4 py-3 text-sm">💗 {c.hearts_from_brands}</td>
+                    <td className="px-4 py-3 text-sm">🤝 {c.matches}</td>
+                    <td className="px-4 py-3 text-xs text-neutral-600 whitespace-nowrap" title={c.last_seen_at || ""}>
+                      {lastSeenLabel(c.last_seen_at)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-1">
+                        <Link href={`/admin/creators/${c.id}`} className="px-2.5 py-1 rounded-lg text-xs bg-neutral-50 hover:bg-neutral-100 transition-colors">
+                          פרטים וסרטונים
+                        </Link>
+                        <button
+                          onClick={() => toggleActive(c)}
+                          disabled={busy === c.id}
+                          className={`px-2.5 py-1 rounded-lg text-xs bg-neutral-50 hover:bg-neutral-100 transition-colors disabled:opacity-50 ${c.is_active ? "text-red-500" : "text-emerald-600"}`}
+                        >
+                          {busy === c.id ? "..." : c.is_active ? "השעיה" : "הפעלה"}
+                        </button>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge variant={levelColors[creator.level] || "default"} size="sm">
-                      {creator.level}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge
-                      variant={creator.status === "active" ? "success" : "danger"}
-                      size="sm"
-                      dot
-                    >
-                      {creator.status === "active" ? "פעיל" : "מושעה"}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-sm">{creator.videos}</td>
-                  <td className="px-4 py-3 text-sm">⭐ {creator.rating}</td>
-                  <td className="px-4 py-3 text-sm">💖 {creator.hearts}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => setSelectedCreator(creator)}
-                        className="px-2.5 py-1 rounded-lg text-xs bg-neutral-50 hover:bg-neutral-100 transition-colors"
-                      >
-                        צפייה
-                      </button>
-                      <button
-                        onClick={() => handleToggleStatus(creator)}
-                        disabled={actionLoading === creator.id}
-                        className="px-2.5 py-1 rounded-lg text-xs bg-neutral-50 hover:bg-neutral-100 transition-colors text-red-500 disabled:opacity-50"
-                      >
-                        {actionLoading === creator.id
-                          ? "..."
-                          : creator.status === "active"
-                          ? "השעיה"
-                          : "הפעלה"}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                );
+              })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-neutral-400 text-sm">
+                  <td colSpan={8} className="px-4 py-12 text-center text-neutral-400 text-sm">
                     לא נמצאו יוצרים
                   </td>
                 </tr>
@@ -210,102 +202,6 @@ export default function AdminCreatorsPage() {
           </table>
         </div>
       )}
-
-      <Modal
-        open={!!selectedCreator}
-        onClose={() => setSelectedCreator(null)}
-        title={selectedCreator?.name || "פרטי יוצר/ת"}
-        size="md"
-      >
-        {selectedCreator && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-4">
-              <Avatar name={selectedCreator.name} size="lg" />
-              <div>
-                <h3 className="text-lg font-bold">{selectedCreator.name}</h3>
-                <div className="flex items-center gap-2 mt-1">
-                  <Badge variant={levelColors[selectedCreator.level] || "default"} size="sm">
-                    {selectedCreator.level}
-                  </Badge>
-                  <Badge
-                    variant={selectedCreator.status === "active" ? "success" : "danger"}
-                    size="sm"
-                    dot
-                  >
-                    {selectedCreator.status === "active" ? "פעיל" : "מושעה"}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-
-            {selectedCreator.bio && (
-              <p className="text-sm text-neutral-600 bg-neutral-50 rounded-xl p-3">
-                {selectedCreator.bio}
-              </p>
-            )}
-
-            <div className="grid grid-cols-3 gap-3">
-              <div className="text-center p-3 bg-neutral-50 rounded-xl">
-                <p className="text-lg font-bold">{selectedCreator.videos}</p>
-                <p className="text-xs text-neutral-500">סרטונים</p>
-              </div>
-              <div className="text-center p-3 bg-neutral-50 rounded-xl">
-                <p className="text-lg font-bold">⭐ {selectedCreator.rating}</p>
-                <p className="text-xs text-neutral-500">דירוג</p>
-              </div>
-              <div className="text-center p-3 bg-neutral-50 rounded-xl">
-                <p className="text-lg font-bold">💖 {selectedCreator.hearts}</p>
-                <p className="text-xs text-neutral-500">לבבות</p>
-              </div>
-            </div>
-
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between py-2 border-b border-neutral-50">
-                <span className="text-neutral-500">קטגוריות</span>
-                <span className="font-medium">{selectedCreator.categories.join(", ")}</span>
-              </div>
-              {selectedCreator.city && (
-                <div className="flex justify-between py-2 border-b border-neutral-50">
-                  <span className="text-neutral-500">עיר</span>
-                  <span className="font-medium">{selectedCreator.city}</span>
-                </div>
-              )}
-              {selectedCreator.tiktokHandle && (
-                <div className="flex justify-between py-2 border-b border-neutral-50">
-                  <span className="text-neutral-500">TikTok</span>
-                  <span className="font-medium" dir="ltr">{selectedCreator.tiktokHandle}</span>
-                </div>
-              )}
-              {selectedCreator.instagramHandle && (
-                <div className="flex justify-between py-2 border-b border-neutral-50">
-                  <span className="text-neutral-500">Instagram</span>
-                  <span className="font-medium" dir="ltr">{selectedCreator.instagramHandle}</span>
-                </div>
-              )}
-              <div className="flex justify-between py-2">
-                <span className="text-neutral-500">הצטרף/ה</span>
-                <span className="font-medium">{selectedCreator.joined}</span>
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <Button
-                variant={selectedCreator.status === "active" ? "danger" : "primary"}
-                size="sm"
-                onClick={() => {
-                  handleToggleStatus(selectedCreator);
-                  setSelectedCreator(null);
-                }}
-              >
-                {selectedCreator.status === "active" ? "השעיית יוצר/ת" : "הפעלת יוצר/ת"}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setSelectedCreator(null)}>
-                סגירה
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
     </div>
   );
 }

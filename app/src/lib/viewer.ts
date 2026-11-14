@@ -19,11 +19,13 @@ export interface Viewer {
   brandProfileId: string | null;
 }
 
-export function availableRoles(type: UserType, creatorProfileId: string | null, brandProfileId: string | null): UiRole[] {
+// `isAdminFlag` = users.is_admin (migration 019): the admin interface on top of a creator / brand account,
+// without changing the type (so the account still appears in the creator gallery and lists)
+export function availableRoles(type: UserType, creatorProfileId: string | null, brandProfileId: string | null, isAdminFlag = false): UiRole[] {
   const roles: UiRole[] = [];
   if (type === "creator" || creatorProfileId) roles.push("creator");
   if (type === "brand" || brandProfileId) roles.push("brand");
-  if (type === "admin") roles.push("admin");
+  if (type === "admin" || isAdminFlag) roles.push("admin");
   return roles;
 }
 
@@ -34,9 +36,10 @@ export function effectiveRole(
   type: UserType,
   creatorProfileId: string | null,
   brandProfileId: string | null,
-  activeRole: string | null | undefined = null
+  activeRole: string | null | undefined = null,
+  isAdminFlag = false
 ): UiRole {
-  const roles = availableRoles(type, creatorProfileId, brandProfileId);
+  const roles = availableRoles(type, creatorProfileId, brandProfileId, isAdminFlag);
   if (activeRole && (roles as string[]).includes(activeRole)) return activeRole as UiRole;
   if (type === "brand") return "brand";
   if (type === "creator") return "creator";
@@ -49,10 +52,11 @@ export function effectiveRole(
 // "admin sees all": user-facing routes scope to the viewer's own profile; admin-wide views live under
 // /api/admin and require role === "admin".
 export async function resolveViewer(admin: Admin, authUserId: string, activeRole: string | null = null): Promise<Viewer | null> {
-  const { data: dbUser } = await admin.from("users").select("id, type").eq("auth_user_id", authUserId).maybeSingle();
+  const { data: dbUser } = await admin.from("users").select("id, type, is_admin").eq("auth_user_id", authUserId).maybeSingle();
   if (!dbUser) return null;
   const userId = (dbUser as { id: string }).id;
   const type = ((dbUser as { type: string }).type || "creator") as UserType;
+  const isAdminFlag = (dbUser as { is_admin?: boolean | null }).is_admin === true;
 
   const [{ data: cp }, { data: bp }] = await Promise.all([
     admin.from("creator_profiles").select("id").eq("user_id", userId).maybeSingle(),
@@ -64,9 +68,9 @@ export async function resolveViewer(admin: Admin, authUserId: string, activeRole
   return {
     userId,
     type,
-    isAdmin: type === "admin",
-    role: effectiveRole(type, creatorProfileId, brandProfileId, activeRole),
-    roles: availableRoles(type, creatorProfileId, brandProfileId),
+    isAdmin: type === "admin" || isAdminFlag,
+    role: effectiveRole(type, creatorProfileId, brandProfileId, activeRole, isAdminFlag),
+    roles: availableRoles(type, creatorProfileId, brandProfileId, isAdminFlag),
     creatorProfileId,
     brandProfileId,
   };
