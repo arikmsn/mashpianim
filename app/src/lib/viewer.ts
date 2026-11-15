@@ -75,3 +75,19 @@ export async function resolveViewer(admin: Admin, authUserId: string, activeRole
     brandProfileId,
   };
 }
+
+// --- Registering a second role ------------------------------------------------------------------------------
+export type RegistrationType = "creator" | "brand";
+export type RegistrationMode = "new" | "complete" | "add_role";
+
+// A phone that already has an account: registering the same type again only completes it; registering the
+// other type adds that role to the account (owner, 2026-11-15: creators who also run a business, and the
+// other way round). No account yet → a new one.
+export function registrationMode(existingType: string | null | undefined, requested: RegistrationType): RegistrationMode {
+  if (!existingType) return "new";
+  return existingType === requested ? "complete" : "add_role";
+}
+
+export function otherRole(role: RegistrationType): RegistrationType {
+  return role === "creator" ? "brand" : "creator";
+}

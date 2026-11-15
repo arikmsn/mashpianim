@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Avatar, Badge, Button, Card, useToast } from "@/components/ui";
 import { displayName, formatFollowers, lastSeenLabel } from "@/lib/admin-creators";
 import { formatDateHe } from "@/lib/dates";
@@ -63,6 +63,7 @@ export default function AdminCreatorPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const { toast } = useToast();
+  const router = useRouter();
 
   // Fetch as a promise chain (state is set in the callbacks, never synchronously inside the effect)
   const load = useCallback(() => {
@@ -124,6 +125,25 @@ export default function AdminCreatorPage() {
     }
   }
 
+  // Removes the registration completely (owner, 2026-11-15); the phone can then sign up again
+  async function deleteAccount() {
+    if (!data) return;
+    const label = displayName(data.creator.name, data.creator.phone);
+    if (!window.confirm(`למחוק את החשבון של ${label}? המשתמש, הפרופיל, הסרטונים והחיבורים שלו יימחקו ואי אפשר לבטל. אחרי המחיקה אפשר להירשם מחדש עם אותו מספר.`)) return;
+    if (window.prompt("לאישור סופי כתבו: מחק") !== "מחק") return;
+    setBusy("delete");
+    try {
+      const res = await fetch(`/api/admin/users/${data.creator.id}`, { method: "DELETE" });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((payload as { error?: string }).error || "API error");
+      toast("החשבון נמחק", "success");
+      router.push("/admin/creators");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "המחיקה נכשלה", "error");
+      setBusy(null);
+    }
+  }
+
   if (loading) return <p className="text-sm text-neutral-400 p-8">טוען...</p>;
   if (!data) return <p className="text-sm text-neutral-400 p-8">לא נמצא.</p>;
   const c = data.creator;
@@ -154,9 +174,16 @@ export default function AdminCreatorPage() {
             </p>
             {c.bio && <p className="text-sm text-neutral-600 mt-2">{c.bio}</p>}
           </div>
-          <Button size="sm" variant={c.is_active ? "danger" : "primary"} loading={busy === "account"} onClick={toggleActive}>
-            {c.is_active ? "השעיית חשבון" : "הפעלת חשבון"}
-          </Button>
+          <div className="flex flex-col items-stretch gap-2 shrink-0">
+            <Button size="sm" variant={c.is_active ? "danger" : "primary"} loading={busy === "account"} onClick={toggleActive}>
+              {c.is_active ? "השעיית חשבון" : "הפעלת חשבון"}
+            </Button>
+            {!c.is_admin && (
+              <button type="button" disabled={busy === "delete"} onClick={deleteAccount} className="text-xs text-red-600 hover:underline disabled:opacity-50">
+                {busy === "delete" ? "מוחק..." : "🗑️ מחיקת החשבון"}
+              </button>
+            )}
+          </div>
         </div>
       </Card>
 

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/components/ui";
-import { clearCache } from "@/lib/client-cache";
+import { clearCache, fetchJson } from "@/lib/client-cache";
 import { refreshAuth } from "@/hooks/use-auth";
 import { ISRAEL_REGIONS } from "@/lib/regions";
 import { otpChannelLabel, otherOtpChannel, type OtpChannel } from "@/lib/otp-channel";
@@ -27,11 +27,15 @@ function RegisterContent() {
   const verifiedUserId = searchParams.get("userId");
   const verifiedPhone = searchParams.get("phone");
   const isPreVerified = searchParams.get("verified") === "1" && !!verifiedUserId;
+  // Adding the other role to a signed-in account (the profile sends ?add=1): the phone is already verified,
+  // the account's name and phone prefill the form
+  const addRole = searchParams.get("add") === "1";
+  const [me, setMe] = useState<{ phone: string; name: string } | null>(null);
   const [userType, setUserType] = useState<UserType>(initialType);
   const router = useRouter();
 
   useEffect(() => {
-    if (isPreVerified && verifiedUserId && !initialType) {
+    if (isPreVerified && verifiedUserId && !initialType && !addRole) {
       fetch(`/api/auth/user-type?userId=${verifiedUserId}`)
         .then((res) => res.ok ? res.json() : null)
         .then((data) => {
@@ -41,7 +45,14 @@ function RegisterContent() {
         })
         .catch(() => {});
     }
-  }, [isPreVerified, verifiedUserId, initialType, router]);
+  }, [isPreVerified, verifiedUserId, initialType, addRole, router]);
+
+  useEffect(() => {
+    if (!addRole) return;
+    fetchJson<{ user?: { phone?: string | null; full_name?: string | null } }>("/api/profile").then((d) => {
+      setMe({ phone: d?.user?.phone || "", name: d?.user?.full_name || "" });
+    });
+  }, [addRole]);
 
   // Registration starts with the phone code, not with the form (QA 18): without a verified phone the
   // login screen takes over and sends new phones back here with verified=1 (the chosen type rides along)
@@ -56,14 +67,26 @@ function RegisterContent() {
       </main>
     );
   }
+  if (addRole && !me) {
+    return (
+      <main className="min-h-screen flex items-center justify-center text-sm text-neutral-400">
+        טוענים את פרטי החשבון…
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen flex items-center justify-center px-6 bg-gradient-to-br from-pink-50 to-background py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Image src="/icon-192.png" alt="משפיען אונליין" width={72} height={72} unoptimized className="mx-auto rounded-2xl shadow-lg shadow-ig-pink/20 mb-4" />
-          <h1 className="text-3xl font-bold mb-2">הצטרפו אלינו</h1>
+          <h1 className="text-3xl font-bold mb-2">{addRole ? "הוספת חשבון לחשבון הקיים" : "הצטרפו אלינו"}</h1>
           {!userType && <p className="text-neutral-500">בואו נתחיל — מי אתם?</p>}
+          {addRole && (
+            <p className="text-neutral-500 text-sm">
+              {userType === "brand" ? "פותחים חשבון עסק על אותו מספר טלפון. מהפרופיל עוברים בין שני הממשקים." : "פותחים חשבון יוצר/ת על אותו מספר טלפון. מהפרופיל עוברים בין שני הממשקים."}
+            </p>
+          )}
         </div>
 
         <AnimatePresence mode="wait">
@@ -104,7 +127,7 @@ function RegisterContent() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
             >
-              <CreatorRegistration onBack={() => setUserType(null)} preVerifiedUserId={verifiedUserId} preVerifiedPhone={verifiedPhone} />
+              <CreatorRegistration onBack={() => (addRole ? router.push("/profile") : setUserType(null))} preVerifiedUserId={verifiedUserId} preVerifiedPhone={verifiedPhone || me?.phone || null} initialName={me?.name || null} addRole={addRole} />
             </motion.div>
           ) : (
             <motion.div
@@ -113,7 +136,7 @@ function RegisterContent() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
             >
-              <BrandRegistration onBack={() => setUserType(null)} preVerifiedUserId={verifiedUserId} preVerifiedPhone={verifiedPhone} />
+              <BrandRegistration onBack={() => (addRole ? router.push("/profile") : setUserType(null))} preVerifiedUserId={verifiedUserId} preVerifiedPhone={verifiedPhone || me?.phone || null} initialName={me?.name || null} addRole={addRole} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -141,13 +164,13 @@ const CATEGORIES = [
   "אחר",
 ];
 
-function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { onBack: () => void; preVerifiedUserId?: string | null; preVerifiedPhone?: string | null }) {
+function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone, initialName, addRole }: { onBack: () => void; preVerifiedUserId?: string | null; preVerifiedPhone?: string | null; initialName?: string | null; addRole?: boolean }) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   // Where the last code went (the server decides: WhatsApp, or SMS when asked for / when WhatsApp fails)
   const [otpChannel, setOtpChannel] = useState<OtpChannel>("whatsapp");
   const [form, setForm] = useState({
-    fullName: "",
+    fullName: initialName || "",
     phone: preVerifiedPhone || "",
     city: "",
     tiktokHandle: "",
@@ -218,7 +241,7 @@ function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { 
       const registerData = await registerRes.json();
       if (!registerRes.ok) throw new Error(registerData.error);
 
-      toast("נרשמתם בהצלחה! 🎉", "success");
+      toast(addRole ? "חשבון היוצר/ת נוסף! 🎉 מהפרופיל אפשר לעבור בין הממשקים" : "נרשמתם בהצלחה! 🎉", "success");
       clearCache();
       // The session was set server-side; refresh the auth store, then land on the first upload
       await refreshAuth();
@@ -442,14 +465,14 @@ function CreatorRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { 
   );
 }
 
-function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { onBack: () => void; preVerifiedUserId?: string | null; preVerifiedPhone?: string | null }) {
+function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone, initialName, addRole }: { onBack: () => void; preVerifiedUserId?: string | null; preVerifiedPhone?: string | null; initialName?: string | null; addRole?: boolean }) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   // Where the last code went (the server decides: WhatsApp, or SMS when asked for / when WhatsApp fails)
   const [otpChannel, setOtpChannel] = useState<OtpChannel>("whatsapp");
   const [customCategory, setCustomCategory] = useState("");
   const [form, setForm] = useState({
-    fullName: "",
+    fullName: initialName || "",
     phone: preVerifiedPhone || "",
     shopName: "",
     category: "",
@@ -510,7 +533,7 @@ function BrandRegistration({ onBack, preVerifiedUserId, preVerifiedPhone }: { on
       const registerData = await registerRes.json();
       if (!registerRes.ok) throw new Error(registerData.error);
 
-      toast("נרשמתם בהצלחה! 🎉", "success");
+      toast(addRole ? "חשבון העסק נוסף! 🎉 מהפרופיל אפשר לעבור בין הממשקים" : "נרשמתם בהצלחה! 🎉", "success");
       clearCache();
       await refreshAuth();
       router.push("/brand");

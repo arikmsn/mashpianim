@@ -5,6 +5,7 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { getGreenAPI } from "@/lib/adapters/greenapi";
 import { whatsappNotificationsEnabled } from "@/lib/messaging-switch";
 import { isAllowedRegistrationType } from "@/lib/authz";
+import { registrationMode } from "@/lib/viewer";
 import { checkRateLimit, rateLimitedResponse, clientIp, RATE_LIMITS } from "@/lib/rate-limit";
 import { setActiveRoleCookie } from "@/lib/active-role";
 
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     const { data: existingUser } = await supabaseAdmin
       .from("users")
-      .select("id, type, phone")
+      .select("id, type, phone, full_name")
       .eq("auth_user_id", userId)
       .maybeSingle();
 
@@ -67,16 +68,21 @@ export async function POST(request: NextRequest) {
     }
 
     let dbUserId: string;
-    // An existing account keeps its role; registration can only complete it
-    const effectiveType: string = existingUser?.type || userType;
+    // An existing account keeps its type. Registering again with the OTHER type adds that role to the account
+    // (owner, 2026-11-15: creators who also run a business, and the other way round): the missing profile is
+    // created below, this session switches to the new role, and the login screen offers both from now on.
+    const mode = registrationMode(existingUser?.type || null, userType as "creator" | "brand");
+    const effectiveType: string = mode === "add_role" ? userType : existingUser?.type || userType;
     const isNewUser = !existingUser;
+    // Whether this call actually created the profile of the requested role (a repeat call creates nothing)
+    let createdProfile = false;
 
     if (existingUser) {
       const { data: updatedUser, error: updateError } = await supabaseAdmin
         .from("users")
         .update({
           phone,
-          full_name: profile.fullName || "",
+          full_name: profile.fullName || (existingUser as { full_name?: string | null }).full_name || "",
           email: profile.email || authUser.user.email || null,
           onboarding_completed: true,
         })
@@ -136,6 +142,7 @@ export async function POST(request: NextRequest) {
           console.error("[register] creator profile error:", profileError);
           return NextResponse.json({ error: "שגיאה ביצירת פרופיל" }, { status: 500 });
         }
+        createdProfile = true;
       }
     } else if (effectiveType === "brand") {
       const { data: existingProfile } = await supabaseAdmin
@@ -162,6 +169,7 @@ export async function POST(request: NextRequest) {
           console.error("[register] brand profile error:", profileError);
           return NextResponse.json({ error: "שגיאה ביצירת פרופיל עסקי" }, { status: 500 });
         }
+        createdProfile = true;
       }
     }
 
@@ -181,8 +189,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // The new account has exactly one role; the session acts as it from here on
-    const response = NextResponse.json({ success: true, userType: effectiveType, role: effectiveType });
+    // The session acts as the role just registered: a new account's only role, or the role just added
+    const response = NextResponse.json({ success: true, userType: existingUser?.type || effectiveType, role: effectiveType, added: mode === "add_role" && createdProfile });
     if (effectiveType === "creator" || effectiveType === "brand") setActiveRoleCookie(response, effectiveType);
     return response;
   } catch (err) {

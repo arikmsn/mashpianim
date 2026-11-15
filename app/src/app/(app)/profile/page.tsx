@@ -1022,6 +1022,11 @@ export default function ProfilePage() {
               🔁 החלפת ממשק (כרגע: {roleLabel("brand")})
             </Button>
           )}
+          {accountRoles.length === 1 && user && (
+            <Button variant="ghost" fullWidth onClick={() => router.push(`/register?type=creator&verified=1&userId=${user.id}&add=1`)}>
+              🎬 גם יוצר/ת תוכן? הוספת חשבון יוצר/ת
+            </Button>
+          )}
           <Button
             variant="ghost"
             fullWidth
@@ -1315,6 +1320,11 @@ export default function ProfilePage() {
           {accountRoles.length > 1 && (
             <Button variant="ghost" fullWidth onClick={() => setRoleSwitchOpen(true)}>
               🔁 החלפת ממשק (כרגע: {roleLabel("creator")})
+            </Button>
+          )}
+          {accountRoles.length === 1 && user && (
+            <Button variant="ghost" fullWidth onClick={() => router.push(`/register?type=brand&verified=1&userId=${user.id}&add=1`)}>
+              🏪 יש לכם גם עסק? הוספת חשבון עסק
             </Button>
           )}
           <Button

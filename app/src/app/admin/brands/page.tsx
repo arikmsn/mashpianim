@@ -24,6 +24,23 @@ type Brand = {
   description?: string;
 };
 
+// Removes a registration completely (owner, 2026-11-15: a creator who signed up as a business by mistake
+// registers again with the same phone). Two confirmations; the API refuses admins.
+async function deleteUserAccount(userId: string, label: string, toast: (message: string, type?: "success" | "error" | "info") => void): Promise<boolean> {
+  if (!window.confirm(`למחוק את החשבון של ${label}? המשתמש, הפרופיל, המוצרים והחיבורים שלו יימחקו ואי אפשר לבטל. אחרי המחיקה אפשר להירשם מחדש עם אותו מספר.`)) return false;
+  if (window.prompt("לאישור סופי כתבו: מחק") !== "מחק") return false;
+  try {
+    const res = await fetch(`/api/admin/users/${userId}`, { method: "DELETE" });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((payload as { error?: string }).error || "API error");
+    toast("החשבון נמחק", "success");
+    return true;
+  } catch (err) {
+    toast(err instanceof Error ? err.message : "המחיקה נכשלה", "error");
+    return false;
+  }
+}
+
 export default function AdminBrandsPage() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [search, setSearch] = useState("");
@@ -349,6 +366,20 @@ export default function AdminBrandsPage() {
               </Button>
               <Button variant={selectedBrand.isActive ? "danger" : "secondary"} size="sm" onClick={() => toggleActive(selectedBrand)}>
                 {selectedBrand.isActive ? "השבתת עסק" : "הפעלת עסק"}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-red-600"
+                onClick={async () => {
+                  const brand = selectedBrand;
+                  if (await deleteUserAccount(brand.id, brand.name, toast)) {
+                    setBrands((prev) => prev.filter((b) => b.id !== brand.id));
+                    setSelectedBrand(null);
+                  }
+                }}
+              >
+                🗑️ מחיקת החשבון
               </Button>
               <Button variant="ghost" size="sm" onClick={() => setSelectedBrand(null)}>
                 סגירה
