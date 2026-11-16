@@ -84,6 +84,8 @@ export default function AdminDashboard() {
             { label: "סרטונים ממתינים לבדיקה", value: String(s.pending_videos ?? 0), change: "", trend: "down", icon: "⏳", href: "/admin/moderation?tab=videos" },
             { label: "הכנסות החודש", value: `₪${(s.monthly_revenue ?? 0).toLocaleString()}`, change: "", trend: "up", icon: "💰", href: "/admin/brands" },
             { label: "סרטונים שנמכרו החודש", value: String(s.credits_sold ?? 0), change: "", trend: "up", icon: "🎫", href: "/admin/brands" },
+            { label: "SMS היום", value: String(data.messages?.sms?.today ?? 0), change: data.messages ? `${data.messages.sms.week} ב-7 ימים · ${data.messages.sms.month} ב-30 ימים` : "נספר אחרי מיגרציה 023", trend: "up", icon: "📱", href: "/admin/messages" },
+            { label: "WhatsApp היום", value: String(data.messages?.whatsapp?.today ?? 0), change: data.messages ? `${data.messages.whatsapp.week} ב-7 ימים · ${data.messages.whatsapp.month} ב-30 ימים` : "", trend: "up", icon: "💬", href: "/admin/messages" },
           ]);
         } else if (Array.isArray(data.stats)) {
           setStats(data.stats);

@@ -40,6 +40,9 @@ export default function AdminModerationPage() {
   const [selectedVideo, setSelectedVideo] = useState<ModerationItem | null>(null);
   const [items, setItems] = useState<ModerationItem[]>([]);
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
+  // Portfolio paging (100 per page, the total from the API)
+  const [portfolioPage, setPortfolioPage] = useState(1);
+  const [portfolioTotal, setPortfolioTotal] = useState(0);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [chatFlags, setChatFlags] = useState<ChatFlag[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,12 +52,18 @@ export default function AdminModerationPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchData();
+    fetchData(1);
   }, []);
 
-  async function fetchData() {
+  function goPortfolioPage(p: number) {
+    const next = Math.max(1, p);
+    setPortfolioPage(next);
+    fetchData(next);
+  }
+
+  async function fetchData(page: number) {
     try {
-      const res = await fetch("/api/admin/moderation");
+      const res = await fetch(`/api/admin/moderation?portfolio_page=${page}`);
       if (res.ok) {
         const data = await res.json();
         if (data.videos) {
@@ -73,6 +82,7 @@ export default function AdminModerationPage() {
           );
         }
         if (data.portfolioVideos) {
+          setPortfolioTotal(typeof data.portfolioTotal === "number" ? data.portfolioTotal : (data.portfolioVideos as unknown[]).length);
           setPortfolio(
             data.portfolioVideos.map((v: Record<string, unknown>) => ({
               id: v.id as string,
@@ -336,6 +346,16 @@ export default function AdminModerationPage() {
               <p className="text-xs text-neutral-500">
                 סרטוני תיק עבודות מתפרסמים מיד. הסרה מסתירה את הסרטון מעסקים ומורידה אותו מספירת 5 הסרטונים; היוצר/ת מקבל/ת התראה.
               </p>
+              <div className="flex items-center justify-between text-xs text-neutral-500 px-1">
+                <span>{portfolioTotal === 0 ? "אין סרטונים" : `${(portfolioPage - 1) * 100 + 1}–${Math.min(portfolioPage * 100, portfolioTotal)} מתוך ${portfolioTotal} סרטונים`}</span>
+                {portfolioTotal > 100 && (
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => goPortfolioPage(portfolioPage - 1)} disabled={portfolioPage <= 1} className="px-2.5 py-1 rounded-lg bg-neutral-50 hover:bg-neutral-100 disabled:opacity-40">‹ הקודם</button>
+                    <span className="px-2">עמוד {portfolioPage} מתוך {Math.max(1, Math.ceil(portfolioTotal / 100))}</span>
+                    <button onClick={() => goPortfolioPage(portfolioPage + 1)} disabled={portfolioPage >= Math.ceil(portfolioTotal / 100)} className="px-2.5 py-1 rounded-lg bg-neutral-50 hover:bg-neutral-100 disabled:opacity-40">הבא ›</button>
+                  </div>
+                )}
+              </div>
               {portfolio.length === 0 ? (
                 <div className="text-center py-12 text-neutral-400">
                   <span className="text-4xl block mb-3">🗂️</span>

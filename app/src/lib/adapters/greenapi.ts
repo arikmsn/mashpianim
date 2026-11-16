@@ -1,4 +1,5 @@
 import type { MessagingProvider, MessageParams } from "./messaging";
+import { logMessage } from "@/lib/message-log";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://www.mashpian.online";
 
@@ -59,9 +60,13 @@ export class GreenAPIProvider implements MessagingProvider {
         chatId,
         message: params.body,
       });
+      if (params.kind) {
+        await logMessage({ channel: "whatsapp", kind: params.kind, phone: params.to, userId: params.userId, status: "sent", providerRef: result?.idMessage ? String(result.idMessage) : null });
+      }
       return { success: true, messageId: result.idMessage };
     } catch (err) {
       console.error("[GreenAPI] sendWhatsApp error:", err);
+      if (params.kind) await logMessage({ channel: "whatsapp", kind: params.kind, phone: params.to, userId: params.userId, status: "failed" });
       return { success: false };
     }
   }
@@ -72,6 +77,7 @@ export class GreenAPIProvider implements MessagingProvider {
   ): Promise<{ success: boolean; messageId?: string }> {
     return this.sendWhatsApp({
       to: phone,
+      kind: "otp",
       // WhatsApp offers no "copy" for a bare number; the link opens the app with the code filled in
       body: `🔐 *משפיען אונליין* — קוד אימות\n\nהקוד שלך:\n\n*${code}*\n\n👇 או לחצו כאן והקוד יוזן אוטומטית:\n${otpLoginLink(phone, code)}\n\n⏱ תקף ל-5 דקות בלבד.\nאין לשתף את הקוד עם אף אחד.`,
     });
@@ -83,6 +89,7 @@ export class GreenAPIProvider implements MessagingProvider {
   ): Promise<{ success: boolean; messageId?: string }> {
     return this.sendWhatsApp({
       to: phone,
+      kind: "welcome",
       body: [
         `🎉 ברוכים הבאים למשפיען אונליין, ${name}!`,
         ``,
@@ -109,6 +116,7 @@ export class GreenAPIProvider implements MessagingProvider {
   ): Promise<{ success: boolean; messageId?: string }> {
     return this.sendWhatsApp({
       to: phone,
+      kind: "welcome",
       body: [
         `🎉 ברוכים הבאים למשפיען אונליין, ${name}!`,
         ``,
@@ -137,6 +145,7 @@ export class GreenAPIProvider implements MessagingProvider {
   ): Promise<{ success: boolean; messageId?: string }> {
     return this.sendWhatsApp({
       to: phone,
+      kind: "match",
       body: `🎉 חדשות טובות!\n\n${brandName} אישרו את הבקשה שלך למוצר *${productName}*.\n\nהיכנסו לאפליקציה לפרטים נוספים.`,
     });
   }

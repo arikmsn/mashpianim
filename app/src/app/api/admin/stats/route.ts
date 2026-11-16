@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifyAdmin, isSupabaseConfigured } from "@/lib/admin-auth";
+import { bucketCounts, type MessageCounts, type MessageLogRow } from "@/lib/messaging-stats";
 import { capacityStatus, type PlatformUsage } from "@/lib/capacity";
 
 export async function GET() {
@@ -57,6 +58,15 @@ export async function GET() {
   const usage = !usageRes.error && usageRes.data ? (usageRes.data as PlatformUsage) : null;
   const capacity = usage ? { ...capacityStatus(usage), usage } : null;
 
+  // SMS / WhatsApp the platform sent (message_log, migration 023): today / 7 days / 30 days — null until the table exists
+  let messages: MessageCounts | null = null;
+  const { data: logRows, error: logErr } = await supabase
+    .from("message_log")
+    .select("channel, status, created_at")
+    .gte("created_at", new Date(Date.now() - 30 * 86_400_000).toISOString())
+    .limit(20000);
+  if (!logErr) messages = bucketCounts((logRows || []) as MessageLogRow[]);
+
   return NextResponse.json({
     stats: {
       creators_count: creatorsRes.count || 0,
@@ -70,5 +80,6 @@ export async function GET() {
       matches_total: matchesRes.count || 0,
     },
     capacity,
+    messages,
   });
 }

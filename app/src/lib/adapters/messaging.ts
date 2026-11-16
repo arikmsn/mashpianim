@@ -4,6 +4,10 @@ export interface MessageParams {
   body: string;
   templateId?: string;
   templateData?: Record<string, string>;
+  // Bookkeeping for the message log (migration 023): the adapters record the send when `kind` is set
+  // (otp | welcome | heart | match | digest_creator | digest_brand); `userId` = the recipient's users.id when known
+  kind?: string;
+  userId?: string | null;
 }
 
 export interface MessagingProvider {

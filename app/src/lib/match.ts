@@ -29,7 +29,7 @@ export function portfolioGateError(count: number) {
 
 export { buildBriefMessage } from "@/lib/brief";
 
-async function sendWhatsApp(phone: string | null | undefined, body: string) {
+async function sendWhatsApp(phone: string | null | undefined, body: string, kind: "heart" | "match" = "heart") {
   if (!phone) return;
   // Heart / match messages go out only while WHATSAPP_NOTIFICATIONS=on (off by default since the 2026-11-12
   // restriction of the owner's number); the in-app notification was already written by the caller
@@ -37,7 +37,7 @@ async function sendWhatsApp(phone: string | null | undefined, body: string) {
   const api = getGreenAPI();
   if (!api) return;
   try {
-    await api.sendWhatsApp({ to: phone, body });
+    await api.sendWhatsApp({ to: phone, body, kind });
   } catch {
     // best effort
   }
@@ -134,7 +134,8 @@ export async function markMutual(
     if (actor === "creator") {
       await sendWhatsApp(
         brandUser.phone,
-        `🎉 *יש מאטץ'!*\n\n${creatorName} אישר/ה לעבוד איתכם על *${productName}*.\nאשרו את החיבור כדי לפתוח את הצ'אט:\n${APP_URL}/brand/connections?tab=match`
+        `🎉 *יש מאטץ'!*\n\n${creatorName} אישר/ה לעבוד איתכם על *${productName}*.\nאשרו את החיבור כדי לפתוח את הצ'אט:\n${APP_URL}/brand/connections?tab=match`,
+        "match"
       );
     }
   }
@@ -250,7 +251,8 @@ export async function performMatch(admin: Admin, connectionId: string, actorUser
     otherPhone,
     otherIsBrand
       ? `🎉 *יש מאטץ'!*\n\n${creatorName} אישר/ה לעבוד איתכם על *${productName}*.\nהצ'אט פתוח — שלחו את המוצר:\n${APP_URL}/messages`
-      : `🎉 *יש מאטץ'!*\n\n${brandName} אישרו לעבוד איתך על *${productName}*.\nהצ'אט פתוח עם הבריף:\n${APP_URL}/messages`
+      : `🎉 *יש מאטץ'!*\n\n${brandName} אישרו לעבוד איתך על *${productName}*.\nהצ'אט פתוח עם הבריף:\n${APP_URL}/messages`,
+    "match"
   );
 
   return { ok: true };

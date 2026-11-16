@@ -5,6 +5,11 @@ import { capacityStatus, type PlatformUsage } from "@/lib/capacity";
 import { getTimelineSettings } from "@/lib/settings";
 import { paymentsMode } from "@/lib/payments";
 import { reconcileSumitPayments } from "@/lib/payments-server";
+import { brandDigestDue, creatorDigestDue, digestMode } from "@/lib/digests";
+import { runBrandDigest, runCreatorDigest, type DigestRunResult } from "@/lib/digests-server";
+
+// The WhatsApp digests pause between sends; the run may take up to a minute (Vercel Pro)
+export const maxDuration = 60;
 
 // A reminder of the same kind for the same connection is sent at most once per this many hours
 const WARNING_DEDUPE_HOURS = 48;
@@ -37,6 +42,7 @@ export async function GET(request: NextRequest) {
     expired: 0, cancelled: 0, warnings: 0, skipped_duplicates: 0, flagged: 0, purged_otps: 0, purged_rate_limits: 0,
     capacity: "unknown" as string, capacity_alerts: 0,
     payments: null as null | { checked: number; completed: number; expired: number; error?: string },
+    digests: null as null | { mode: string; creators?: DigestRunResult; brands?: DigestRunResult },
   };
 
   // Purchases: a business that paid at SUMIT and closed the tab never reached the return URL — the order is
@@ -348,6 +354,21 @@ export async function GET(request: NextRequest) {
         }, 24);
         if (created) results.capacity_alerts++;
       }
+    }
+  }
+
+  // 6. WhatsApp digests (owner, 2026-11-16): creators at 18:xx every day, businesses on Sunday 10:xx — a few
+  // per run with a pause between them, each heart announced once (lib/digests-server.ts). Off unless
+  // WHATSAPP_DIGESTS=dry|on; dry composes and logs without sending (review in /admin/messages).
+  const mode = digestMode(process.env);
+  if (mode !== "off") {
+    const at = new Date();
+    results.digests = { mode };
+    try {
+      if (creatorDigestDue(at)) results.digests.creators = await runCreatorDigest(supabase, mode, at);
+      if (brandDigestDue(at)) results.digests.brands = await runBrandDigest(supabase, mode, at);
+    } catch (err) {
+      console.error("[cron] digests failed:", err);
     }
   }
 

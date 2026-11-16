@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
       if (!smsLimit.allowed) return "limited";
       const to = toE164(formattedPhone);
       if (!to) return "failed";
-      const r = await twilio.sendSMS({ to, body: otpSmsText(code) });
+      const r = await twilio.sendSMS({ to, body: otpSmsText(code), kind: "otp" });
       return r.success ? "sent" : "failed";
     }
 

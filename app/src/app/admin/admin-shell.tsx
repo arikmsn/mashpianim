@@ -15,6 +15,7 @@ const navItems = [
   { href: "/admin/moderation", label: "מודרציה", icon: "🛡️" },
   { href: "/admin/content", label: "תוכן האתר", icon: "✏️" },
   { href: "/admin/feedback", label: "פניות ותקלות", icon: "📨" },
+  { href: "/admin/messages", label: "הודעות", icon: "📱" },
   { href: "/admin/settings", label: "הגדרות", icon: "⚙️" },
 ];
 

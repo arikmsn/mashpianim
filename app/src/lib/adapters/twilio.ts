@@ -1,5 +1,6 @@
 import type { MessageParams, MessagingProvider } from "./messaging";
 import { isValidTwilioSender } from "@/lib/otp-channel";
+import { logMessage } from "@/lib/message-log";
 
 // Twilio Programmable Messaging, SMS only (owner approved 2026-11-12). Used for the login code as the channel
 // WhatsApp cannot restrict. Plain REST with Basic auth — no SDK dependency. The sender (TWILIO_SMS_FROM) is an
@@ -28,11 +29,14 @@ export class TwilioSmsProvider implements MessagingProvider {
       if (!res.ok) {
         // Twilio's error code + message are safe to log (e.g. 21408 = region not enabled, 21606 = bad From)
         console.error(`[Twilio] sendSMS failed (${res.status}) code=${json.code ?? "?"}: ${json.message ?? ""}`);
+        if (params.kind) await logMessage({ channel: "sms", kind: params.kind, phone: params.to, userId: params.userId, status: "failed", meta: { code: json.code ?? null } });
         return { success: false };
       }
+      if (params.kind) await logMessage({ channel: "sms", kind: params.kind, phone: params.to, userId: params.userId, status: "sent", providerRef: json.sid || null });
       return { success: true, messageId: json.sid };
     } catch (err) {
       console.error("[Twilio] sendSMS error:", err instanceof Error ? err.message : err);
+      if (params.kind) await logMessage({ channel: "sms", kind: params.kind, phone: params.to, userId: params.userId, status: "failed" });
       return { success: false };
     }
   }

@@ -3,7 +3,9 @@ import { verifyAdmin } from "@/lib/admin-auth";
 import { createNotification, logActivity } from "@/lib/notifications";
 
 // Admin moderation: deliverables awaiting an optional admin pass, flagged chat, and portfolio takedowns (MOD-01).
-export async function GET() {
+const PORTFOLIO_PER = 100;
+
+export async function GET(request: NextRequest) {
   const { isAdmin, supabase } = await verifyAdmin();
   if (!isAdmin || !supabase) {
     return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
@@ -30,13 +32,16 @@ export async function GET() {
     return NextResponse.json({ error: vErr.message }, { status: 500 });
   }
 
-  // Latest portfolio videos (any status) with their creators, so an admin can take content down or restore it
-  const { data: portfolioRows } = await supabase
+  // Portfolio videos (any status) with their creators, newest first, paged (owner, 2026-11-16: "show me all of
+  // them"): ?portfolio_page=N, PORTFOLIO_PER per page, the total alongside
+  const portfolioPage = Math.max(1, Math.floor(Number(request.nextUrl.searchParams.get("portfolio_page") || "1")) || 1);
+  const pFrom = (portfolioPage - 1) * PORTFOLIO_PER;
+  const { data: portfolioRows, count: portfolioTotal } = await supabase
     .from("videos")
-    .select("id, creator_id, title, status, thumbnail_url, revision_notes, created_at")
+    .select("id, creator_id, title, status, thumbnail_url, revision_notes, created_at", { count: "exact" })
     .is("connection_id", null)
     .order("created_at", { ascending: false })
-    .limit(100);
+    .range(pFrom, pFrom + PORTFOLIO_PER - 1);
   const creatorIds = Array.from(new Set(((portfolioRows || []) as any[]).map((v) => v.creator_id).filter(Boolean)));
   const { data: creators } = creatorIds.length
     ? await supabase.from("users").select("id, full_name").in("id", creatorIds)
@@ -67,6 +72,9 @@ export async function GET() {
     videos: pendingVideos || [],
     pendingVideos: pendingVideos || [],
     portfolioVideos,
+    portfolioTotal: portfolioTotal || 0,
+    portfolioPage,
+    portfolioPer: PORTFOLIO_PER,
     flaggedMessages: flaggedMessages || [],
   });
 }
