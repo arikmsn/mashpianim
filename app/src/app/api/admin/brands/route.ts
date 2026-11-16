@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyAdmin, isSupabaseConfigured } from "@/lib/admin-auth";
-import { logActivity } from "@/lib/notifications";
+import { createNotification, logActivity } from "@/lib/notifications";
 
 export async function GET() {
   if (!isSupabaseConfigured()) {
@@ -15,7 +15,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from("users")
     .select(`
-      id, full_name, phone, is_active, avatar_url, created_at,
+      *,
       brand_profiles(id, shop_name, category, categories, website_url, total_credits, used_credits, description, logo_url)
     `)
     .eq("type", "brand")
@@ -52,6 +52,10 @@ export async function GET() {
     (purchasesByBrand[t.brand_id] ||= []).push({ id: t.id, amount: Number(t.amount) || 0, credits: t.credits || 0, status: t.status, at: t.created_at, method: t.payment_method || "", ref: t.payment_ref || null });
   }
 
+  // Businesses that already hold a creator account on the same phone (the admin opened it, they registered it)
+  const { data: creatorRows } = await supabase.from("creator_profiles").select("user_id");
+  const creatorUsers = new Set(((creatorRows || []) as { user_id: string }[]).map((c) => c.user_id));
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const brands = (data || []).map((u: any) => {
     const profile = Array.isArray(u.brand_profiles) ? u.brand_profiles[0] : u.brand_profiles;
@@ -62,6 +66,9 @@ export async function GET() {
       hearts_to: hearts,
       purchases,
       purchases_paid: purchases.filter((p) => p.status === "completed").reduce((sum, p) => sum + p.amount, 0),
+      // The admin opened the creator side for this business (022); has_creator_profile = they already registered it
+      dual_role_allowed: u.dual_role_allowed === true,
+      has_creator_profile: creatorUsers.has(u.id),
       id: u.id,
       full_name: u.full_name,
       phone: u.phone,
@@ -96,6 +103,7 @@ export async function PUT(request: NextRequest) {
 
   const body = await request.json();
   const { userId, is_active, total_credits } = body;
+  const dualRole: boolean | undefined = typeof body.dual_role_allowed === "boolean" ? body.dual_role_allowed : undefined;
 
   if (!userId) {
     return NextResponse.json({ error: "מזהה משתמש חסר" }, { status: 400 });
@@ -133,6 +141,27 @@ export async function PUT(request: NextRequest) {
     }
   }
 
+  // The creator side for this business (owner, 2026-11-16): the profile then offers "הוספת חשבון יוצר/ת"
+  if (dualRole !== undefined) {
+    const { error } = await supabase
+      .from("users")
+      .update({ dual_role_allowed: dualRole, dual_role_allowed_at: dualRole ? new Date().toISOString() : null } as any)
+      .eq("id", userId);
+    if (error) {
+      console.error("[admin/brands] dual role update error:", error);
+      return NextResponse.json({ error: /dual_role_allowed/.test(error.message) ? "המיגרציה 022 עדיין לא הופעלה" : "שגיאה בעדכון" }, { status: 500 });
+    }
+    if (dualRole) {
+      await createNotification({
+        userId,
+        type: "dual_role_allowed",
+        title: "🎬 נפתחה לכם האפשרות לחשבון יוצר/ת",
+        body: "בפרופיל מופיע עכשיו \"הוספת חשבון יוצר/ת\" — אותו מספר טלפון, שני ממשקים, מעבר ביניהם מהפרופיל.",
+        data: { role: "brand" },
+      });
+    }
+  }
+
   // Admin actions are audited
   await logActivity({
     actorId: adminId || undefined,
@@ -142,6 +171,7 @@ export async function PUT(request: NextRequest) {
     details: {
       ...(is_active !== undefined ? { is_active } : {}),
       ...(total_credits !== undefined ? { total_credits: Number(total_credits) } : {}),
+      ...(dualRole !== undefined ? { dual_role_allowed: dualRole } : {}),
     },
   });
 

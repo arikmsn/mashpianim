@@ -41,6 +41,7 @@ describe("notification deep links", () => {
     assert.equal(notificationHref({ type: "feedback_updated", data: { feedbackId: "f" } }, "brand"), "/profile?feedback=f");
     assert.equal(notificationHref({ type: "feedback_reply", data: { feedbackId: "f" } }, "creator"), "/profile?feedback=f");
     assert.equal(notificationHref({ type: "feedback_updated", data: null }, "brand"), "/profile");
+    assert.equal(notificationHref({ type: "dual_role_allowed", data: { role: "creator" } }, "creator"), "/profile");
     // Capacity alerts (daily cron) lead admins to the dashboard gauge and nobody else anywhere
     assert.equal(notificationHref({ type: "capacity_warning", data: { role: "admin" } }, "creator", true), "/admin");
     assert.equal(notificationHref({ type: "capacity_warning", data: { role: "admin" } }, "creator", false), null);

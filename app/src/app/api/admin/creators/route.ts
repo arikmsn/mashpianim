@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyAdmin, isSupabaseConfigured } from "@/lib/admin-auth";
-import { logActivity } from "@/lib/notifications";
+import { createNotification, logActivity } from "@/lib/notifications";
 import { aggregateCreators, EMPTY_AGG, type ConnectionRow, type VideoRow } from "@/lib/admin-creators";
 
 // Admin list of creators (owner list, 2026-11-14): name, followers, the real status, portfolio / collaboration
@@ -19,7 +19,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from("users")
     .select(`
-      id, full_name, phone, is_active, is_admin, avatar_url, created_at, last_seen_at,
+      *,
       creator_profiles(id, level, categories, tiktok_handle, instagram_handle, tiktok_followers, instagram_followers, city, bio)
     `)
     .eq("type", "creator")
@@ -46,6 +46,9 @@ export async function GET() {
   if (videosRes.error) console.error("[admin/creators] videos:", videosRes.error.message);
   if (connsRes.error) console.error("[admin/creators] connections:", connsRes.error.message);
   const agg = aggregateCreators((videosRes.data || []) as VideoRow[], (connsRes.data || []) as ConnectionRow[], profileToUser);
+  // Creators who already hold a business account on the same phone (the admin opened it, they registered it)
+  const { data: brandRows } = await supabase.from("brand_profiles").select("user_id");
+  const brandUsers = new Set(((brandRows || []) as { user_id: string }[]).map((b) => b.user_id));
 
   const creators = rows.map((u) => {
     const profile = profileOf(u);
@@ -56,6 +59,9 @@ export async function GET() {
       phone: u.phone || "",
       is_active: u.is_active !== false,
       is_admin: u.is_admin === true,
+      // The admin opened the business side for this creator (022); has_brand_profile = they already registered it
+      dual_role_allowed: u.dual_role_allowed === true,
+      has_brand_profile: brandUsers.has(u.id),
       avatar_url: u.avatar_url,
       created_at: u.created_at,
       last_seen_at: u.last_seen_at || null,
@@ -90,7 +96,8 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
   }
 
-  const body = (await request.json().catch(() => ({}))) as { userId?: string; is_active?: unknown; action?: unknown; level?: unknown };
+  const body = (await request.json().catch(() => ({}))) as { userId?: string; is_active?: unknown; action?: unknown; level?: unknown; dual_role_allowed?: unknown };
+  const dualRole: boolean | undefined = typeof body.dual_role_allowed === "boolean" ? body.dual_role_allowed : undefined;
   const { userId, level } = body;
   let isActive: boolean | undefined = typeof body.is_active === "boolean" ? body.is_active : undefined;
   if (isActive === undefined && (body.action === "suspend" || body.action === "activate")) isActive = body.action === "activate";
@@ -98,7 +105,7 @@ export async function PUT(request: NextRequest) {
   if (!userId || typeof userId !== "string") {
     return NextResponse.json({ error: "חסר userId" }, { status: 400 });
   }
-  if (isActive === undefined && level === undefined) {
+  if (isActive === undefined && level === undefined && dualRole === undefined) {
     return NextResponse.json({ error: "אין מה לעדכן" }, { status: 400 });
   }
 
@@ -117,13 +124,34 @@ export async function PUT(request: NextRequest) {
     }
   }
 
+  // The business side for this creator (owner, 2026-11-16): the profile then offers "הוספת חשבון עסק"
+  if (dualRole !== undefined) {
+    const { error } = await supabase
+      .from("users")
+      .update({ dual_role_allowed: dualRole, dual_role_allowed_at: dualRole ? new Date().toISOString() : null } as any)
+      .eq("id", userId);
+    if (error) {
+      console.error("[admin/creators] dual role update error:", error);
+      return NextResponse.json({ error: /dual_role_allowed/.test(error.message) ? "המיגרציה 022 עדיין לא הופעלה" : "שגיאה בעדכון" }, { status: 500 });
+    }
+    if (dualRole) {
+      await createNotification({
+        userId,
+        type: "dual_role_allowed",
+        title: "🏪 נפתחה לכם האפשרות לחשבון עסק",
+        body: "בפרופיל מופיע עכשיו \"הוספת חשבון עסק\" — אותו מספר טלפון, שני ממשקים, מעבר ביניהם מהפרופיל.",
+        data: { role: "creator" },
+      });
+    }
+  }
+
   // Admin actions are audited
   await logActivity({
     actorId: adminId || undefined,
     action: "admin_update_creator",
     entityType: "user",
     entityId: userId,
-    details: { ...(isActive !== undefined ? { is_active: isActive } : {}), ...(typeof level === "string" ? { level } : {}) },
+    details: { ...(isActive !== undefined ? { is_active: isActive } : {}), ...(typeof level === "string" ? { level } : {}), ...(dualRole !== undefined ? { dual_role_allowed: dualRole } : {}) },
   });
 
   return NextResponse.json({ success: true, is_active: isActive });

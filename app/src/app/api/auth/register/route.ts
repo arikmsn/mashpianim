@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     const { data: existingUser } = await supabaseAdmin
       .from("users")
-      .select("id, type, phone, full_name")
+      .select("*")
       .eq("auth_user_id", userId)
       .maybeSingle();
 
@@ -73,6 +73,13 @@ export async function POST(request: NextRequest) {
     // created below, this session switches to the new role, and the login screen offers both from now on.
     const mode = registrationMode(existingUser?.type || null, userType as "creator" | "brand");
     const effectiveType: string = mode === "add_role" ? userType : existingUser?.type || userType;
+    // The second role opens only for accounts an admin allowed (users.dual_role_allowed, migration 022)
+    if (mode === "add_role" && (existingUser as { dual_role_allowed?: boolean | null } | null)?.dual_role_allowed !== true) {
+      return NextResponse.json(
+        { error: "פתיחת חשבון נוסף דורשת אישור של הצוות — פנו אלינו דרך \"צור קשר\" באתר", code: "dual_role_not_allowed" },
+        { status: 403 }
+      );
+    }
     const isNewUser = !existingUser;
     // Whether this call actually created the profile of the requested role (a repeat call creates nothing)
     let createdProfile = false;

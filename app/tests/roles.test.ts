@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { availableRoles, effectiveRole, otherRole, registrationMode } from "../src/lib/viewer.ts";
+import { addableRole, availableRoles, effectiveRole, otherRole, registrationMode } from "../src/lib/viewer.ts";
 
 describe("a second role on one account (owner, 2026-11-15)", () => {
   test("registering again: same type completes, the other type adds a role, no account is new", () => {
@@ -23,5 +23,20 @@ describe("a second role on one account (owner, 2026-11-15)", () => {
     assert.equal(effectiveRole("brand", "cp-1", "bp-1", "creator"), "creator");
     assert.equal(effectiveRole("brand", "cp-1", "bp-1", null), "brand", "without a chosen role the account's own type wins");
     assert.deepEqual(availableRoles("creator", "cp-1", "bp-2"), ["creator", "brand"]);
+  });
+});
+
+
+describe("the admin opens the second role per account (owner, 2026-11-16)", () => {
+  test("nothing is addable by default", () => {
+    assert.equal(addableRole("creator", false, ["creator"]), null);
+    assert.equal(addableRole("brand", null, ["brand"]), null);
+    assert.equal(addableRole("creator", undefined, ["creator"]), null);
+  });
+  test("once allowed, the other role is addable until the account holds both", () => {
+    assert.equal(addableRole("creator", true, ["creator"]), "brand");
+    assert.equal(addableRole("brand", true, ["brand"]), "creator");
+    assert.equal(addableRole("creator", true, ["creator", "brand"]), null);
+    assert.equal(addableRole("admin", true, ["admin"]), null);
   });
 });

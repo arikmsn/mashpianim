@@ -91,3 +91,16 @@ export function registrationMode(existingType: string | null | undefined, reques
 export function otherRole(role: RegistrationType): RegistrationType {
   return role === "creator" ? "brand" : "creator";
 }
+
+// The role an account may still add: only when an admin opened it (users.dual_role_allowed, migration 022),
+// only for creator / business accounts, and only while the account does not already hold both.
+export function addableRole(
+  type: string | null | undefined,
+  dualRoleAllowed: boolean | null | undefined,
+  roles: readonly string[]
+): RegistrationType | null {
+  if (dualRoleAllowed !== true) return null;
+  if (type !== "creator" && type !== "brand") return null;
+  if (roles.includes("creator") && roles.includes("brand")) return null;
+  return otherRole(type);
+}

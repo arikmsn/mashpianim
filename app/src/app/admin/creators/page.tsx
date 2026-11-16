@@ -27,6 +27,9 @@ type Creator = {
   videos_collab: number;
   hearts_from_brands: number;
   matches: number;
+  // The admin opened the business side (022) / the creator already registered it
+  dual_role_allowed: boolean;
+  has_brand_profile: boolean;
 };
 
 // Creators list (owner list, 2026-11-14). The previous screen expected other field names than the API sent —
@@ -73,6 +76,28 @@ export default function AdminCreatorsPage() {
     if (filter === "suspended" && c.is_active) return false;
     return matchesSearch(c, search);
   });
+
+  // Opens (or closes) the business side for this creator; the profile then offers "הוספת חשבון עסק"
+  async function toggleDual(c: Creator) {
+    const next = !c.dual_role_allowed;
+    if (next && !window.confirm(`לפתוח ל${displayName(c.name, c.phone)} את האפשרות לחשבון עסק? היוצר/ת יראו בפרופיל "הוספת חשבון עסק" ויקבלו התראה.`)) return;
+    setBusy(c.id);
+    try {
+      const res = await fetch("/api/admin/creators", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: c.id, dual_role_allowed: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || "API error");
+      setCreators((prev) => prev.map((x) => (x.id === c.id ? { ...x, dual_role_allowed: next } : x)));
+      toast(next ? "נפתחה האפשרות לחשבון עסק" : "האפשרות נסגרה", "success");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "שגיאה בעדכון", "error");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   const counts = { all: creators.length, active: creators.filter((c) => c.is_active).length, suspended: creators.filter((c) => !c.is_active).length };
 
@@ -135,6 +160,7 @@ export default function AdminCreatorsPage() {
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">סרטונים</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">לבבות מעסקים</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">מאטצ&apos;ים</th>
+                <th className="px-4 py-3 text-xs font-medium text-neutral-400">גם עסק</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">כניסה אחרונה</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">פעולות</th>
               </tr>
@@ -171,6 +197,20 @@ export default function AdminCreatorsPage() {
                     </td>
                     <td className="px-4 py-3 text-sm">💗 {c.hearts_from_brands}</td>
                     <td className="px-4 py-3 text-sm">🤝 {c.matches}</td>
+                    <td className="px-4 py-3">
+                      {c.has_brand_profile ? (
+                        <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full whitespace-nowrap">🏪 יש חשבון עסק</span>
+                      ) : (
+                        <button
+                          onClick={() => toggleDual(c)}
+                          disabled={busy === c.id || c.is_admin}
+                          title={c.dual_role_allowed ? "היוצר/ת רואים בפרופיל 'הוספת חשבון עסק' — לחיצה סוגרת" : "לפתוח ליוצר/ת את האפשרות לחשבון עסק"}
+                          className={`px-2.5 py-1 rounded-lg text-xs transition-colors disabled:opacity-50 whitespace-nowrap ${c.dual_role_allowed ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-neutral-50 text-neutral-500 hover:bg-neutral-100"}`}
+                        >
+                          {c.dual_role_allowed ? "✅ מאושר" : "🏪 לאפשר"}
+                        </button>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-xs text-neutral-600 whitespace-nowrap" title={c.last_seen_at || ""}>
                       {lastSeenLabel(c.last_seen_at)}
                     </td>
@@ -193,7 +233,7 @@ export default function AdminCreatorsPage() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-neutral-400 text-sm">
+                  <td colSpan={9} className="px-4 py-12 text-center text-neutral-400 text-sm">
                     לא נמצאו יוצרים
                   </td>
                 </tr>

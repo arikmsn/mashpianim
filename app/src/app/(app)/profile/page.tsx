@@ -595,6 +595,8 @@ export default function ProfilePage() {
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   // Every role the account holds; more than one → the profile offers switching
   const [accountRoles, setAccountRoles] = useState<AppRole[]>([]);
+  // The admin opened the second role for this account (users.dual_role_allowed, 022)
+  const [dualRoleAllowed, setDualRoleAllowed] = useState(false);
   const [roleSwitchOpen, setRoleSwitchOpen] = useState(false);
   const { user, loading: authLoading, signOut } = useAuth();
   const { toast } = useToast();
@@ -643,6 +645,7 @@ export default function ProfilePage() {
         // The screen follows the role this session is signed in as, not the account type
         const sessionRole = payload.role || userData.type;
         setAccountRoles(Array.isArray(payload.roles) ? (payload.roles as AppRole[]) : []);
+        setDualRoleAllowed(userData.dual_role_allowed === true);
 
         if (sessionRole === "creator") {
           const creatorData = profileData as any;
@@ -1022,7 +1025,7 @@ export default function ProfilePage() {
               🔁 החלפת ממשק (כרגע: {roleLabel("brand")})
             </Button>
           )}
-          {accountRoles.length === 1 && user && (
+          {accountRoles.length === 1 && dualRoleAllowed && user && (
             <Button variant="ghost" fullWidth onClick={() => router.push(`/register?type=creator&verified=1&userId=${user.id}&add=1`)}>
               🎬 גם יוצר/ת תוכן? הוספת חשבון יוצר/ת
             </Button>
@@ -1322,7 +1325,7 @@ export default function ProfilePage() {
               🔁 החלפת ממשק (כרגע: {roleLabel("creator")})
             </Button>
           )}
-          {accountRoles.length === 1 && user && (
+          {accountRoles.length === 1 && dualRoleAllowed && user && (
             <Button variant="ghost" fullWidth onClick={() => router.push(`/register?type=brand&verified=1&userId=${user.id}&add=1`)}>
               🏪 יש לכם גם עסק? הוספת חשבון עסק
             </Button>

@@ -29,6 +29,8 @@ export function notificationHref(n: NotificationLike, role: ViewerRole, isAdmin 
   // Purchases (SUMIT): the business lands on its home (the credits card), admins on the businesses screen
   if (n.type === "credits_loaded") return role === "brand" ? "/brand" : "/profile";
   if (n.type === "purchase_received") return isAdmin ? "/admin/brands" : null;
+  // The admin opened the second role: the profile has the "הוספת חשבון …" button
+  if (n.type === "dual_role_allowed") return "/profile";
 
   if (CHAT_NOTIFICATION_TYPES.has(n.type)) {
     return connectionId ? `/messages?connection=${connectionId}` : "/messages";

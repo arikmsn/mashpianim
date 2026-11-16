@@ -41,6 +41,8 @@ type Payload = {
     instagram_followers: number;
     hearts_from_brands: number;
     matches: number;
+    dual_role_allowed: boolean;
+    has_brand_profile: boolean;
   };
   portfolio: AdminVideo[];
   collab: AdminVideo[];
@@ -125,6 +127,29 @@ export default function AdminCreatorPage() {
     }
   }
 
+  // Opens (or closes) the business side for this creator; the profile then offers "הוספת חשבון עסק"
+  async function toggleDual() {
+    if (!data) return;
+    const next = !data.creator.dual_role_allowed;
+    if (next && !window.confirm("לפתוח את האפשרות לחשבון עסק? היוצר/ת יראו בפרופיל \"הוספת חשבון עסק\" ויקבלו התראה.")) return;
+    setBusy("dual");
+    try {
+      const res = await fetch("/api/admin/creators", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: data.creator.id, dual_role_allowed: next }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((payload as { error?: string }).error || "API error");
+      setData({ ...data, creator: { ...data.creator, dual_role_allowed: next } });
+      toast(next ? "נפתחה האפשרות לחשבון עסק" : "האפשרות נסגרה", "success");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "שגיאה בעדכון", "error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   // Removes the registration completely (owner, 2026-11-15); the phone can then sign up again
   async function deleteAccount() {
     if (!data) return;
@@ -163,6 +188,20 @@ export default function AdminCreatorPage() {
               {c.is_admin && <Badge variant="purple" size="sm">מנהל/ת</Badge>}
             </div>
             <p className="text-sm text-neutral-500 mt-1" dir="ltr">{c.phone}</p>
+            <div className="mt-2 flex items-center gap-2 flex-wrap text-xs">
+              {c.has_brand_profile ? (
+                <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">🏪 יש גם חשבון עסק על המספר הזה</span>
+              ) : (
+                <>
+                  <span className="text-neutral-500">{c.dual_role_allowed ? "✅ מאושר לפתוח גם חשבון עסק (רואה \"הוספת חשבון עסק\" בפרופיל)" : "חשבון עסק מקביל: לא פתוח"}</span>
+                  {!c.is_admin && (
+                    <button type="button" disabled={busy === "dual"} onClick={toggleDual} className="text-pink-600 hover:underline disabled:opacity-50">
+                      {busy === "dual" ? "..." : c.dual_role_allowed ? "סגירת האפשרות" : "לאפשר חשבון עסק"}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-sm">
               <div><span className="text-neutral-400 text-xs block">עוקבים באינסטגרם</span>📸 {formatFollowers(c.instagram_followers)}{c.instagram_handle ? <span className="text-neutral-400 text-xs"> @{c.instagram_handle}</span> : null}</div>
               <div><span className="text-neutral-400 text-xs block">עוקבים בטיקטוק</span>🎵 {formatFollowers(c.tiktok_followers)}{c.tiktok_handle ? <span className="text-neutral-400 text-xs"> @{c.tiktok_handle}</span> : null}</div>

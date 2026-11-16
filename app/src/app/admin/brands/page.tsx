@@ -18,6 +18,9 @@ type Brand = {
   // Orders through SUMIT (newest first) and what was actually paid
   purchases: { id: string; amount: number; credits: number; status: string; at: string; method: string; ref: string | null }[];
   purchasesPaid: number;
+  // The admin opened the creator side (022) / the business already registered it
+  dualRoleAllowed: boolean;
+  hasCreatorProfile: boolean;
   joined: string;
   category?: string;
   websiteUrl?: string;
@@ -51,6 +54,26 @@ export default function AdminBrandsPage() {
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
+  // Opens (or closes) the creator side for this business; the profile then offers "הוספת חשבון יוצר/ת"
+  async function toggleDual(brand: Brand) {
+    const next = !brand.dualRoleAllowed;
+    if (next && !window.confirm(`לפתוח ל${brand.name} את האפשרות לחשבון יוצר/ת? העסק יראה בפרופיל "הוספת חשבון יוצר/ת" ויקבל התראה.`)) return;
+    try {
+      const res = await fetch("/api/admin/brands", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: brand.id, dual_role_allowed: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || "API error");
+      setBrands((prev) => prev.map((b) => (b.id === brand.id ? { ...b, dualRoleAllowed: next } : b)));
+      setSelectedBrand((prev) => (prev && prev.id === brand.id ? { ...prev, dualRoleAllowed: next } : prev));
+      toast(next ? "נפתחה האפשרות לחשבון יוצר/ת" : "האפשרות נסגרה", "success");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "שגיאה בעדכון", "error");
+    }
+  }
+
   useEffect(() => {
     async function fetchBrands() {
       try {
@@ -70,6 +93,8 @@ export default function AdminBrandsPage() {
             heartsTo: Array.isArray(b.hearts_to) ? (b.hearts_to as { name: string; status: string; at: string }[]) : [],
             purchases: Array.isArray(b.purchases) ? (b.purchases as Brand["purchases"]) : [],
             purchasesPaid: (b.purchases_paid as number) || 0,
+            dualRoleAllowed: b.dual_role_allowed === true,
+            hasCreatorProfile: b.has_creator_profile === true,
             usedCredits: (b.used_credits as number) || 0,
             joined: b.created_at ? new Date(b.created_at as string).toLocaleDateString("he-IL") : "",
             category: (Array.isArray(b.categories) && (b.categories as string[]).length > 0
@@ -191,6 +216,7 @@ export default function AdminBrandsPage() {
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">סרטונים (נותרו / סה״כ)</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">נוצלו</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">לבבות ששלחו</th>
+                <th className="px-4 py-3 text-xs font-medium text-neutral-400">גם יוצר/ת</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">פעולות</th>
               </tr>
             </thead>
@@ -228,6 +254,19 @@ export default function AdminBrandsPage() {
                     )}
                   </td>
                   <td className="px-4 py-3">
+                    {brand.hasCreatorProfile ? (
+                      <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full whitespace-nowrap">🎬 יש חשבון יוצר/ת</span>
+                    ) : (
+                      <button
+                        onClick={() => toggleDual(brand)}
+                        title={brand.dualRoleAllowed ? "העסק רואה בפרופיל 'הוספת חשבון יוצר/ת' — לחיצה סוגרת" : "לפתוח לעסק את האפשרות לחשבון יוצר/ת"}
+                        className={`px-2.5 py-1 rounded-lg text-xs transition-colors whitespace-nowrap ${brand.dualRoleAllowed ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-neutral-50 text-neutral-500 hover:bg-neutral-100"}`}
+                      >
+                        {brand.dualRoleAllowed ? "✅ מאושר" : "🎬 לאפשר"}
+                      </button>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
                     <div className="flex gap-1">
                       <button
                         onClick={() => setSelectedBrand(brand)}
@@ -247,7 +286,7 @@ export default function AdminBrandsPage() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-neutral-400 text-sm">
+                  <td colSpan={8} className="px-4 py-12 text-center text-neutral-400 text-sm">
                     לא נמצאו עסקים
                   </td>
                 </tr>
@@ -306,6 +345,16 @@ export default function AdminBrandsPage() {
                     </li>
                   ))}
                 </ul>
+              )}
+            </div>
+            <div className="bg-neutral-50 rounded-xl p-3 flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-xs text-neutral-700">
+                🎬 חשבון יוצר/ת מקביל: {selectedBrand.hasCreatorProfile ? "קיים (אותו מספר, שני ממשקים)" : selectedBrand.dualRoleAllowed ? "מאושר — העסק רואה \"הוספת חשבון יוצר/ת\" בפרופיל" : "לא פתוח"}
+              </p>
+              {!selectedBrand.hasCreatorProfile && (
+                <Button size="sm" variant="secondary" onClick={() => toggleDual(selectedBrand)}>
+                  {selectedBrand.dualRoleAllowed ? "סגירת האפשרות" : "לאפשר חשבון יוצר/ת"}
+                </Button>
               )}
             </div>
             {selectedBrand.description && (

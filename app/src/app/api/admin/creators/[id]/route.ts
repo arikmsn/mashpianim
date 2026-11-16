@@ -16,7 +16,7 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
   const { data: u } = await supabase
     .from("users")
     .select(`
-      id, full_name, phone, is_active, is_admin, avatar_url, created_at, last_seen_at, type,
+      *,
       creator_profiles(id, level, categories, tiktok_handle, instagram_handle, tiktok_followers, instagram_followers, city, bio)
     `)
     .eq("id", id)
@@ -25,6 +25,7 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
 
   const user = u as any;
   const profile = Array.isArray(user.creator_profiles) ? user.creator_profiles[0] : user.creator_profiles;
+  const { data: brandProfile } = await supabase.from("brand_profiles").select("id").eq("user_id", id).maybeSingle();
 
   const [{ data: videos, error: vErr }, connsRes] = await Promise.all([
     supabase
@@ -73,6 +74,8 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
       type: user.type,
       is_active: user.is_active !== false,
       is_admin: user.is_admin === true,
+      dual_role_allowed: user.dual_role_allowed === true,
+      has_brand_profile: !!brandProfile,
       avatar_url: user.avatar_url,
       created_at: user.created_at,
       last_seen_at: user.last_seen_at || null,
