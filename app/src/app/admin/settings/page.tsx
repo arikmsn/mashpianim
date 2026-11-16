@@ -5,7 +5,7 @@ import { Card, CardTitle, Button, Input, useToast } from "@/components/ui";
 
 const defaultSettings = {
   general: { platformName: "Mashpian", supportEmail: "info@mashpian.online", supportPhone: "" },
-  credits: { single: "100", pack5: "450", pack10: "800", pack20: "1400" },
+  credits: { single: "100", pack5: "450", pack10: "800", pack20: "1400", discount: "15" },
   moderation: { ocrCheck: true, chatFilter: true, speechDetection: true, contentFilter: true },
   timelines: { shipDays: "7", filmDays: "10", reviewDays: "7", maxRevisions: "2" },
 };
@@ -39,6 +39,7 @@ function fromApi(api: ApiSettings): Settings {
       pack5: str(c.pack_5_price, "450"),
       pack10: str(c.pack_10_price, "800"),
       pack20: str(c.pack_20_price, "1400"),
+      discount: str(c.first_purchase_discount_pct, "15"),
     },
     moderation: {
       ocrCheck: bool(m.auto_ocr, true),
@@ -63,6 +64,7 @@ function toApi(s: Settings): ApiSettings {
       pack_5_price: num(s.credits.pack5, 450),
       pack_10_price: num(s.credits.pack10, 800),
       pack_20_price: num(s.credits.pack20, 1400),
+      first_purchase_discount_pct: num(s.credits.discount, 15),
     },
     moderation: {
       auto_ocr: s.moderation.ocrCheck,
@@ -178,6 +180,7 @@ export default function AdminSettingsPage() {
             <Input label="חבילת 5 פניות (₪)" value={settings.credits.pack5} onChange={(e) => updateCredits("pack5", e.target.value)} type="number" dir="ltr" />
             <Input label="חבילת 10 פניות (₪)" value={settings.credits.pack10} onChange={(e) => updateCredits("pack10", e.target.value)} type="number" dir="ltr" />
             <Input label="חבילת 20 פניות (₪)" value={settings.credits.pack20} onChange={(e) => updateCredits("pack20", e.target.value)} type="number" dir="ltr" />
+            <Input label="הנחת רכישה ראשונה (%) — 0 = בלי הנחה" value={settings.credits.discount} onChange={(e) => updateCredits("discount", e.target.value)} type="number" dir="ltr" />
           </div>
         </Card>
 

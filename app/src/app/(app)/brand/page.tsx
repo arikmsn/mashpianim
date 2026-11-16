@@ -408,8 +408,8 @@ export default function BrandDiscoverPage() {
             </div>
             <button
               type="button"
-              onClick={() => setPurchaseOpen(true)}
-              title="סרטונים בחבילה"
+              onClick={() => router.push("/brand/billing")}
+              title="סרטונים וחיוב"
               className={`text-xs font-bold px-3 py-1.5 rounded-full ${credits.remaining > 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}
             >
               🎬 {credits.remaining} סרטונים
@@ -631,7 +631,7 @@ export default function BrandDiscoverPage() {
         <Card padding="sm" className="mt-4">
           <div className="flex items-center justify-between px-2 py-1">
             <span className="text-sm">🎬 {credits.remaining} מתוך {credits.total} סרטונים נותרים</span>
-            <Button size="sm" variant="secondary" onClick={() => setPurchaseOpen(true)}>
+            <Button size="sm" variant="secondary" onClick={() => router.push("/brand/billing")}>
               רכישה
             </Button>
           </div>

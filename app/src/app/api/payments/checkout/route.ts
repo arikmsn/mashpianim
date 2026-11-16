@@ -4,11 +4,12 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/admin-auth";
 import { resolveViewer } from "@/lib/viewer";
 import { readActiveRole } from "@/lib/active-role";
-import { getCreditPrices } from "@/lib/settings";
+import { getCreditPrices, getFirstPurchaseDiscount } from "@/lib/settings";
 import { logActivity } from "@/lib/notifications";
 import { checkRateLimit, rateLimitedResponse, RATE_LIMITS } from "@/lib/rate-limit";
-import { buildBeginRedirectBody, isPackageId, packageOffers, paymentsMode, purchasesOpenFor, validateBilling } from "@/lib/payments";
+import { applyFirstPurchaseDiscount, buildBeginRedirectBody, isPackageId, packageOffers, paymentsMode, purchasesOpenFor, validateBilling } from "@/lib/payments";
 import { sumitBeginRedirect, sumitCredentials } from "@/lib/adapters/sumit";
+import { firstPurchaseEligible } from "@/lib/payments-server";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://www.mashpian.online";
 
@@ -21,6 +22,7 @@ function getAdminClient() {
 
 // POST { package, billing: { name, companyNumber?, email } } → { url } of SUMIT's payment page.
 // Opens a pending `transactions` row (the order) first; its id is the ExternalIdentifier SUMIT hands back.
+// The first-purchase discount is applied here again from the settings (never from the client).
 export async function POST(request: NextRequest) {
   if (!isSupabaseConfigured()) return NextResponse.json({ error: "המערכת לא מוגדרת" }, { status: 503 });
   const userClient = await createServerClient();
@@ -47,8 +49,13 @@ export async function POST(request: NextRequest) {
   const limit = await checkRateLimit(admin, "checkout:user", viewer.userId, RATE_LIMITS.checkoutUser);
   if (!limit.allowed) return rateLimitedResponse(limit);
 
-  const offer = packageOffers(await getCreditPrices(admin)).find((o) => o.id === body!.package)!;
-  const { data: account } = await admin.from("users").select("phone").eq("id", viewer.userId).maybeSingle();
+  const [prices, discountPct, eligible, { data: account }] = await Promise.all([
+    getCreditPrices(admin),
+    getFirstPurchaseDiscount(admin),
+    firstPurchaseEligible(admin, viewer.brandProfileId),
+    admin.from("users").select("phone").eq("id", viewer.userId).maybeSingle(),
+  ]);
+  const offer = applyFirstPurchaseDiscount(packageOffers(prices), discountPct > 0 && eligible ? discountPct : 0).find((o) => o.id === body!.package)!;
 
   // The invoice details stick to the business for next time (021)
   const { error: billingErr } = await admin
@@ -102,7 +109,7 @@ export async function POST(request: NextRequest) {
     action: "purchase_started",
     entityType: "transaction",
     entityId: transactionId,
-    details: { package: offer.id, credits: offer.credits, amount: offer.price },
+    details: { package: offer.id, credits: offer.credits, amount: offer.price, discount_pct: offer.discountPct || 0 },
   });
   return NextResponse.json({ url: page.data, transactionId });
 }

@@ -995,7 +995,7 @@ export default function ProfilePage() {
                 <span className="text-sm font-medium">
                   🎬 {brandProfile.totalCredits - brandProfile.usedCredits} סרטונים נותרים
                 </span>
-                <Button size="sm" variant="secondary" onClick={() => setPurchaseOpen(true)}>רכישת סרטונים</Button>
+                <Button size="sm" variant="secondary" onClick={() => router.push("/brand/billing")}>רכישת סרטונים</Button>
               </div>
               {creditsCardHint(brandProfile.totalCredits, brandProfile.usedCredits) && (
                 <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5 mt-2">

@@ -3,10 +3,13 @@ import { verifyAdmin, isSupabaseConfigured } from "@/lib/admin-auth";
 import { createClient } from "@/lib/supabase/server";
 import { logActivity } from "@/lib/notifications";
 import { ONBOARDING_CONTENT_DEFAULTS } from "@/lib/onboarding";
+import { BILLING_CONTENT_DEFAULTS, BILLING_CONTENT_SECTION } from "@/lib/billing-content";
 
 const defaultContent: Record<string, Record<string, string>> = {
   // The creator walkthrough copy, editable like the landing text (lib/onboarding.ts is the source of truth)
   ...ONBOARDING_CONTENT_DEFAULTS,
+  // The business's "סרטונים וחיוב" page (lib/billing-content.ts)
+  [BILLING_CONTENT_SECTION]: BILLING_CONTENT_DEFAULTS,
   hero: {
     badge: "הפלטפורמה ליוצרי תוכן ומותגים בישראל",
     title_line1: "יוצרים תוכן.",

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardTitle, Button, useToast } from "@/components/ui";
 import { ONBOARDING_CONTENT_DEFAULTS, ONBOARDING_WELCOME_SECTION, ONBOARDING_MOMENTS_SECTION } from "@/lib/onboarding";
+import { BILLING_CONTENT_DEFAULTS, BILLING_CONTENT_FIELDS, BILLING_CONTENT_SECTION } from "@/lib/billing-content";
 
 type ContentSection = {
   id: string;
@@ -127,6 +128,11 @@ const defaultContent: ContentSection[] = [
       { key: "match_primary", label: "המאטץ' הראשון — כפתור ראשי", type: "text", value: M.match_primary },
       { key: "match_secondary", label: "המאטץ' הראשון — כפתור משני", type: "text", value: M.match_secondary },
     ],
+  },
+  {
+    id: BILLING_CONTENT_SECTION,
+    label: "עסקים — עמוד \"סרטונים וחיוב\" (מחירים, מדיניות, שאלות ותשובות)",
+    fields: BILLING_CONTENT_FIELDS.map((f) => ({ key: f.key, label: f.label, type: f.type, value: BILLING_CONTENT_DEFAULTS[f.key] || "" })),
   },
 ];
 

@@ -52,6 +52,9 @@ export interface PackageOffer {
   label: string;
   // The best price per video among the multi-video packages
   best: boolean;
+  // Set when the first-purchase discount applies (applyFirstPurchaseDiscount)
+  originalPrice?: number;
+  discountPct?: number;
 }
 
 export function packageLabel(credits: number): string {
@@ -144,7 +147,8 @@ export interface BeginRedirectParams {
 }
 
 export function packageItemName(offer: PackageOffer): string {
-  return `חבילת ${offer.label} — משפיען אונליין`;
+  const base = `חבילת ${offer.label} — משפיען אונליין`;
+  return offer.discountPct ? `${base} (${offer.discountPct}% הנחת רכישה ראשונה)` : base;
 }
 
 // The body of POST /billing/payments/beginredirect/. VATIncluded with the gross price keeps the charge equal
@@ -266,4 +270,34 @@ export function purchaseOutcomeText(outcome: string | null | undefined, credits?
     default:
       return null;
   }
+}
+
+// --- First-purchase discount (owner, 2026-11-16: "מתנת פתיחה") --------------------------------------------
+// A percentage from the admin settings (site_settings "credits" → first_purchase_discount_pct), applied to a
+// business's first completed online order. The server decides (never the client), both when listing and when
+// opening the order; SUMIT charges the discounted price, the item name says so.
+export const FIRST_PURCHASE_DISCOUNT_DEFAULT = 15;
+
+export function parseFirstPurchaseDiscount(data: unknown): number {
+  const d = (data && typeof data === "object" ? data : {}) as Record<string, unknown>;
+  const raw = d.first_purchase_discount_pct;
+  if (raw === undefined || raw === null || raw === "") return FIRST_PURCHASE_DISCOUNT_DEFAULT;
+  const n = typeof raw === "number" ? raw : Number(String(raw).trim());
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(90, Math.floor(n));
+}
+
+// With pct > 0 every offer gets `originalPrice` and the discounted `price` / `perVideo`; pct 0 leaves them as is
+export function applyFirstPurchaseDiscount(offers: PackageOffer[], pct: number): PackageOffer[] {
+  if (!(pct > 0)) return offers.map((o) => ({ ...o, originalPrice: undefined, discountPct: 0 }));
+  return offers.map((o) => {
+    const price = Math.round(o.price * (100 - pct)) / 100;
+    return { ...o, originalPrice: o.price, discountPct: pct, price, perVideo: Math.round((price / o.credits) * 100) / 100 };
+  });
+}
+
+// What a package saves against buying its videos one by one (0 when it does not)
+export function savingsVsSingle(offer: PackageOffer, singlePrice: number): number {
+  const saving = Math.round((offer.credits * singlePrice - offer.price) * 100) / 100;
+  return saving > 0 ? saving : 0;
 }

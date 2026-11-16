@@ -19,6 +19,8 @@ const defaultSettings: Record<Section, Record<string, unknown>> = {
     pack_5_price: 450,
     pack_10_price: 800,
     pack_20_price: 1400,
+    // Percentage off a business's first online order (0 = none); shown as "מתנת פתיחה" on the billing page
+    first_purchase_discount_pct: 15,
   },
   moderation: {
     auto_ocr: true,

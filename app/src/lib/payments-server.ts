@@ -158,3 +158,9 @@ export async function reconcileSumitPayments(admin: Admin): Promise<{ checked: n
   }
   return out;
 }
+
+// A business that never completed an online order gets the first-purchase discount (admin settings)
+export async function firstPurchaseEligible(admin: Admin, brandProfileId: string): Promise<boolean> {
+  const { count } = await admin.from("transactions").select("id", { count: "exact", head: true }).eq("brand_id", brandProfileId).eq("status", "completed");
+  return (count || 0) === 0;
+}

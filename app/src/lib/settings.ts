@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { parseCreditPrices, type CreditPrices } from "./payments.ts";
+import { parseCreditPrices, parseFirstPurchaseDiscount, type CreditPrices } from "./payments.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Admin = SupabaseClient<any, any, any, any, any>;
@@ -45,6 +45,16 @@ export async function getCreditPrices(admin: Admin): Promise<CreditPrices> {
     return parseCreditPrices((data as { data?: unknown } | null)?.data);
   } catch {
     return parseCreditPrices(null);
+  }
+}
+
+// The first-purchase discount (%) — same settings row as the prices
+export async function getFirstPurchaseDiscount(admin: Admin): Promise<number> {
+  try {
+    const { data } = await admin.from("site_settings").select("data").eq("id", "credits").maybeSingle();
+    return parseFirstPurchaseDiscount((data as { data?: unknown } | null)?.data);
+  } catch {
+    return parseFirstPurchaseDiscount(null);
   }
 }
 
