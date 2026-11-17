@@ -1,17 +1,25 @@
-// The WhatsApp digests, run from the cron (every 15 minutes) inside their hour windows. Server-only.
-// Volume control: at most SENDS_PER_RUN messages per run, SEND_GAP_MS apart; each heart is announced once
+// The digests, run from the cron (every 15 minutes) inside their hour windows. Server-only.
+// Channel rule (owner, 2026-11-17): WhatsApp only into a chat that already exists with our number
+// (lib/whatsapp-known.ts); everyone else gets a short SMS (DIGEST_SMS=off skips them instead). Volume control:
+// at most SENDS_PER_RUN messages per run, SEND_GAP_MS apart; each heart is announced once
 // (message_log.meta.heart_ids), a business gets one summary a week. WHATSAPP_DIGESTS=dry composes and logs
 // everything with status "dry" and sends nothing — the owner reviews the texts in /admin/messages first.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getGreenAPI } from "@/lib/adapters/greenapi";
-import { logMessage } from "@/lib/message-log";
+import { getTwilio } from "@/lib/adapters/twilio";
+import { logMessage, type MessageChannel } from "@/lib/message-log";
+import { toE164 } from "@/lib/otp-channel";
+import { knownWhatsAppPhones } from "@/lib/whatsapp-known";
 import {
   HEART_WINDOW_DAYS,
   SENDS_PER_RUN,
   SEND_GAP_MS,
+  brandDigestSms,
   brandDigestText,
   brandDigestWorthSending,
+  creatorDigestSms,
   creatorDigestText,
+  digestSmsEnabled,
   newHeartsFor,
   type DigestMode,
   type HeartForDigest,
@@ -24,26 +32,47 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://www.mashpian.online"
 
 export interface DigestRunResult {
   eligible: number;
-  sent: number;
+  sent: number; // WhatsApp sends
+  sms: number; // SMS sends (no WhatsApp chat)
   dry: number;
   failed: number;
-  skipped: number;
+  skipped: number; // nothing new for them
+  skipped_no_channel: number; // no chat and SMS digests off
   error?: string;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function deliver(mode: DigestMode, phone: string, body: string): Promise<"sent" | "dry" | "failed"> {
+function emptyResult(): DigestRunResult {
+  return { eligible: 0, sent: 0, sms: 0, dry: 0, failed: 0, skipped: 0, skipped_no_channel: 0 };
+}
+
+// Sends (or, in dry mode, only composes) one digest; the caller logs it with its own meta
+async function deliver(mode: DigestMode, channel: MessageChannel, phone: string, body: string): Promise<"sent" | "dry" | "failed"> {
   if (mode === "dry") return "dry";
-  const api = getGreenAPI();
-  if (!api) return "failed";
-  const r = await api.sendWhatsApp({ to: phone, body });
+  if (channel === "whatsapp") {
+    const api = getGreenAPI();
+    if (!api) return "failed";
+    const r = await api.sendWhatsApp({ to: phone, body });
+    return r.success ? "sent" : "failed";
+  }
+  const twilio = getTwilio();
+  const to = toE164(phone);
+  if (!twilio || !to) return "failed";
+  const r = await twilio.sendSMS({ to, body });
   return r.success ? "sent" : "failed";
+}
+
+function count(out: DigestRunResult, channel: MessageChannel, status: "sent" | "dry" | "failed") {
+  if (status === "dry") out.dry += 1;
+  else if (status === "failed") out.failed += 1;
+  else if (channel === "sms") out.sms += 1;
+  else out.sent += 1;
 }
 
 // Creators: every unanswered heart a business sent in the last week that no digest mentioned yet
 export async function runCreatorDigest(admin: Admin, mode: DigestMode, now: Date = new Date(), limit = SENDS_PER_RUN, gapMs = SEND_GAP_MS): Promise<DigestRunResult> {
-  const out: DigestRunResult = { eligible: 0, sent: 0, dry: 0, failed: 0, skipped: 0 };
+  const out = emptyResult();
   const since = new Date(now.getTime() - HEART_WINDOW_DAYS * 86_400_000).toISOString();
   const { data, error } = await admin
     .from("connections")
@@ -101,6 +130,8 @@ export async function runCreatorDigest(admin: Admin, mode: DigestMode, now: Date
     for (const id of Array.isArray(r.meta?.heart_ids) ? (r.meta!.heart_ids as unknown[]) : []) if (typeof id === "string") set.add(id);
     announced.set(r.user_id, set);
   }
+  const known = await knownWhatsAppPhones(admin, [...byCreator.values()].map((e) => e.user.phone));
+  const smsOk = digestSmsEnabled();
 
   let sends = 0;
   for (const [userId, { user, hearts }] of byCreator) {
@@ -109,21 +140,25 @@ export async function runCreatorDigest(admin: Admin, mode: DigestMode, now: Date
       out.skipped += 1;
       continue;
     }
+    const digits = String(user.phone).replace(/\D/g, "");
+    const channel: MessageChannel = known.get(digits) ? "whatsapp" : "sms";
+    if (channel === "sms" && !smsOk) {
+      out.skipped_no_channel += 1;
+      continue;
+    }
     out.eligible += 1;
     if (sends >= limit) continue; // the next run of the hour takes the rest
-    const body = creatorDigestText(user.full_name, fresh, APP_URL);
-    const status = await deliver(mode, user.phone, body);
+    const body = channel === "whatsapp" ? creatorDigestText(user.full_name, fresh, APP_URL) : creatorDigestSms(fresh.length);
+    const status = await deliver(mode, channel, user.phone, body);
     await logMessage({
-      channel: "whatsapp",
+      channel,
       kind: "digest_creator",
       phone: user.phone,
       userId,
       status,
       meta: { heart_ids: fresh.map((h) => h.connectionId), hearts: fresh.length, text: body },
     });
-    if (status === "sent") out.sent += 1;
-    else if (status === "dry") out.dry += 1;
-    else out.failed += 1;
+    count(out, channel, status);
     sends += 1;
     if (mode === "on" && gapMs > 0) await sleep(gapMs);
   }
@@ -132,7 +167,7 @@ export async function runCreatorDigest(admin: Admin, mode: DigestMode, now: Date
 
 // Businesses: one summary a week when creators chose their products or a match waits for them
 export async function runBrandDigest(admin: Admin, mode: DigestMode, now: Date = new Date(), limit = SENDS_PER_RUN, gapMs = SEND_GAP_MS): Promise<DigestRunResult> {
-  const out: DigestRunResult = { eligible: 0, sent: 0, dry: 0, failed: 0, skipped: 0 };
+  const out = emptyResult();
   const weekAgo = new Date(now.getTime() - 7 * 86_400_000).toISOString();
   const { data, error } = await admin
     .from("connections")
@@ -174,6 +209,8 @@ export async function runBrandDigest(admin: Admin, mode: DigestMode, now: Date =
     return out;
   }
   const already = new Set(((logRows || []) as { user_id: string | null }[]).map((r) => r.user_id).filter((v): v is string => !!v));
+  const known = await knownWhatsAppPhones(admin, candidates.map(([, e]) => e.user.phone));
+  const smsOk = digestSmsEnabled();
 
   let sends = 0;
   for (const [userId, e] of candidates) {
@@ -181,23 +218,38 @@ export async function runBrandDigest(admin: Admin, mode: DigestMode, now: Date =
       out.skipped += 1;
       continue;
     }
+    const digits = String(e.user.phone).replace(/\D/g, "");
+    const channel: MessageChannel = known.get(digits) ? "whatsapp" : "sms";
+    if (channel === "sms" && !smsOk) {
+      out.skipped_no_channel += 1;
+      continue;
+    }
     out.eligible += 1;
     if (sends >= limit) continue;
-    const body = brandDigestText(e.shop, { newHearts: e.newHearts, waitingMutual: e.waitingMutual, waitingTotal: e.waitingTotal }, APP_URL);
-    const status = await deliver(mode, e.user.phone, body);
+    const numbers = { newHearts: e.newHearts, waitingMutual: e.waitingMutual, waitingTotal: e.waitingTotal };
+    const body = channel === "whatsapp" ? brandDigestText(e.shop, numbers, APP_URL) : brandDigestSms(numbers);
+    const status = await deliver(mode, channel, e.user.phone, body);
     await logMessage({
-      channel: "whatsapp",
+      channel,
       kind: "digest_brand",
       phone: e.user.phone,
       userId,
       status,
       meta: { new_hearts: e.newHearts, waiting_mutual: e.waitingMutual, waiting_total: e.waitingTotal, text: body },
     });
-    if (status === "sent") out.sent += 1;
-    else if (status === "dry") out.dry += 1;
-    else out.failed += 1;
+    count(out, channel, status);
     sends += 1;
     if (mode === "on" && gapMs > 0) await sleep(gapMs);
   }
   return out;
+}
+
+// What the last digest run did, for /admin/messages (site_settings row "digests_last_run")
+export async function recordDigestRun(admin: Admin, summary: Record<string, unknown>): Promise<void> {
+  try {
+    const { error } = await admin.from("site_settings").upsert({ id: "digests_last_run", data: summary, updated_at: new Date().toISOString() } as any, { onConflict: "id" });
+    if (error) console.error("[cron] digests last-run record failed:", error.message);
+  } catch (err) {
+    console.error("[cron] digests last-run record error:", err);
+  }
 }

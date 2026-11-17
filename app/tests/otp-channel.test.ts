@@ -1,6 +1,10 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
+  chooseOtpChannel,
+  isKnownWhatsAppUser,
+  phoneDigits,
+  smartOtpEnabled,
   isOtpChannel,
   defaultOtpChannel,
   resolveOtpChannel,
@@ -60,5 +64,24 @@ describe("login code channel (WhatsApp / SMS, owner 2026-11-12)", () => {
     assert.equal(toE164(""), null);
     assert.equal(toE164(null), null);
     assert.equal(toE164("12"), null);
+  });
+});
+
+describe("smart login-code channel (owner, 2026-11-17)", () => {
+  test("a known WhatsApp chat = created before the restriction, or a WhatsApp we already sent", () => {
+    assert.equal(isKnownWhatsAppUser({ createdAt: "2026-11-05T10:00:00Z" }), true);
+    assert.equal(isKnownWhatsAppUser({ createdAt: "2026-11-13T10:00:00Z" }), false);
+    assert.equal(isKnownWhatsAppUser({ createdAt: "2026-11-13T10:00:00Z", whatsappSent: true }), true);
+    assert.equal(isKnownWhatsAppUser({}), false);
+    assert.equal(phoneDigits("+972 52-801-8238"), "972528018238");
+  });
+  test("the client's choice wins; otherwise a known chat goes by WhatsApp, the rest by the default", () => {
+    assert.equal(chooseOtpChannel({ requested: "sms", knownWhatsApp: true, defaultEnv: "sms" }), "sms");
+    assert.equal(chooseOtpChannel({ requested: "whatsapp", knownWhatsApp: false, defaultEnv: "sms" }), "whatsapp");
+    assert.equal(chooseOtpChannel({ knownWhatsApp: true, defaultEnv: "sms" }), "whatsapp");
+    assert.equal(chooseOtpChannel({ knownWhatsApp: false, defaultEnv: "sms" }), "sms");
+    assert.equal(chooseOtpChannel({ knownWhatsApp: true, defaultEnv: "sms", smartEnv: "off" }), "sms", "OTP_SMART_CHANNEL=off → the default alone");
+    assert.equal(smartOtpEnabled(undefined), true);
+    assert.equal(smartOtpEnabled("off"), false);
   });
 });

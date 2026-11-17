@@ -88,3 +88,33 @@ export function brandDigestText(shopName: string | null | undefined, n: BrandDig
 export function brandDigestWorthSending(n: BrandDigestNumbers): boolean {
   return n.newHearts > 0 || n.waitingMutual > 0;
 }
+
+// --- SMS for phones with no WhatsApp chat (owner, 2026-11-17) ---------------------------------------------
+// A WhatsApp digest may only go into an existing chat (lib/otp-channel.ts WHATSAPP_KNOWN_BEFORE); creators and
+// businesses without one get a short SMS instead (one UCS-2 segment, ≤ 70 characters, no emoji) — unless
+// DIGEST_SMS=off, in which case they are skipped. The short links /c and /b are redirects in next.config.ts.
+export function digestSmsEnabled(env: { [key: string]: string | undefined } = process.env): boolean {
+  return (env.DIGEST_SMS || "").trim().toLowerCase() !== "off";
+}
+
+export const DIGEST_SMS_MAX_CHARS = 70;
+export const SMS_LINK_CREATOR = "mashpian.online/c"; // → /connections
+export const SMS_LINK_BRAND = "mashpian.online/b"; // → /brand/connections
+
+export function creatorDigestSms(count: number): string {
+  const who = count === 1 ? "עסק אחד סימן אותך" : `${count} עסקים סימנו אותך`;
+  return `משפיען: ${who}! יש לך 7 ימים לאשר: ${SMS_LINK_CREATOR}`;
+}
+
+// "ו-" before a number, "ו" before a word
+function and(s: string): string {
+  return /^\d/.test(s) ? `ו-${s}` : `ו${s}`;
+}
+
+export function brandDigestSms(n: BrandDigestNumbers): string {
+  const parts: string[] = [];
+  if (n.newHearts > 0) parts.push(n.newHearts === 1 ? "יוצר/ת סימן/ה אתכם" : `${n.newHearts} יוצרים סימנו אתכם`);
+  if (n.waitingMutual > 0) parts.push(n.waitingMutual === 1 ? "מאטץ' אחד מחכה" : `${n.waitingMutual} מאטצ'ים מחכים`);
+  const what = parts.length === 2 ? `${parts[0]} ${and(parts[1])}` : parts[0] || "יש חדש בחיבורים שלכם";
+  return `משפיען: ${what}: ${SMS_LINK_BRAND}`;
+}

@@ -16,13 +16,14 @@ export async function GET(request: NextRequest) {
   const now = new Date();
   const since = new Date(now.getTime() - days * 86_400_000).toISOString();
 
-  const [rowsRes, recentRes] = await Promise.all([
+  const [rowsRes, recentRes, lastRunRes] = await Promise.all([
     supabase.from("message_log").select("channel, status, created_at").gte("created_at", since).order("created_at", { ascending: false }).limit(20000),
     supabase
       .from("message_log")
       .select("id, channel, kind, phone, status, provider_ref, meta, created_at, users(full_name, type)")
       .order("created_at", { ascending: false })
       .limit(150),
+    supabase.from("site_settings").select("data, updated_at").eq("id", "digests_last_run").maybeSingle(),
   ]);
   if (rowsRes.error) {
     if (isMessageLogMissing(rowsRes.error)) return NextResponse.json({ available: false, counts: null, daily: [], recent: [], digests: digestMode() });
@@ -50,5 +51,6 @@ export async function GET(request: NextRequest) {
     daily: dailySeries(rows, days, now),
     recent,
     digests: digestMode(),
+    last_run: (lastRunRes.data as { data?: unknown } | null)?.data || null,
   });
 }

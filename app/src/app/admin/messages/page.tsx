@@ -23,7 +23,18 @@ type Payload = {
   daily: DailyPoint[];
   recent: Recent[];
   digests?: "off" | "dry" | "on";
+  last_run?: { at?: string; mode?: string; creators?: RunSummary; brands?: RunSummary } | null;
 };
+
+type RunSummary = { eligible: number; sent: number; sms?: number; dry: number; failed: number; skipped: number; skipped_no_channel?: number; error?: string };
+
+function runLine(r: RunSummary | undefined): string {
+  if (!r) return "לא רץ";
+  const parts = [`זכאים ${r.eligible}`, `וואטסאפ ${r.sent}`, `SMS ${r.sms ?? 0}`, `ניסוי ${r.dry}`, `נכשלו ${r.failed}`, `בלי חדש ${r.skipped}`];
+  if (r.skipped_no_channel) parts.push(`בלי ערוץ ${r.skipped_no_channel}`);
+  if (r.error) parts.push(`שגיאה: ${r.error}`);
+  return parts.join(" · ");
+}
 
 const kindLabel: Record<string, string> = {
   otp: "קוד כניסה",
@@ -83,6 +94,14 @@ export default function AdminMessagesPage() {
         </div>
       </div>
 
+      {data.last_run?.at && (
+        <div className="mb-6 rounded-xl bg-neutral-50 border border-neutral-100 px-4 py-3 text-xs text-neutral-700 space-y-1">
+          <p className="font-semibold">ריצת הסיכומים האחרונה: {when(data.last_run.at)} · מצב {data.last_run.mode === "dry" ? "ניסוי" : data.last_run.mode === "on" ? "פעיל" : data.last_run.mode}</p>
+          <p>יוצרים (יומי 18:00): {runLine(data.last_run.creators)}</p>
+          <p>עסקים (יום ראשון 10:00): {runLine(data.last_run.brands)}</p>
+          <p className="text-neutral-400">זכאים = יש להם משהו חדש להודיע · בלי חדש = כל הלבבות כבר הוזכרו · וואטסאפ רק למי שכבר יש איתו שיחה, לשאר SMS קצר</p>
+        </div>
+      )}
       {!data.available && (
         <div className="mb-6 rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 text-sm text-amber-800">
           יומן ההודעות יתחיל להיספר אחרי הפעלת מיגרציה 023 (<code>message_log</code>).

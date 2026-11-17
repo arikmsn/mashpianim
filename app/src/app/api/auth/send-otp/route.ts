@@ -4,7 +4,8 @@ import { getTwilio } from "@/lib/adapters/twilio";
 import { createClient } from "@supabase/supabase-js";
 import { checkRateLimit, rateLimitedResponse, clientIp, RATE_LIMITS } from "@/lib/rate-limit";
 import { normalizeIsraeliMobile, PHONE_ERROR } from "@/lib/phone";
-import { otpSmsText, resolveOtpChannel, toE164, type OtpChannel } from "@/lib/otp-channel";
+import { chooseOtpChannel, otpSmsText, toE164, type OtpChannel } from "@/lib/otp-channel";
+import { isKnownWhatsAppPhone } from "@/lib/whatsapp-known";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -66,7 +67,11 @@ export async function POST(request: NextRequest) {
     // cannot block. When the WhatsApp send fails outright and Twilio is configured, the code goes out by SMS
     // instead, and the response says so (`channel`, `fallback`) so the screen can tell the user where to look.
     const requested = (body as { channel?: unknown }).channel;
-    const channel: OtpChannel = resolveOtpChannel(requested, process.env.OTP_DEFAULT_CHANNEL);
+    // Smart routing (owner, 2026-11-17): a phone with an existing WhatsApp chat gets the code by WhatsApp (free,
+    // no new chat opened); everyone else by SMS. The client's explicit choice still wins; OTP_SMART_CHANNEL=off
+    // goes back to OTP_DEFAULT_CHANNEL alone.
+    const knownWhatsApp = requested === undefined || requested === null ? await isKnownWhatsAppPhone(supabaseAdmin, formattedPhone) : false;
+    const channel: OtpChannel = chooseOtpChannel({ requested, defaultEnv: process.env.OTP_DEFAULT_CHANNEL, smartEnv: process.env.OTP_SMART_CHANNEL, knownWhatsApp });
     const greenAPI = getGreenAPI();
     const twilio = getTwilio();
 

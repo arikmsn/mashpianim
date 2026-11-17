@@ -57,3 +57,32 @@ export function toE164(phone: string | null | undefined): string | null {
   if (digits.length < 8 || digits.length > 15) return null;
   return `+${digits}`;
 }
+
+// --- Smart channel (owner, 2026-11-17: "what can go by WhatsApp goes by WhatsApp, the rest by SMS") ---------
+// A WhatsApp send through GreenAPI is only safe into a chat that already exists with our number: the restriction
+// of 2026-11-12 was about opening new chats in bulk. A phone counts as a known chat when it got a WhatsApp from
+// us before (the message log) or the account was created before the restriction (every code went by WhatsApp
+// then). Known chats get the login code by WhatsApp (free); everyone else by SMS (paid, cannot be blocked).
+export const WHATSAPP_KNOWN_BEFORE = "2026-11-12T08:00:00Z";
+
+// OTP_SMART_CHANNEL=off disables the routing (then OTP_DEFAULT_CHANNEL alone decides)
+export function smartOtpEnabled(env: string | undefined | null): boolean {
+  return (env || "").trim().toLowerCase() !== "off";
+}
+
+export function phoneDigits(phone: string | null | undefined): string {
+  return String(phone || "").replace(/\D/g, "");
+}
+
+export function isKnownWhatsAppUser(facts: { createdAt?: string | null; whatsappSent?: boolean }, cutoff: string = WHATSAPP_KNOWN_BEFORE): boolean {
+  if (facts.whatsappSent) return true;
+  const t = facts.createdAt ? Date.parse(facts.createdAt) : NaN;
+  return Number.isFinite(t) && t < Date.parse(cutoff);
+}
+
+// The client's explicit choice wins; else a known chat goes by WhatsApp when smart routing is on; else the default
+export function chooseOtpChannel(p: { requested?: unknown; defaultEnv?: string | null; smartEnv?: string | null; knownWhatsApp: boolean }): OtpChannel {
+  if (isOtpChannel(p.requested)) return p.requested;
+  if (smartOtpEnabled(p.smartEnv) && p.knownWhatsApp) return "whatsapp";
+  return defaultOtpChannel(p.defaultEnv);
+}

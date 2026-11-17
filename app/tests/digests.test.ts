@@ -1,6 +1,13 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
+import nextConfig from "../next.config.ts";
 import {
+  DIGEST_SMS_MAX_CHARS,
+  SMS_LINK_BRAND,
+  SMS_LINK_CREATOR,
+  brandDigestSms,
+  creatorDigestSms,
+  digestSmsEnabled,
   brandDigestDue,
   brandDigestText,
   brandDigestWorthSending,
@@ -58,6 +65,30 @@ describe("WhatsApp digests (owner, 2026-11-16)", () => {
     assert.ok(t.endsWith("https://x/brand/connections"));
     assert.equal(brandDigestWorthSending({ newHearts: 0, waitingMutual: 0, waitingTotal: 2 }), false, "old unanswered hearts alone are not news");
     assert.equal(brandDigestWorthSending({ newHearts: 0, waitingMutual: 1, waitingTotal: 1 }), true);
+  });
+});
+
+describe("SMS digests for phones without a WhatsApp chat", () => {
+  test("one segment each, numbers included", () => {
+    for (const n of [1, 2, 9, 12, 99]) assert.ok(creatorDigestSms(n).length <= DIGEST_SMS_MAX_CHARS, `creator ${n}: ${creatorDigestSms(n).length}`);
+    for (const n of [{ newHearts: 1, waitingMutual: 0, waitingTotal: 1 }, { newHearts: 12, waitingMutual: 3, waitingTotal: 15 }, { newHearts: 99, waitingMutual: 99, waitingTotal: 99 }]) {
+      assert.ok(brandDigestSms(n).length <= DIGEST_SMS_MAX_CHARS, `brand: ${brandDigestSms(n).length}`);
+    }
+    assert.ok(creatorDigestSms(1).startsWith("משפיען: עסק אחד סימן אותך!"));
+    assert.ok(creatorDigestSms(3).endsWith(SMS_LINK_CREATOR));
+    assert.equal(brandDigestSms({ newHearts: 2, waitingMutual: 1, waitingTotal: 2 }), `משפיען: 2 יוצרים סימנו אתכם ומאטץ' אחד מחכה: ${SMS_LINK_BRAND}`);
+    assert.equal(brandDigestSms({ newHearts: 1, waitingMutual: 12, waitingTotal: 1 }), `משפיען: יוצר/ת סימן/ה אתכם ו-12 מאטצ'ים מחכים: ${SMS_LINK_BRAND}`);
+    assert.equal(brandDigestSms({ newHearts: 0, waitingMutual: 3, waitingTotal: 0 }), `משפיען: 3 מאטצ'ים מחכים: ${SMS_LINK_BRAND}`, "a match waiting with no new heart");
+    assert.equal(brandDigestSms({ newHearts: 5, waitingMutual: 0, waitingTotal: 7 }), `משפיען: 5 יוצרים סימנו אתכם: ${SMS_LINK_BRAND}`);
+    assert.equal(digestSmsEnabled({}), true);
+    assert.equal(digestSmsEnabled({ DIGEST_SMS: "off" }), false);
+  });
+
+  test("the short links are redirects in next.config.ts", async () => {
+    const rules = await (nextConfig.redirects as () => Promise<{ source: string; destination: string }[]>)();
+    const map = new Map(rules.map((r) => [r.source, r.destination]));
+    assert.equal(map.get("/" + SMS_LINK_CREATOR.split("/")[1]), "/connections");
+    assert.equal(map.get("/" + SMS_LINK_BRAND.split("/")[1]), "/brand/connections");
   });
 });
 

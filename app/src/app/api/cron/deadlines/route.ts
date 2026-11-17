@@ -6,7 +6,7 @@ import { getTimelineSettings } from "@/lib/settings";
 import { paymentsMode } from "@/lib/payments";
 import { reconcileSumitPayments } from "@/lib/payments-server";
 import { brandDigestDue, creatorDigestDue, digestMode } from "@/lib/digests";
-import { runBrandDigest, runCreatorDigest, type DigestRunResult } from "@/lib/digests-server";
+import { recordDigestRun, runBrandDigest, runCreatorDigest, type DigestRunResult } from "@/lib/digests-server";
 
 // The WhatsApp digests pause between sends; the run may take up to a minute (Vercel Pro)
 export const maxDuration = 60;
@@ -365,8 +365,15 @@ export async function GET(request: NextRequest) {
     const at = new Date();
     results.digests = { mode };
     try {
-      if (creatorDigestDue(at)) results.digests.creators = await runCreatorDigest(supabase, mode, at);
-      if (brandDigestDue(at)) results.digests.brands = await runBrandDigest(supabase, mode, at);
+      const creatorsDue = creatorDigestDue(at);
+      const brandsDue = brandDigestDue(at);
+      if (creatorsDue) results.digests.creators = await runCreatorDigest(supabase, mode, at);
+      if (brandsDue) results.digests.brands = await runBrandDigest(supabase, mode, at);
+      if (creatorsDue || brandsDue) {
+        console.log("[cron] digests", JSON.stringify(results.digests));
+        for (const r of [results.digests.creators, results.digests.brands]) if (r?.error) console.error("[cron] digests error:", r.error);
+        await recordDigestRun(supabase, { at: at.toISOString(), ...results.digests });
+      }
     } catch (err) {
       console.error("[cron] digests failed:", err);
     }
