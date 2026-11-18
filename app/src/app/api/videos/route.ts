@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
-import { signedVideoUrls } from "@/lib/video-links";
+import { videoUrls } from "@/lib/video-links";
 import { isConnectionParticipant, canUploadConnectionVideo } from "@/lib/authz";
 import { videoFileProblem } from "@/lib/uploads";
 import { resolveViewer } from "@/lib/viewer";
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const videos = await refreshVideoUrls(supabase, data || []);
+    const videos = refreshVideoUrls(data || []);
     return NextResponse.json({ videos });
   }
 
@@ -94,14 +94,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const videos = await refreshVideoUrls(supabase, data || []);
+  const videos = refreshVideoUrls(data || []);
   return NextResponse.json({ videos });
 }
 
-// Signed per path and cached so the CDN can serve the files (lib/video-links.ts)
-async function refreshVideoUrls(supabase: any, videos: any[]) {
-  const paths = videos.map((v: any) => v.storage_path).filter((p: unknown): p is string => typeof p === "string" && p.length > 0);
-  const signed = await signedVideoUrls(supabase, paths);
+// Stable public URLs so the CDN serves the files (lib/video-links.ts)
+function refreshVideoUrls(videos: any[]) {
+  const signed = videoUrls(videos.map((v: any) => v.storage_path));
   return videos.map((video: any) => (video.storage_path ? { ...video, url: signed.get(video.storage_path) || video.url } : video));
 }
 

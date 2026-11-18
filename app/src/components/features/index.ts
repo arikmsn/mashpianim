@@ -17,3 +17,5 @@ export { RoleSwitchModal, RoleOptions, AdminRoleSwitch, chooseRole, roleLabel, R
 export { CreditsAccess } from "./credits-access";
 export { WelcomeSheet, MomentSheet, useOnboarding, useOnboardingContent, firstHeartMoment, firstMatchMoment, type OnboardingUser } from "./onboarding";
 export { SuspendedGate } from "./suspended-gate";
+export { ExitGuard } from "./exit-guard";
+export { isExitGuardScreen } from "@/lib/exit-guard";

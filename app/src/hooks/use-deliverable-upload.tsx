@@ -66,6 +66,7 @@ export function useDeliverableUpload(onUploaded: (connectionId: string) => void)
               file,
               contentType: file.type || "video/mp4",
               onProgress: setProgress,
+              cacheControl: "max-age=2592000", // 30 days — the path is immutable, so the CDN can hold it
             }),
             generateVideoThumbnail(file),
           ]);

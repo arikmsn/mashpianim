@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
-import { signedVideoUrls } from "@/lib/video-links";
+import { videoUrls } from "@/lib/video-links";
 import { resolveViewer } from "@/lib/viewer";
 import { readActiveRole } from "@/lib/active-role";
 import { brandRevealedToCreator } from "@/lib/connection-flow";
@@ -141,9 +141,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     else if (ACTIVE_STATUSES.includes(c.status)) active++;
   }
 
-  // One signing call for the misses, cached per path so the CDN can serve the files (lib/video-links.ts)
+  // Stable public URLs so the CDN serves the files (lib/video-links.ts)
   const rows = (videos || []) as any[];
-  const signed = await signedVideoUrls(supabase, rows.map((v) => v.storage_path).filter((p): p is string => typeof p === "string" && p.length > 0));
+  const signed = videoUrls(rows.map((v) => v.storage_path));
   const portfolio = rows.map((v) => ({
     id: v.id,
     title: v.title,

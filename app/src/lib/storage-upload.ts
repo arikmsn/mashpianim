@@ -14,6 +14,9 @@ export interface UploadOptions {
   contentType: string;
   upsert?: boolean;
   onProgress?: (percent: number) => void;
+  // Cache-Control for the stored object (public buckets serve it to the CDN). Videos use a long value because
+  // their paths are immutable (timestamped), so repeat viewers get the file from the edge. Default: 1 hour.
+  cacheControl?: string;
 }
 
 export type UploadResult = { ok: true } | { ok: false; error: string };
@@ -36,7 +39,7 @@ export async function uploadToStorage(opts: UploadOptions): Promise<UploadResult
     xhr.setRequestHeader("apikey", anonKey);
     xhr.setRequestHeader("content-type", opts.contentType);
     xhr.setRequestHeader("x-upsert", opts.upsert ? "true" : "false");
-    xhr.setRequestHeader("cache-control", "max-age=3600");
+    xhr.setRequestHeader("cache-control", opts.cacheControl || "max-age=3600");
 
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && opts.onProgress) {

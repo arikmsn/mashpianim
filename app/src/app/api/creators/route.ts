@@ -4,7 +4,7 @@ import { readActiveRole } from "@/lib/active-role";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { MIN_PORTFOLIO_VIDEOS } from "@/lib/match";
-import { signedVideoUrl } from "@/lib/video-links";
+import { videoUrl } from "@/lib/video-links";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -88,17 +88,18 @@ export async function GET() {
   const overlaps = (cats: string[]) =>
     cats.some((c) => brandCats.some((b) => b === normalize(c) || b.startsWith(normalize(c)) || normalize(c).startsWith(b)));
 
-  const list = await Promise.all(
-    ((creators || []) as any[]).filter((u) => {
+  const list = ((creators || []) as any[])
+    .filter((u) => {
       const cp = Array.isArray(u.creator_profiles) ? u.creator_profiles[0] : u.creator_profiles;
       return !(cp?.id && passed.has(cp.id));
-    }).map(async (u) => {
+    })
+    .map((u) => {
       const cp = Array.isArray(u.creator_profiles) ? u.creator_profiles[0] : u.creator_profiles;
       const port = byCreator.get(u.id) || { count: 0, first: null };
+      // A stable public URL (lib/video-links.ts) so the CDN serves the preview
       let previewVideo: string | null = null;
       if (port.first?.storage_path) {
-        // Cached per path so the CDN can serve the file (lib/video-links.ts)
-        previewVideo = (await signedVideoUrl(admin, port.first.storage_path)) || port.first.url || null;
+        previewVideo = videoUrl(port.first.storage_path) || port.first.url || null;
       } else if (port.first?.url) {
         previewVideo = port.first.url;
       }
@@ -147,8 +148,7 @@ export async function GET() {
         fit: overlaps(categories),
         score,
       };
-    })
-  );
+    });
 
   // A creator with no portfolio video has nothing for a business to judge (owner, 2026-11-18: "a card with only
   // text looks bad and no business would pick it") — hidden until the first upload, unless this business already

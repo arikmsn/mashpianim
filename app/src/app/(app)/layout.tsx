@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { BottomNav } from "@/components/ui";
-import { SideMenu, SuspendedGate, TermsGate } from "@/components/features";
+import { ExitGuard, SideMenu, SuspendedGate, TermsGate } from "@/components/features";
 import { useAuth } from "@/hooks/use-auth";
 import { swrFetch } from "@/lib/client-cache";
 
@@ -48,6 +48,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <>
       <div className="pb-20">{children}</div>
       <BottomNav onMenu={() => setMenuOpen(true)} />
+      {/* Device Back on the home screens asks before leaving the app (owner, 2026-11-18) */}
+      <ExitGuard />
       <SideMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
       {/* Terms of service: shown full-screen until this account accepted the current version */}
       <TermsGate />

@@ -760,6 +760,7 @@ export default function ProfilePage() {
           file: selectedFile,
           contentType: selectedFile.type || "video/mp4",
           onProgress: setUploadProgress,
+          cacheControl: "max-age=2592000", // 30 days — the path is immutable, so the CDN can hold it
         }),
         generateVideoThumbnail(selectedFile),
       ]);
