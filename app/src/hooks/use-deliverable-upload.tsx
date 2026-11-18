@@ -61,12 +61,12 @@ export function useDeliverableUpload(onUploaded: (connectionId: string) => void)
 
           const [uploadResult, thumbBlob] = await Promise.all([
             uploadToStorage({
-              bucket: "videos",
+              // Deliverables are private (bucket set in migration 025) — they are not part of the public gallery
+              bucket: "deliverables",
               path: storagePath,
               file,
               contentType: file.type || "video/mp4",
               onProgress: setProgress,
-              cacheControl: "max-age=2592000", // 30 days — the path is immutable, so the CDN can hold it
             }),
             generateVideoThumbnail(file),
           ]);

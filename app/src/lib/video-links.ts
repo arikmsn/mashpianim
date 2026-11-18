@@ -16,13 +16,49 @@ export function videoUrl(path: string | null | undefined): string | null {
   return `${BASE}/storage/v1/object/public/videos/${encoded}`;
 }
 
-// Many paths at once (a profile's portfolio, a chat's deliverables): storage path → public URL
+// Many paths at once (a profile's portfolio): storage path → public URL
 export function videoUrls(paths: (string | null | undefined)[]): Map<string, string> {
   const out = new Map<string, string>();
   for (const p of paths) {
     if (!p) continue;
     const u = videoUrl(p);
     if (u) out.set(p, u);
+  }
+  return out;
+}
+
+// --- Deliverables: the private bucket (migration 025) -------------------------------------------------------
+// Connection deliverable videos (the paid UGC a creator uploads for a business) stay private (owner, 2026-11-18)
+// — unlike the portfolio gallery, they must not be reachable by URL. They live in the `deliverables` bucket and
+// are served only through short-lived signed URLs. The caller MUST have already checked the viewer is a party to
+// the connection (or an admin); signing is done with the service role.
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Admin = SupabaseClient<any, any, any, any, any>;
+
+export const DELIVERABLES_BUCKET = "deliverables";
+const DELIVERABLE_TTL_SECONDS = 24 * 3600;
+
+export async function signedDeliverableUrl(
+  admin: Admin,
+  path: string | null | undefined,
+  opts: { download?: boolean; ttl?: number } = {}
+): Promise<string | null> {
+  if (!path) return null;
+  const { data } = await admin.storage
+    .from(DELIVERABLES_BUCKET)
+    .createSignedUrl(path, opts.ttl ?? DELIVERABLE_TTL_SECONDS, opts.download ? { download: true } : undefined);
+  return data?.signedUrl ?? null;
+}
+
+export async function signedDeliverableUrls(admin: Admin, paths: (string | null | undefined)[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const clean = [...new Set(paths.filter((p): p is string => typeof p === "string" && p.length > 0))];
+  if (clean.length === 0) return out;
+  const { data } = await admin.storage.from(DELIVERABLES_BUCKET).createSignedUrls(clean, DELIVERABLE_TTL_SECONDS);
+  for (const row of (data || []) as { path: string | null; signedUrl: string }[]) {
+    if (row.path && row.signedUrl) out.set(row.path, row.signedUrl);
   }
   return out;
 }

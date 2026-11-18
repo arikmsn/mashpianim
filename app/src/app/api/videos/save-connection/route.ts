@@ -98,9 +98,9 @@ export async function POST(request: NextRequest) {
     }
     const option = (pendingCount || 0) + 1;
 
-    // Signing also proves the object exists
+    // Signing also proves the object exists (deliverables live in their own private bucket — migration 025)
     const { data: signedData, error: signError } = await supabase.storage
-      .from("videos")
+      .from("deliverables")
       .createSignedUrl(storagePath, 86400);
     if (signError || !signedData?.signedUrl) {
       return NextResponse.json({ error: "הקובץ לא נמצא באחסון" }, { status: 400 });

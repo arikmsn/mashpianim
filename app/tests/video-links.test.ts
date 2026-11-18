@@ -5,9 +5,29 @@ import assert from "node:assert/strict";
 process.env.NEXT_SUPABASE_URL = "https://proj.supabase.co";
 let videoUrl: (p: string | null | undefined) => string | null;
 let videoUrls: (paths: (string | null | undefined)[]) => Map<string, string>;
+let signedDeliverableUrls: (admin: any, paths: (string | null | undefined)[]) => Promise<Map<string, string>>;
+let DELIVERABLES_BUCKET: string;
 before(async () => {
-  ({ videoUrl, videoUrls } = await import("../src/lib/video-links.ts"));
+  ({ videoUrl, videoUrls, signedDeliverableUrls, DELIVERABLES_BUCKET } = await import("../src/lib/video-links.ts"));
 });
+
+// A stand-in for the service-role storage client
+function fakeAdmin() {
+  const calls: { bucket: string; paths: string[] }[] = [];
+  const admin = {
+    storage: {
+      from(bucket: string) {
+        return {
+          async createSignedUrls(paths: string[]) {
+            calls.push({ bucket, paths });
+            return { data: paths.map((p) => ({ path: p, signedUrl: `https://proj.supabase.co/storage/v1/object/sign/${bucket}/${p}?token=t` })) };
+          },
+        };
+      },
+    },
+  };
+  return { admin, calls };
+}
 
 describe("public video URLs (owner, 2026-11-18: make the bucket public so the CDN serves the files)", () => {
   test("a storage path becomes the stable /object/public/videos/ URL, segments encoded", () => {
@@ -34,5 +54,23 @@ describe("public video URLs (owner, 2026-11-18: make the bucket public so the CD
     assert.deepEqual([...map.keys()].sort(), ["portfolio/a/1.mp4", "portfolio/b/2.mp4"]);
     assert.equal(map.get("portfolio/b/2.mp4"), "https://proj.supabase.co/storage/v1/object/public/videos/portfolio/b/2.mp4");
     assert.equal(videoUrls([]).size, 0);
+  });
+});
+
+describe("private deliverable URLs (owner, 2026-11-18: keep delivery videos private)", () => {
+  test("signs from the private deliverables bucket, deduped, blanks dropped", async () => {
+    const { admin, calls } = fakeAdmin();
+    const map = await signedDeliverableUrls(admin, ["d/1.mp4", null, "d/1.mp4", "d/2.mov", ""]);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].bucket, DELIVERABLES_BUCKET);
+    assert.deepEqual(calls[0].paths.sort(), ["d/1.mp4", "d/2.mov"]);
+    assert.ok(map.get("d/2.mov")?.includes("/object/sign/deliverables/d/2.mov"));
+    assert.equal(map.size, 2);
+  });
+  test("no paths means no storage call", async () => {
+    const { admin, calls } = fakeAdmin();
+    const map = await signedDeliverableUrls(admin, [null, "", undefined]);
+    assert.equal(map.size, 0);
+    assert.equal(calls.length, 0);
   });
 });

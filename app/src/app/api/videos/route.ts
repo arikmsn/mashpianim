@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
-import { videoUrls } from "@/lib/video-links";
+import { videoUrls, signedDeliverableUrls } from "@/lib/video-links";
 import { isConnectionParticipant, canUploadConnectionVideo } from "@/lib/authz";
 import { videoFileProblem } from "@/lib/uploads";
 import { resolveViewer } from "@/lib/viewer";
@@ -94,7 +94,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const videos = refreshVideoUrls(data || []);
+  // Deliverables are private (migration 025): the caller is an authorized party (checked above), so the service
+  // role mints short-lived signed URLs for them
+  const admin = getSupabaseAdmin();
+  const rows = (data || []) as any[];
+  const signed = admin ? await signedDeliverableUrls(admin, rows.map((v) => v.storage_path)) : new Map<string, string>();
+  const videos = rows.map((v) => (v.storage_path ? { ...v, url: signed.get(v.storage_path) || v.url } : v));
   return NextResponse.json({ videos });
 }
 

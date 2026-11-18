@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { thumbnailPathFromUrl } from "@/lib/authz";
 import { countPortfolioVideos } from "@/lib/match";
+import { videoUrl, signedDeliverableUrl } from "@/lib/video-links";
 import { resolveViewer } from "@/lib/viewer";
 import { readActiveRole } from "@/lib/active-role";
 
@@ -82,15 +83,13 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     }
   }
 
-  // Generate signed URL for viewing (1 hour TTL)
+  // A portfolio video (no connection) is public; a connection deliverable is private (migration 025) and signed
   const storagePath = (video as any).storage_path || extractStoragePath((video as any).url);
+  const isDeliverable = !!(video as any).connection_id;
 
   let signedUrl: string | null = null;
   if (storagePath) {
-    const { data } = await supabase.storage
-      .from("videos")
-      .createSignedUrl(storagePath, 86400);
-    signedUrl = data?.signedUrl || null;
+    signedUrl = isDeliverable ? await signedDeliverableUrl(supabase, storagePath) : videoUrl(storagePath);
   }
 
   // Determine if download is allowed
@@ -100,10 +99,9 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
   let downloadUrl: string | null = null;
   if (canDownload && storagePath) {
-    const { data } = await supabase.storage
-      .from("videos")
-      .createSignedUrl(storagePath, 3600, { download: true });
-    downloadUrl = data?.signedUrl || null;
+    downloadUrl = isDeliverable
+      ? await signedDeliverableUrl(supabase, storagePath, { download: true, ttl: 3600 })
+      : videoUrl(storagePath);
 
     // Increment download counter
     await supabase
@@ -129,9 +127,9 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
 function extractStoragePath(url: string): string | null {
   if (!url) return null;
-  // URLs look like: https://<project>.supabase.co/storage/v1/object/public/videos/<path>
-  const match = url.match(/\/storage\/v1\/object\/(?:public|sign)\/videos\/(.+)/);
-  return match ? match[1] : null;
+  // URLs look like: https://<project>.supabase.co/storage/v1/object/public|sign/<videos|deliverables>/<path>
+  const match = url.match(/\/storage\/v1\/object\/(?:public|sign)\/(?:videos|deliverables)\/([^?]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 // DELETE /api/videos/[id] — a creator removes one of their own portfolio videos (admins may remove any video).

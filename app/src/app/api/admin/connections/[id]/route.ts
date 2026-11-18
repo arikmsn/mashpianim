@@ -46,12 +46,12 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
     c.blocked_by ? supabase.from("users").select("full_name").eq("id", c.blocked_by).maybeSingle() : Promise.resolve({ data: null }),
   ]);
 
-  // Signed playback URLs (1 hour) for the private videos bucket
+  // Signed playback URLs (1 hour) from the private deliverables bucket (migration 025)
   const videoRows = (vidRes.data || []) as any[];
   const paths = videoRows.map((v) => v.storage_path).filter((p): p is string => typeof p === "string" && p.length > 0);
   const signedByPath: Record<string, string> = {};
   if (paths.length > 0) {
-    const { data: signed } = await supabase.storage.from("videos").createSignedUrls(paths, 3600);
+    const { data: signed } = await supabase.storage.from("deliverables").createSignedUrls(paths, 3600);
     for (const s of signed || []) if (s.path && s.signedUrl) signedByPath[s.path] = s.signedUrl;
   }
   const videos = videoRows.map((v) => ({
