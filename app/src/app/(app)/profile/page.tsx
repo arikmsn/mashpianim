@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 import { swrFetch, clearCache, readCache, writeCache, fetchJson } from "@/lib/client-cache";
 import { generateVideoThumbnail } from "@/lib/video-thumbnail";
 import { uploadToStorage } from "@/lib/storage-upload";
-import { videoFileProblem, MAX_VIDEO_MB } from "@/lib/uploads";
+import { videoFileProblem, videoFileCodecProblem, MAX_VIDEO_MB } from "@/lib/uploads";
 import { formatDateHe } from "@/lib/dates";
 import { ISRAEL_REGIONS } from "@/lib/regions";
 import { creditsCardHint } from "@/lib/credits";
@@ -738,7 +738,7 @@ export default function ProfilePage() {
       toast("בחרו קובץ וידאו", "error");
       return;
     }
-    const problem = videoFileProblem(selectedFile);
+    const problem = videoFileProblem(selectedFile) || (await videoFileCodecProblem(selectedFile));
     if (problem) {
       toast(problem, "error");
       return;
@@ -1399,8 +1399,9 @@ export default function ProfilePage() {
               label="בחירת סרטון"
               changeLabel="החלפת סרטון"
               disabled={uploading}
-              onChange={(file) => {
-                const issue = file ? videoFileProblem(file) : null;
+              onChange={async (file) => {
+                // Type and size first, then the codec (reads both ends of the file — iPhone HEVC clips are refused)
+                const issue = file ? videoFileProblem(file) || (await videoFileCodecProblem(file)) : null;
                 if (issue) {
                   toast(issue, "error");
                   setSelectedFile(null);
@@ -1410,8 +1411,8 @@ export default function ProfilePage() {
               }}
             />
             <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
-              <span className="block">פורמטים נתמכים: MP4, MOV, WebM</span>
-              <span className="block">גודל מקסימלי: {MAX_VIDEO_MB}MB</span>
+              <span className="block">פורמטים נתמכים: MP4, MOV, WebM (קידוד H.264 — סרטוני HEVC של אייפון לא נתמכים בכל הדפדפנים)</span>
+              <span className="block">גודל מקסימלי: {MAX_VIDEO_MB}MB · סרטון קצר וקל נטען מהר אצל העסקים</span>
             </p>
           </div>
           {uploading && uploadProgress !== null && (

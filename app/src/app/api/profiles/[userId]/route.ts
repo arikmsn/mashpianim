@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { signedVideoUrls } from "@/lib/video-links";
 import { resolveViewer } from "@/lib/viewer";
 import { readActiveRole } from "@/lib/active-role";
 import { brandRevealedToCreator } from "@/lib/connection-flow";
@@ -140,16 +141,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     else if (ACTIVE_STATUSES.includes(c.status)) active++;
   }
 
-  const portfolio = await Promise.all(
-    ((videos || []) as any[]).map(async (v) => {
-      let url = v.url;
-      if (v.storage_path) {
-        const { data } = await supabase.storage.from("videos").createSignedUrl(v.storage_path, 86400);
-        url = data?.signedUrl || url;
-      }
-      return { id: v.id, title: v.title, description: v.description, url, thumbnail: v.thumbnail_url, status: v.status, createdAt: v.created_at };
-    })
-  );
+  // One signing call for the misses, cached per path so the CDN can serve the files (lib/video-links.ts)
+  const rows = (videos || []) as any[];
+  const signed = await signedVideoUrls(supabase, rows.map((v) => v.storage_path).filter((p): p is string => typeof p === "string" && p.length > 0));
+  const portfolio = rows.map((v) => ({
+    id: v.id,
+    title: v.title,
+    description: v.description,
+    url: (v.storage_path && signed.get(v.storage_path)) || v.url,
+    thumbnail: v.thumbnail_url,
+    status: v.status,
+    createdAt: v.created_at,
+  }));
 
   return NextResponse.json({
     type: "creator",

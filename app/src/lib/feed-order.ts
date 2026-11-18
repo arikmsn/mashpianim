@@ -1,7 +1,8 @@
 // The order of the creator's deck (pure, unit-tested). The owner wants the products shuffled (2026-11-09),
 // but a shuffle that changes under the creator's thumb while she browses would be maddening — so the order
 // is random per visit: a seed is drawn once per browser session and every product gets a stable position
-// from it. New sessions, new order.
+// from it. New sessions, new order. The business's creator gallery uses the same seed (owner, 2026-11-18:
+// "not the same creator first on every visit").
 
 export const FEED_SEED_KEY = "mashpian:feed-seed";
 
@@ -16,8 +17,13 @@ export function orderKey(id: string, seed: string): number {
   return h;
 }
 
+// Any list whose items are identified by a string of their own (the gallery keys creators by userId)
+export function shuffledBySeedBy<T>(items: T[], seed: string, idOf: (item: T) => string): T[] {
+  return [...items].sort((a, b) => orderKey(idOf(a), seed) - orderKey(idOf(b), seed) || idOf(a).localeCompare(idOf(b)));
+}
+
 export function shuffledBySeed<T extends { id: string }>(items: T[], seed: string): T[] {
-  return [...items].sort((a, b) => orderKey(a.id, seed) - orderKey(b.id, seed) || a.id.localeCompare(b.id));
+  return shuffledBySeedBy(items, seed, (item) => item.id);
 }
 
 export function newFeedSeed(): string {

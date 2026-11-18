@@ -1,6 +1,7 @@
 import { NextResponse, after, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { signedVideoUrls } from "@/lib/video-links";
 import { isSupabaseConfigured } from "@/lib/admin-auth";
 import { filterContactInfo } from "@/lib/moderation/chat-filter";
 import { notifyConnectionStatusChange, logActivity, createNotification, notificationData } from "@/lib/notifications";
@@ -84,13 +85,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     const { data: videos } = await admin.from("videos").select("id, storage_path, url, thumbnail_url, status").in("id", videoIds);
     const rows = (videos || []) as any[];
     const paths = rows.map((v) => v.storage_path).filter((p): p is string => typeof p === "string" && p.length > 0);
-    const signedByPath = new Map<string, string>();
-    if (paths.length > 0) {
-      const { data: signed } = await admin.storage.from("videos").createSignedUrls(paths, 86400);
-      for (const s of signed || []) {
-        if (s.path && s.signedUrl) signedByPath.set(s.path, s.signedUrl);
-      }
-    }
+    // Cached per path so the CDN can serve the files (lib/video-links.ts)
+    const signedByPath = paths.length > 0 ? await signedVideoUrls(admin, paths) : new Map<string, string>();
     const byId = new Map<string, any>();
     for (const v of rows) {
       const url = (v.storage_path && signedByPath.get(v.storage_path)) || v.url;

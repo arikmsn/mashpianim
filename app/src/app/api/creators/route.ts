@@ -4,6 +4,7 @@ import { readActiveRole } from "@/lib/active-role";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { MIN_PORTFOLIO_VIDEOS } from "@/lib/match";
+import { signedVideoUrl } from "@/lib/video-links";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -96,8 +97,8 @@ export async function GET() {
       const port = byCreator.get(u.id) || { count: 0, first: null };
       let previewVideo: string | null = null;
       if (port.first?.storage_path) {
-        const { data } = await admin.storage.from("videos").createSignedUrl(port.first.storage_path, 86400);
-        previewVideo = data?.signedUrl || port.first.url || null;
+        // Cached per path so the CDN can serve the file (lib/video-links.ts)
+        previewVideo = (await signedVideoUrl(admin, port.first.storage_path)) || port.first.url || null;
       } else if (port.first?.url) {
         previewVideo = port.first.url;
       }
@@ -149,6 +150,11 @@ export async function GET() {
     })
   );
 
-  list.sort((a, b) => b.score - a.score);
-  return NextResponse.json({ creators: list, brandCategories });
+  // A creator with no portfolio video has nothing for a business to judge (owner, 2026-11-18: "a card with only
+  // text looks bad and no business would pick it") — hidden until the first upload, unless this business already
+  // has a connection with them (the hearted list must keep showing them).
+  const visible = list.filter((c) => c.portfolioCount > 0 || c.relation);
+  // Ranked by fit for API readers; the gallery itself shuffles per visit (lib/feed-order.ts)
+  visible.sort((a, b) => b.score - a.score);
+  return NextResponse.json({ creators: visible, brandCategories, hidden_without_videos: list.length - visible.length });
 }

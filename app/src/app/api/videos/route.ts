@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { signedVideoUrls } from "@/lib/video-links";
 import { isConnectionParticipant, canUploadConnectionVideo } from "@/lib/authz";
 import { videoFileProblem } from "@/lib/uploads";
 import { resolveViewer } from "@/lib/viewer";
@@ -97,16 +98,11 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ videos });
 }
 
+// Signed per path and cached so the CDN can serve the files (lib/video-links.ts)
 async function refreshVideoUrls(supabase: any, videos: any[]) {
-  return Promise.all(
-    videos.map(async (video: any) => {
-      if (!video.storage_path) return video;
-      const { data } = await supabase.storage
-        .from("videos")
-        .createSignedUrl(video.storage_path, 86400);
-      return { ...video, url: data?.signedUrl || video.url };
-    })
-  );
+  const paths = videos.map((v: any) => v.storage_path).filter((p: unknown): p is string => typeof p === "string" && p.length > 0);
+  const signed = await signedVideoUrls(supabase, paths);
+  return videos.map((video: any) => (video.storage_path ? { ...video, url: signed.get(video.storage_path) || video.url } : video));
 }
 
 export async function POST(request: NextRequest) {

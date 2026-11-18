@@ -9,6 +9,7 @@ import { swrFetch, fetchJson } from "@/lib/client-cache";
 import { CREDITS_CONTACT_NOTICE, creditsCardHint } from "@/lib/credits";
 import { purchaseOutcomeText } from "@/lib/payments";
 import { toDirectImageUrl } from "@/lib/images";
+import { feedSeed, shuffledBySeedBy } from "@/lib/feed-order";
 import { createClient } from "@/lib/supabase/client";
 
 interface Relation {
@@ -133,6 +134,104 @@ function PurchaseOutcome({ onSettled }: { onSettled: (outcome: string) => void }
   return null;
 }
 
+// The card's video (owner, 2026-11-18): muted autoplay — the only autoplay browsers allow — with a speaker
+// button to hear it; the poster and a spinner while the file buffers (a signed Storage URL served through the
+// CDN, often tens of MB), and a plain message when the browser cannot decode the file (an iPhone HEVC clip on
+// Windows or Firefox) instead of a black card.
+function DeckVideo({
+  src,
+  poster,
+  soundOn,
+  onToggleSound,
+  onBlocked,
+}: {
+  src: string;
+  poster: string | null;
+  soundOn: boolean;
+  onToggleSound: () => void;
+  onBlocked: () => void;
+}) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const [state, setState] = useState<"loading" | "playing" | "error">("loading");
+  const [slow, setSlow] = useState(false);
+
+  // Apply the sound choice to this element (React does not keep `muted` in sync) and start it; a browser that
+  // refuses sound without a fresh tap falls back to muted and tells the page
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    v.muted = !soundOn;
+    const p = v.play();
+    if (p) {
+      p.catch(() => {
+        if (v.muted) return;
+        v.muted = true;
+        onBlocked();
+        v.play().catch(() => {});
+      });
+    }
+  }, [soundOn, src, onBlocked]);
+
+  // Buffering for more than 1.5 s gets a word, not just a spinner (reset when playback starts, below)
+  useEffect(() => {
+    if (state !== "loading") return;
+    const t = setTimeout(() => setSlow(true), 1500);
+    return () => clearTimeout(t);
+  }, [state, src]);
+
+  return (
+    <>
+      <video
+        ref={ref}
+        key={src}
+        src={src}
+        poster={poster || undefined}
+        className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+        controlsList="nodownload"
+        onContextMenu={(e) => e.preventDefault()}
+        onWaiting={() => setState("loading")}
+        onPlaying={() => { setState("playing"); setSlow(false); }}
+        onError={() => { setState("error"); setSlow(false); }}
+      />
+      {state === "loading" && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none">
+          <div className="w-10 h-10 rounded-full border-[3px] border-white/30 border-t-white animate-spin" aria-hidden="true" />
+          {slow && <span className="bg-black/50 text-white text-xs px-3 py-1 rounded-full">הסרטון נטען…</span>}
+        </div>
+      )}
+      {state === "error" && (
+        <div className="absolute inset-x-4 top-14 flex justify-center pointer-events-none">
+          <span className="bg-black/60 text-white text-xs px-3 py-1.5 rounded-full text-center">הדפדפן לא מנגן את הסרטון הזה — שאר הסרטונים בפרופיל</span>
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onToggleSound(); }}
+        onPointerDown={(e) => e.stopPropagation()}
+        aria-label={soundOn ? "השתקת הסרטון" : "השמעת הסרטון"}
+        aria-pressed={soundOn}
+        title={soundOn ? "השתקה" : "קול"}
+        className="absolute top-14 left-3 w-11 h-11 rounded-full bg-black/50 text-white backdrop-blur flex items-center justify-center active:scale-95 transition-transform"
+      >
+        {soundOn ? (
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M11 5L6 9H2v6h4l5 4V5z" /><path d="M15.5 8.5a5 5 0 0 1 0 7" /><path d="M18.5 5.5a9 9 0 0 1 0 13" />
+          </svg>
+        ) : (
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M11 5L6 9H2v6h4l5 4V5z" /><path d="M23 9l-6 6" /><path d="M17 9l6 6" />
+          </svg>
+        )}
+      </button>
+    </>
+  );
+}
+
 export default function BrandDiscoverPage() {
   const [creators, setCreators] = useState<CreatorCard[]>([]);
   const [products, setProducts] = useState<BrandProduct[]>([]);
@@ -152,14 +251,23 @@ export default function BrandDiscoverPage() {
   const [viewProfileId, setViewProfileId] = useState<string | null>(null);
   const [allOpen, setAllOpen] = useState(false);
   const [direction, setDirection] = useState<1 | -1>(1);
+  // Sound is off until the business taps the speaker (browsers allow autoplay muted only)
+  const [soundOn, setSoundOn] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
   const dragging = useRef(false);
 
+  // The gallery order is random per visit (owner, 2026-11-18: never the same creator first), stable while the
+  // page is open — realtime refreshes reuse the session's seed, so cards never jump under the thumb
   const applyCreators = useCallback((data: { creators?: CreatorCard[] }) => {
-    setCreators(data.creators || []);
+    setCreators(shuffledBySeedBy(data.creators || [], feedSeed(), (c) => c.userId));
     setLoading(false);
   }, []);
+
+  const soundBlocked = useCallback(() => {
+    setSoundOn(false);
+    toast("הדפדפן מבקש הקשה כדי להשמיע קול — הקישו שוב על הרמקול", "info");
+  }, [toast]);
 
   const applyCounts = useCallback((data: { chose_you?: number; match?: number }) => {
     setChoseYou(data.chose_you || 0);
@@ -482,18 +590,12 @@ export default function BrandDiscoverPage() {
                 className="relative rounded-3xl overflow-hidden bg-black shadow-xl aspect-[3/4] max-h-[560px] mx-auto touch-pan-y select-none"
               >
                 {current.previewVideo ? (
-                  <video
-                    key={current.previewVideo}
+                  <DeckVideo
                     src={current.previewVideo}
-                    poster={current.previewPoster || undefined}
-                    className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    preload="auto"
-                    controlsList="nodownload"
-                    onContextMenu={(e) => e.preventDefault()}
+                    poster={current.previewPoster}
+                    soundOn={soundOn}
+                    onToggleSound={() => setSoundOn((v) => !v)}
+                    onBlocked={soundBlocked}
                   />
                 ) : (
                   <div className="absolute inset-0 bg-gradient-to-br from-pink-200 via-purple-200 to-amber-100 flex items-center justify-center">

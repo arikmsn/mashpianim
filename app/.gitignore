@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local scratch for published artifacts (brochure canvas files)
+.artifacts-tmp/
