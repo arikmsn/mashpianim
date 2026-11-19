@@ -6,6 +6,7 @@ import { getTimelineSettings } from "@/lib/settings";
 import { paymentsMode } from "@/lib/payments";
 import { reconcileSumitPayments } from "@/lib/payments-server";
 import { brandDigestDue, creatorDigestDue, digestMode } from "@/lib/digests";
+import { HEART_EXPIRY_DAYS, heartExpiresUnanswered } from "@/lib/hearts";
 import { recordDigestRun, runBrandDigest, runCreatorDigest, type DigestRunResult } from "@/lib/digests-server";
 
 // The WhatsApp digests pause between sends; the run may take up to a minute (Vercel Pro)
@@ -55,21 +56,25 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 0. One-sided hearts left unanswered for 7 days expire (mutual pairs wait for the brand, see step 0b)
-  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+  // 0. A BUSINESS's one-sided heart left unanswered for 7 days expires. A creator's heart never expires by time
+  //    (owner, 2026-11-19: "the like stays until the business answers or removes the product" — this step used to
+  //    cancel creator hearts too, and 578 were lost). Mutual pairs wait for the brand, see step 0b.
+  const sevenDaysAgo = new Date(Date.now() - HEART_EXPIRY_DAYS * 86400000).toISOString();
   const { data: staleHearts } = await supabase
     .from("connections")
     .select(`
-      id, initiated_by,
+      id, initiated_by, status, mutual_at, created_at,
       products(name),
       creator_profiles!connections_creator_id_fkey(users(id)),
       brand_profiles!connections_brand_id_fkey(users(id))
     `)
     .eq("status", "pending")
+    .eq("initiated_by", "brand")
     .is("mutual_at", null)
     .lt("created_at", sevenDaysAgo);
 
   for (const conn of (staleHearts || []) as any[]) {
+    if (!heartExpiresUnanswered(conn)) continue; // the rule in one place (lib/hearts.ts), checked per row too
     await supabase.from("connections").update({
       status: "cancelled",
       rejection_reason: "expired",

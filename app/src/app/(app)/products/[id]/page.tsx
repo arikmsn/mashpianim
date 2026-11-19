@@ -356,7 +356,7 @@ export default function ProductPage() {
 
               {pendingFromMe && (
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-neutral-500">העסק מקבל התראה ועונה עד 7 ימים</p>
+                  <p className="text-xs text-neutral-500">העסק מקבל התראה. הלב שלך נשאר עד שהעסק עונה או מסיר את המוצר</p>
                   <button type="button" className="text-xs text-neutral-400 hover:text-red-500" onClick={() => putStatus(conn.id, "cancelled", "הלב בוטל")}>
                     ביטול הלב
                   </button>
