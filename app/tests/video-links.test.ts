@@ -6,9 +6,10 @@ process.env.NEXT_SUPABASE_URL = "https://proj.supabase.co";
 let videoUrl: (p: string | null | undefined) => string | null;
 let videoUrls: (paths: (string | null | undefined)[]) => Map<string, string>;
 let signedDeliverableUrls: (admin: any, paths: (string | null | undefined)[]) => Promise<Map<string, string>>;
+let deliverableThumbPath: (u: string | null | undefined) => string | null;
 let DELIVERABLES_BUCKET: string;
 before(async () => {
-  ({ videoUrl, videoUrls, signedDeliverableUrls, DELIVERABLES_BUCKET } = await import("../src/lib/video-links.ts"));
+  ({ videoUrl, videoUrls, signedDeliverableUrls, deliverableThumbPath, DELIVERABLES_BUCKET } = await import("../src/lib/video-links.ts"));
 });
 
 // A stand-in for the service-role storage client
@@ -72,5 +73,14 @@ describe("private deliverable URLs (owner, 2026-11-18: keep delivery videos priv
     const map = await signedDeliverableUrls(admin, [null, "", undefined]);
     assert.equal(map.size, 0);
     assert.equal(calls.length, 0);
+  });
+
+  test("a deliverable poster path is recovered from a bare path or a legacy public thumbnails URL", () => {
+    const path = "portfolio/u/connections/c/1794248818703.jpg";
+    assert.equal(deliverableThumbPath(path), path, "already a bare path");
+    assert.equal(deliverableThumbPath(`https://proj.supabase.co/storage/v1/object/public/thumbnails/${path}`), path, "legacy public URL");
+    assert.equal(deliverableThumbPath(`https://proj.supabase.co/storage/v1/object/sign/deliverables/${path}?token=t`), path, "already-signed URL");
+    assert.equal(deliverableThumbPath(null), null);
+    assert.equal(deliverableThumbPath(""), null);
   });
 });

@@ -52,6 +52,15 @@ export async function signedDeliverableUrl(
   return data?.signedUrl ?? null;
 }
 
+// A deliverable's poster thumbnail is private too (owner, 2026-11-19). It is stored either as a bare storage path
+// (new uploads) or, for rows created before the move, a legacy public `thumbnails` URL — either way the object now
+// lives in the `deliverables` bucket, so return the path to sign.
+export function deliverableThumbPath(thumbnailUrl: string | null | undefined): string | null {
+  if (!thumbnailUrl) return null;
+  const m = thumbnailUrl.match(/\/storage\/v1\/object\/(?:public|sign)\/(?:thumbnails|deliverables)\/([^?]+)/);
+  return m ? decodeURIComponent(m[1]) : thumbnailUrl;
+}
+
 export async function signedDeliverableUrls(admin: Admin, paths: (string | null | undefined)[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   const clean = [...new Set(paths.filter((p): p is string => typeof p === "string" && p.length > 0))];

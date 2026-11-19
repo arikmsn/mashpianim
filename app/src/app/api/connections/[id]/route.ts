@@ -1,7 +1,7 @@
 import { NextResponse, after, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
-import { signedDeliverableUrls } from "@/lib/video-links";
+import { signedDeliverableUrls, deliverableThumbPath } from "@/lib/video-links";
 import { isSupabaseConfigured } from "@/lib/admin-auth";
 import { filterContactInfo } from "@/lib/moderation/chat-filter";
 import { notifyConnectionStatusChange, logActivity, createNotification, notificationData } from "@/lib/notifications";
@@ -84,12 +84,17 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   if (videoIds.length > 0) {
     const { data: videos } = await admin.from("videos").select("id, storage_path, url, thumbnail_url, status").in("id", videoIds);
     const rows = (videos || []) as any[];
-    // Deliverables are private (migration 025) — the viewer is a party to this connection, so sign them (admin)
-    const signedByPath = await signedDeliverableUrls(admin, rows.map((v) => v.storage_path));
+    // Deliverables (video + poster) are private (migrations 025 / 2026-11-19) — the viewer is a party to this
+    // connection, so the service role signs both from the deliverables bucket
+    const signedByPath = await signedDeliverableUrls(admin, [
+      ...rows.map((v) => v.storage_path),
+      ...rows.map((v) => deliverableThumbPath(v.thumbnail_url)),
+    ]);
     const byId = new Map<string, any>();
     for (const v of rows) {
       const url = (v.storage_path && signedByPath.get(v.storage_path)) || v.url;
-      byId.set(v.id, { url, thumbnail_url: v.thumbnail_url, status: v.status });
+      const thumbPath = deliverableThumbPath(v.thumbnail_url);
+      byId.set(v.id, { url, thumbnail_url: (thumbPath && signedByPath.get(thumbPath)) || null, status: v.status });
     }
     for (const m of list) {
       if (m.kind === "video" && m.data?.video_id) {

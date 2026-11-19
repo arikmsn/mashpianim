@@ -4,6 +4,7 @@ import { createNotification, logActivity, notificationData } from "@/lib/notific
 import { detectContactInfo } from "@/lib/moderation/chat-filter";
 import { contactWarnings, messageSide } from "@/lib/admin-connections";
 import { CHAT_BLOCKED_TEXT, CHAT_UNBLOCKED_TEXT, isChatBlocked } from "@/lib/chat-block";
+import { deliverableThumbPath } from "@/lib/video-links";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -46,22 +47,28 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
     c.blocked_by ? supabase.from("users").select("full_name").eq("id", c.blocked_by).maybeSingle() : Promise.resolve({ data: null }),
   ]);
 
-  // Signed playback URLs (1 hour) from the private deliverables bucket (migration 025)
+  // Signed URLs (1 hour) for the deliverable video AND its poster, both private (migrations 025 / 2026-11-19)
   const videoRows = (vidRes.data || []) as any[];
-  const paths = videoRows.map((v) => v.storage_path).filter((p): p is string => typeof p === "string" && p.length > 0);
+  const paths = [
+    ...videoRows.map((v) => v.storage_path),
+    ...videoRows.map((v) => deliverableThumbPath(v.thumbnail_url)),
+  ].filter((p): p is string => typeof p === "string" && p.length > 0);
   const signedByPath: Record<string, string> = {};
   if (paths.length > 0) {
-    const { data: signed } = await supabase.storage.from("deliverables").createSignedUrls(paths, 3600);
+    const { data: signed } = await supabase.storage.from("deliverables").createSignedUrls([...new Set(paths)], 3600);
     for (const s of signed || []) if (s.path && s.signedUrl) signedByPath[s.path] = s.signedUrl;
   }
-  const videos = videoRows.map((v) => ({
-    id: v.id as string,
-    status: (v.status as string) || null,
-    thumbnail_url: (v.thumbnail_url as string) || null,
-    created_at: v.created_at as string,
-    revision_notes: (v.revision_notes as string) || null,
-    play_url: (v.storage_path && signedByPath[v.storage_path]) || (v.url as string) || null,
-  }));
+  const videos = videoRows.map((v) => {
+    const thumbPath = deliverableThumbPath(v.thumbnail_url);
+    return {
+      id: v.id as string,
+      status: (v.status as string) || null,
+      thumbnail_url: (thumbPath && signedByPath[thumbPath]) || null,
+      created_at: v.created_at as string,
+      revision_notes: (v.revision_notes as string) || null,
+      play_url: (v.storage_path && signedByPath[v.storage_path]) || (v.url as string) || null,
+    };
+  });
   const videoById = new Map(videos.map((v) => [v.id, v]));
 
   // The transcript: side, and why a line deserves a second look (only what the two parties wrote)

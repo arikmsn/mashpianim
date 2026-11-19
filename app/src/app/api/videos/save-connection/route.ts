@@ -37,10 +37,9 @@ export async function POST(request: NextRequest) {
     if (!isOwnConnectionVideoPath(storagePath, user.id, connectionId)) {
       return NextResponse.json({ error: "נתיב קובץ לא תקין" }, { status: 400 });
     }
+    // The poster lives in the private deliverables bucket; store its path (signed on read), not a public URL
     const hasThumb = isOwnConnectionVideoPath(thumbnailPath, user.id, connectionId) && isImagePath(thumbnailPath);
-    const thumbnailUrl = hasThumb
-      ? `${process.env.NEXT_SUPABASE_URL}/storage/v1/object/public/thumbnails/${thumbnailPath}`
-      : null;
+    const thumbnailUrl = hasThumb ? thumbnailPath : null;
 
     const supabase = getSupabaseAdmin();
     if (!supabase) {

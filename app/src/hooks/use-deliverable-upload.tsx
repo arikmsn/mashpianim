@@ -78,8 +78,9 @@ export function useDeliverableUpload(onUploaded: (connectionId: string) => void)
 
           let thumbnailPath: string | null = null;
           if (thumbBlob) {
+            // The poster goes to the private deliverables bucket too — deliverables are not public (2026-11-19)
             const { error: thumbError } = await supabase.storage
-              .from("thumbnails")
+              .from("deliverables")
               .upload(thumbPath, thumbBlob, { contentType: "image/jpeg", upsert: true });
             if (!thumbError) thumbnailPath = thumbPath;
           }

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
-import { videoUrls, signedDeliverableUrls } from "@/lib/video-links";
+import { videoUrls, signedDeliverableUrls, deliverableThumbPath } from "@/lib/video-links";
 import { isConnectionParticipant, canUploadConnectionVideo } from "@/lib/authz";
 import { videoFileProblem } from "@/lib/uploads";
 import { resolveViewer } from "@/lib/viewer";
@@ -98,8 +98,18 @@ export async function GET(request: NextRequest) {
   // role mints short-lived signed URLs for them
   const admin = getSupabaseAdmin();
   const rows = (data || []) as any[];
-  const signed = admin ? await signedDeliverableUrls(admin, rows.map((v) => v.storage_path)) : new Map<string, string>();
-  const videos = rows.map((v) => (v.storage_path ? { ...v, url: signed.get(v.storage_path) || v.url } : v));
+  // The deliverable video and its poster are both private — sign both from the deliverables bucket
+  const signed = admin
+    ? await signedDeliverableUrls(admin, [...rows.map((v) => v.storage_path), ...rows.map((v) => deliverableThumbPath(v.thumbnail_url))])
+    : new Map<string, string>();
+  const videos = rows.map((v) => {
+    const thumbPath = deliverableThumbPath(v.thumbnail_url);
+    return {
+      ...v,
+      url: (v.storage_path && signed.get(v.storage_path)) || v.url,
+      thumbnail_url: (thumbPath && signed.get(thumbPath)) || null,
+    };
+  });
   return NextResponse.json({ videos });
 }
 
