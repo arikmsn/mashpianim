@@ -60,7 +60,7 @@ app/src/
   middleware.ts                 Supabase session refresh for page requests only (lib/supabase/middleware.ts): /api/* is skipped (routes authenticate themselves); a 4 s Auth timeout lets the request through instead of hanging
   app/
     page.tsx                    marketing landing
-    login/, register/           phone OTP flows (register has creator + brand branches; brand categories are chips)
+    login/, register/           phone OTP flows (register has creator + brand branches; brand categories are chips; `?type=brand|creator` picks the persona skin, `?next=billing` sends a business to /brand/billing after registration or login — the home page's purchase button)
     terms/
     (app)/                      authenticated area; layout.tsx gates on useAuth, template.tsx = 150ms fade
       feed/                     CREATOR HOME: one-product deck (❤️ / ✕ / פרטים, swipe or arrows; only פרטים opens the product — the picture is inert since 2026-11-09; random order per session; the eye-off button lists ✕-skipped products — "מוצרים שהסרתי" — with a restore per product), filter popup (categories with products, brand regions, type), "המוצרים שבחרתי" grid, gate banner, brand-hearts strip
