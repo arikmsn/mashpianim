@@ -131,6 +131,15 @@ describe("site content registry (design package v3, ניהול תוכן מהאד
     }
     assert.ok(SITE_CONTENT_DEFAULTS.home_brands.gallery_posters.length >= 3);
     assert.ok(SITE_CONTENT_DEFAULTS.home_brands.approved_posters.length >= 1);
+    // The gallery deck, the match avatars and the approved videos show other creators than the hero fan, and
+    // never the same creator twice (owner's review round 2)
+    const creatorOf = (url: string) => url.match(/\/portfolio\/([0-9a-f-]+)\//)?.[1] ?? url;
+    const fanCreators = new Set(fan.tiles.map((t) => creatorOf(t.poster_url)));
+    const bento = [...SITE_CONTENT_DEFAULTS.home_brands.gallery_posters, ...SITE_CONTENT_DEFAULTS.home_brands.approved_posters];
+    const bentoCreators = bento.map((p) => creatorOf(p.image_url));
+    for (const c of bentoCreators) assert.ok(!fanCreators.has(c), `bento poster of a fan creator: ${c}`);
+    assert.equal(new Set(bentoCreators).size, bentoCreators.length, "a creator repeats in the bento posters");
+    for (const p of bento) assert.match(p.caption, /^[^,]+, [^,]+$/, `caption "name, field": ${p.caption}`);
     // No Latin decoration left in the defaults of the public home page and the quiz
     const latin = /[A-Za-z]{3,}/;
     const noVars = (s: string) => s.replace(/\{[a-z_]+\}/g, "");

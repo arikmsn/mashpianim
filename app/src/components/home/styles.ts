@@ -12,8 +12,11 @@ export const pillOutlineLight = `${pill} border-[1.5px] border-white/40 text-on-
 export const pillSmall = "h-10 px-4 text-sm";
 
 export const display = "font-display text-ink-900";
-export const eyebrow = "inline-flex items-center gap-2 text-xs font-medium tracking-[1.2px] text-ink-700 before:content-[''] before:w-1.5 before:h-1.5 before:rounded-full before:bg-lemon-400";
-export const eyebrowLight = "inline-flex items-center gap-2 text-xs font-medium tracking-[1.2px] text-lemon-400 before:content-[''] before:w-1.5 before:h-1.5 before:rounded-full before:bg-lemon-400";
+// Section labels: readable at a glance (owner, review round 2: the 12px version was too small)
+export const eyebrow = "inline-flex items-center gap-2.5 text-[15px] font-semibold tracking-[0.3px] text-pink-700 md:text-base before:content-[''] before:w-2 before:h-2 before:rounded-full before:bg-lemon-400";
+export const eyebrowLight = "inline-flex items-center gap-2.5 text-[15px] font-semibold tracking-[0.3px] text-lemon-400 md:text-base before:content-[''] before:w-2 before:h-2 before:rounded-full before:bg-lemon-400";
+// The numbered circle of a step (digits in Rubik 700, at the start of the row in RTL)
+export const stepNumber = "grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary text-[15px] font-bold tabular-nums text-white shadow-md md:h-11 md:w-11 md:text-base";
 export const mono = "font-mono tabular-nums";
 
 // IBM Plex Mono is for digits and Latin only: a tag the admin wrote in Hebrew falls back to Rubik

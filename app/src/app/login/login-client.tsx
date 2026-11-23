@@ -51,8 +51,10 @@ function LoginContent({ texts }: { texts: AuthTexts }) {
   useEffect(() => {
     if (typeParam) storePersona(typeParam);
   }, [typeParam]);
-  // "I'm a creator / a brand" rides through the code step into registration
+  // "I'm a creator / a brand" rides through the code step into registration, and so does the screen a new
+  // business should land on afterwards (?next=billing from the home page's purchase button)
   const presetType = persona;
+  const nextScreen: "billing" | null = searchParams.get("next") === "billing" ? "billing" : null;
 
   // The account holds several roles: this session signs in as the chosen one
   async function handleChooseRole(role: AppRole) {
@@ -131,7 +133,7 @@ function LoginContent({ texts }: { texts: AuthTexts }) {
 
       if (data.needsOnboarding) {
         router.push(
-          `/register?verified=1&userId=${data.userId}&phone=${encodeURIComponent(formattedPhone)}${presetType ? `&type=${presetType}` : ""}`
+          `/register?verified=1&userId=${data.userId}&phone=${encodeURIComponent(formattedPhone)}${presetType ? `&type=${presetType}` : ""}${nextScreen ? `&next=${nextScreen}` : ""}`
         );
       } else if (Array.isArray(data.roles) && data.roles.length > 1 && !data.role) {
         // The account holds several roles (creator / brand / admin): the session must pick one
@@ -143,7 +145,7 @@ function LoginContent({ texts }: { texts: AuthTexts }) {
         // The device now belongs to this side (admins keep the remembered colour)
         const signedInAs = personaForRole(role);
         if (signedInAs) storePersona(signedInAs);
-        const defaultRedirect = role === "brand" ? "/brand" : role === "admin" ? "/admin" : "/feed";
+        const defaultRedirect = role === "brand" ? (nextScreen === "billing" ? "/brand/billing" : "/brand") : role === "admin" ? "/admin" : "/feed";
         router.push(redirect !== "/feed" ? redirect : defaultRedirect);
       }
     } catch (err: unknown) {

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowDown, ArrowLeft, Briefcase, Sparkles, UserRound } from "lucide-react";
+import { ArrowDown, ArrowLeft, Briefcase, Check, Heart, Sparkles, UserRound, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { splitMarker } from "@/lib/site-content";
 import { getSiteContent } from "@/lib/site-content-server";
@@ -10,7 +10,7 @@ import { CreatorFan } from "@/components/home/creator-fan";
 import { Reveal } from "@/components/home/reveal";
 import { StickyCta } from "@/components/home/sticky-cta";
 import { InfluencerQuiz } from "@/components/features/influencer-quiz";
-import { bento, container, display, eyebrow, eyebrowLight, isMonoText, pillCreator, pillDark, pillInkLemon, pillOutline, pillPrimary, tagClass } from "@/components/home/styles";
+import { bento, container, display, eyebrow, eyebrowLight, isMonoText, pillCreator, pillDark, pillInkLemon, pillOutline, pillPrimary, stepNumber, tagClass } from "@/components/home/styles";
 
 // The home page (design package v3 "Pop warm"): a server component that reads the content registry and renders
 // the sections in the package's order. Every visible string comes from lib/site-content.ts through
@@ -18,8 +18,11 @@ import { bento, container, display, eyebrow, eyebrowLight, isMonoText, pillCreat
 export const revalidate = 60;
 
 const REGISTER_BRAND = "/register?type=brand";
+const REGISTER_BRAND_BUY = "/register?type=brand&next=billing";
 const REGISTER_CREATOR = "/register?type=creator";
 const LOGIN = "/login";
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
 
 export async function generateMetadata(): Promise<Metadata> {
   const { content } = await getSiteContent();
@@ -43,6 +46,112 @@ function TwoTone({ text, markedClassName }: { text: string; markedClassName: str
       <span className={markedClassName}>{marked}</span>
       {after}
     </>
+  );
+}
+
+type Poster = { image_url: string; caption: string };
+
+// Step 1 of the business process: the creator gallery as the business sees it, a deck of real portfolio
+// posters with the creator's name and category and the two decisions under it
+function GalleryPreview({ posters, heartLabel, passLabel }: { posters: Poster[]; heartLabel: string; passLabel: string }) {
+  const [front, ...behind] = posters;
+  if (!front) return null;
+  const [name, category] = front.caption.split(/,\s*/);
+  return (
+    <div className="relative mx-auto w-[150px] pt-3">
+      {behind.slice(0, 2).map((p, i) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={`${p.image_url}-${i}`}
+          src={p.image_url}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className={cn("absolute top-0 aspect-[9/16] w-[150px] rounded-2xl object-cover opacity-70 shadow-md", i === 0 ? "left-4 rotate-[5deg]" : "right-4 -rotate-[5deg]")}
+        />
+      ))}
+      <div className="relative aspect-[9/16] w-[150px] overflow-hidden rounded-2xl shadow-lg">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={front.image_url} alt={front.caption} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent px-3 pb-3 pt-10 text-on-ink">
+          <div className="text-sm font-bold">{name}</div>
+          {category && <span className="mt-1 inline-block rounded-full bg-white/20 px-2 py-0.5 text-[11px]">{category}</span>}
+        </div>
+      </div>
+      <div className="relative -mt-5 flex items-center justify-center gap-4">
+        <span className="grid h-11 w-11 place-items-center rounded-full border border-border bg-surface text-neutral-500 shadow-md" aria-label={passLabel} title={passLabel}>
+          <X className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <span className="grid h-14 w-14 place-items-center rounded-full bg-primary text-white shadow-lg" aria-label={heartLabel} title={heartLabel}>
+          <Heart className="h-7 w-7" aria-hidden="true" fill="currentColor" />
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// Step 2: two hearts met
+function MatchPreview({ posters, line, tag }: { posters: Poster[]; line: string; tag: string }) {
+  const [a, b] = posters;
+  return (
+    <div className="rounded-2xl border border-border bg-canvas p-4">
+      <div className="flex items-center justify-center gap-3">
+        <span className="relative h-14 w-14 overflow-hidden rounded-full border-2 border-white shadow-md">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {a && <img src={a.image_url} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />}
+        </span>
+        <span className="grid h-9 w-9 place-items-center rounded-full bg-pink-100 text-pink-600">
+          <Heart className="h-4 w-4" aria-hidden="true" fill="currentColor" />
+        </span>
+        <span className="grid h-14 w-14 place-items-center rounded-full bg-surface-ink text-on-ink shadow-md">
+          <Briefcase className="h-6 w-6" aria-hidden="true" />
+        </span>
+        {b && (
+          <span className="sr-only">{b.caption}</span>
+        )}
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-2 rounded-xl bg-surface px-3 py-2 text-[13px]">
+        <span>{line}</span>
+        <span className="rounded-full bg-success-soft px-2.5 py-1 text-xs font-semibold text-success">{tag}</span>
+      </div>
+    </div>
+  );
+}
+
+// Step 3: the managed chat
+function ChatPreview({ bubbles }: { bubbles: string[] }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      {bubbles.filter(Boolean).map((b, i) => (
+        <span
+          key={i}
+          className={cn(
+            "max-w-[88%] px-3 py-2 text-[13px]",
+            i % 2 === 0 ? "self-start rounded-[12px_12px_12px_4px] border border-border bg-canvas" : "self-end rounded-[12px_12px_4px_12px] bg-surface-ink text-on-ink"
+          )}
+        >
+          {b}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// Step 4: approved videos, each with the "done" mark
+function ApprovedPreview({ posters, badge }: { posters: Poster[]; badge: string }) {
+  return (
+    <div className="flex justify-center gap-2.5">
+      {posters.slice(0, 3).map((p, i) => (
+        <div key={`${p.image_url}-${i}`} className="relative aspect-[9/16] w-[72px] overflow-hidden rounded-xl shadow-md md:w-[76px]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={p.image_url} alt={p.caption} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+          <span className="absolute left-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-success text-white shadow">
+            <Check className="h-3.5 w-3.5" aria-hidden="true" strokeWidth={3} />
+          </span>
+          <span className="absolute inset-x-1.5 bottom-1.5 rounded-full bg-success-soft px-1.5 py-0.5 text-center text-[10px] font-semibold text-success">{badge}</span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -73,6 +182,15 @@ export default async function HomePage() {
     { value: stats.stat3_value, suffix: stats.stat3_suffix, label: stats.stat3_label, source: stats.stat3_source, dark: stats.stat3_dark },
   ];
 
+  const galleryPosters = brands.gallery_posters as Poster[];
+  const approvedPosters = brands.approved_posters as Poster[];
+  const processSteps = [
+    { title: brands.bento1_title, desc: brands.bento1_desc, visual: <GalleryPreview posters={galleryPosters} heartLabel={brands.gallery_heart} passLabel={brands.gallery_pass} /> },
+    { title: brands.bento2_title, desc: brands.bento2_desc, visual: <MatchPreview posters={galleryPosters.slice(3)} line={brands.bento2_sample} tag={brands.bento2_sample_tag} /> },
+    { title: brands.bento3_title, desc: brands.bento3_desc, visual: <ChatPreview bubbles={[brands.bento3_bubble1, brands.bento3_bubble2, brands.bento3_bubble3]} /> },
+    { title: brands.bento4_title, desc: brands.bento4_desc, visual: <ApprovedPreview posters={approvedPosters} badge={brands.approved_badge} /> },
+  ];
+
   return (
     <div className="bg-canvas text-ink-900 pb-[80px] md:pb-0" id="top">
       <SiteNav
@@ -98,7 +216,7 @@ export default async function HomePage() {
             <h1 className="mx-auto mt-4 max-w-[980px] font-display text-[34px] leading-[1.06] tracking-[-1px] text-on-ink md:mt-6 md:text-[56px] md:tracking-[-1.5px] lg:text-[72px] lg:leading-[1.02]">
               <TwoTone text={hero.title} markedClassName="signature-text" />
             </h1>
-            <p className="mx-auto mt-4 max-w-[600px] text-base leading-relaxed text-on-ink/70 md:mt-6 md:text-[19px]">{hero.subtitle}</p>
+            <p className="mx-auto mt-4 max-w-[640px] text-base leading-relaxed text-on-ink/70 md:mt-6 md:text-[19px]">{hero.subtitle}</p>
             <div className="mt-6 flex flex-col justify-center gap-2.5 sm:flex-row sm:gap-3 md:mt-8">
               <Link href={REGISTER_BRAND} className={cn(pillPrimary, "h-[52px] px-7 text-base")}>
                 <Briefcase className="h-[18px] w-[18px]" aria-hidden="true" />
@@ -124,7 +242,7 @@ export default async function HomePage() {
               </span>
             )}
           </div>
-          <div className="relative z-[1] mt-9 md:mt-14">
+          <div className="relative z-[1] mt-7 md:mt-14">
             <CreatorFan tiles={content.home_fan.tiles} autoplay={content.home_fan.autoplay} label={hero.fan_label} counterLine={hero.counter_line} demoNote={hero.demo_note} />
           </div>
         </section>
@@ -174,68 +292,50 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* BUSINESSES */}
+        {/* BUSINESSES: why, then the four steps */}
         <section id="biz" className={cn(container, "pb-16 pt-16 md:pb-24 md:pt-28")}>
           <Reveal>
             <span className={eyebrow}>{brands.eyebrow}</span>
             <h2 className={cn(display, "mt-3 max-w-[880px] text-[32px] leading-[1.1] md:text-[48px] md:leading-[1.08]")}>
               <TwoTone text={brands.title} markedClassName="text-neutral-500" />
             </h2>
-            <p className="mt-3 max-w-[560px] text-base leading-relaxed text-ink-700 md:mt-4 md:text-lg">{brands.subtitle}</p>
+            <p className="mt-3 max-w-[620px] text-base leading-relaxed text-ink-700 md:mt-4 md:text-lg">{brands.subtitle}</p>
           </Reveal>
 
-          <div className="mt-7 grid grid-cols-1 gap-3 md:mt-12 md:grid-cols-3 md:gap-4">
-            <Reveal className="md:col-span-2" delay={0}>
-              <div className={cn(bento, "bento-glow h-full md:min-h-[340px]")}>
-                <div className="font-display text-[22px] md:text-[27px]">{brands.bento1_title}</div>
-                <p className="mt-1.5 max-w-[320px] text-sm leading-relaxed text-ink-700 md:mt-2 md:text-base">{brands.bento1_desc}</p>
-                <div className="mt-4 grid grid-cols-3 gap-2 md:absolute md:-bottom-10 md:left-8 md:mt-0 md:w-[440px] md:gap-2.5 md:rounded-t-2xl md:border md:border-border md:bg-surface md:p-4 md:shadow-lg">
-                  {brands.gallery_posters.slice(0, 6).map((p, i) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img key={`${p.image_url}-${i}`} src={p.image_url} alt={p.caption} loading="lazy" decoding="async" className={cn("h-[120px] w-full rounded-[10px] object-cover md:h-[150px]", i >= 3 && "hidden lg:block md:h-[60px]")} />
-                  ))}
+          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 md:mt-10 md:grid-cols-4 md:gap-4">
+            {brands.benefits.map((b, i) => (
+              <Reveal key={i} delay={0.06 * i}>
+                <div className="h-full rounded-2xl border border-pink-200 bg-pink-50 p-4 md:p-5">
+                  <span className="grid h-9 w-9 place-items-center rounded-full bg-primary text-white">
+                    <Check className="h-4 w-4" aria-hidden="true" strokeWidth={3} />
+                  </span>
+                  <div className="mt-3 font-display text-[20px] leading-tight text-pink-900 md:text-[22px]">{b.title}</div>
+                  <p className="mt-1.5 text-sm leading-relaxed text-ink-700">{b.desc}</p>
                 </div>
-                {brands.screenshot_caption && <span className={cn(tagClass(brands.screenshot_caption), "mt-3 block text-[11px] text-neutral-500 md:absolute md:bottom-5 md:right-8 md:mt-0")}>{brands.screenshot_caption}</span>}
-              </div>
-            </Reveal>
-            <Reveal delay={0.08}>
-              <div className={cn(bento, "flex h-full flex-col md:min-h-[340px]")}>
-                <div className="font-display text-[22px] md:text-[27px]">{brands.bento2_title}</div>
-                <p className="mt-1.5 text-sm leading-relaxed text-ink-700 md:mt-2 md:text-base">{brands.bento2_desc}</p>
-                <div className="mt-5 flex items-center gap-2 rounded-xl border border-border bg-canvas px-3.5 py-3 md:mt-auto" aria-hidden="true">
-                  <span className="h-9 w-9 shrink-0 rounded-full bg-pink-200" />
-                  <span className="flex-1 text-[13px]">{brands.bento2_sample}</span>
-                  <span className="rounded-full bg-success-soft px-2.5 py-1.5 text-xs font-semibold text-success">{brands.bento2_sample_tag}</span>
-                </div>
-              </div>
-            </Reveal>
-            <Reveal delay={0.16}>
-              <div className={cn(bento, "flex h-full flex-col md:min-h-[300px]")}>
-                <div className="font-display text-[22px] md:text-[27px]">{brands.bento3_title}</div>
-                <p className="mt-1.5 text-sm leading-relaxed text-ink-700 md:mt-2 md:text-base">{brands.bento3_desc}</p>
-                <div className="mt-5 flex flex-col gap-1.5 md:mt-auto" aria-hidden="true">
-                  <span className="self-start rounded-[12px_12px_12px_4px] border border-border bg-canvas px-3 py-2 text-[13px]">{brands.bento3_bubble1}</span>
-                  <span className="self-end rounded-[12px_12px_4px_12px] bg-surface-ink px-3 py-2 text-[13px] text-on-ink">{brands.bento3_bubble2}</span>
-                </div>
-              </div>
-            </Reveal>
-            <Reveal className="md:col-span-2" delay={0.24}>
-              <div className={cn(bento, "flex h-full flex-col gap-5 md:min-h-[300px] md:flex-row md:items-center md:gap-8")} style={{ background: "var(--surface) radial-gradient(110% 80% at 100% 0%, #ffadc959 0%, #ffadc900 60%)" }}>
-                <div className="flex-1">
-                  <div className="font-display text-[22px] md:text-[27px]">{brands.bento4_title}</div>
-                  <p className="mt-1.5 max-w-[380px] text-sm leading-relaxed text-ink-700 md:mt-2 md:text-base">{brands.bento4_desc}</p>
-                </div>
-                <div className="flex gap-2.5">
-                  {brands.approved_posters.slice(0, 3).map((p, i) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img key={`${p.image_url}-${i}`} src={p.image_url} alt={p.caption} loading="lazy" decoding="async" className="h-[120px] w-[68px] rounded-[14px] object-cover shadow-md md:h-[170px] md:w-[96px]" />
-                  ))}
-                </div>
-              </div>
-            </Reveal>
+              </Reveal>
+            ))}
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-3 md:mt-4 md:grid-cols-3 md:gap-4">
+          <Reveal>
+            <h3 className={cn(display, "mt-10 text-[24px] leading-tight md:mt-16 md:text-[30px]")}>{brands.process_title}</h3>
+          </Reveal>
+          <ol className="relative mt-5 grid grid-cols-1 gap-5 md:mt-8 md:grid-cols-4 md:gap-4">
+            <div aria-hidden="true" className="absolute bottom-6 right-5 top-6 w-0.5 bg-pink-200 md:bottom-auto md:left-[12.5%] md:right-[12.5%] md:top-[22px] md:h-0.5 md:w-auto" />
+            {processSteps.map((s, i) => (
+              <li key={i} className="relative ps-14 md:ps-0 md:pt-16">
+                <span className={cn(stepNumber, "absolute right-0 top-0 md:left-1/2 md:right-auto md:-translate-x-1/2")}>{pad2(i + 1)}</span>
+                <Reveal delay={0.06 * i} className="h-full">
+                  <div className={cn(bento, "flex h-full flex-col p-5 md:p-5")}>
+                    <div className="font-display text-[20px] leading-tight md:text-[22px]">{s.title}</div>
+                    <p className="mt-1.5 text-sm leading-relaxed text-ink-700">{s.desc}</p>
+                    <div className="mt-4 flex flex-1 flex-col justify-center md:mt-5">{s.visual}</div>
+                  </div>
+                </Reveal>
+              </li>
+            ))}
+          </ol>
+
+          <div className="mt-6 grid grid-cols-2 gap-3 md:mt-10 md:grid-cols-3 md:gap-4">
             {statTiles.map((s, i) => (
               <Reveal key={i} delay={0.06 * i} className={cn(i === 2 && "col-span-2 md:col-span-1")}>
                 <div className={cn("h-full rounded-2xl border p-5 md:px-6 md:pb-6 md:pt-7", s.dark ? "border-white/10 bg-surface-ink" : "border-border bg-surface")}>
@@ -255,7 +355,7 @@ export default async function HomePage() {
           </div>
 
           <div className="mt-6 flex flex-col gap-3 md:mt-10 md:flex-row md:items-center">
-            <Link href={REGISTER_BRAND} className={cn(pillPrimary, "w-full md:w-auto")}>
+            <Link href={REGISTER_BRAND_BUY} className={cn(pillPrimary, "w-full md:w-auto")}>
               {brands.cta_primary}
               <ArrowLeft className="h-[18px] w-[18px]" aria-hidden="true" />
             </Link>
@@ -278,8 +378,8 @@ export default async function HomePage() {
             <div className="mt-7 grid grid-cols-1 gap-5 md:mt-12 md:grid-cols-4 md:gap-6">
               {how.steps.map((s, i) => (
                 <Reveal key={i} delay={0.06 * i}>
-                  <div className="flex gap-3.5 md:flex-col md:gap-3 md:border-t md:border-border md:pt-5">
-                    <span className={cn(tagClass(s.tag), "w-8 shrink-0 pt-1 text-xs text-pink-700 md:w-auto md:pt-0")}>{s.tag}</span>
+                  <div className="flex gap-4 md:flex-col md:gap-4 md:border-t md:border-border md:pt-6">
+                    <span className={cn(stepNumber, tagClass(s.tag), "self-start")}>{s.tag || pad2(i + 1)}</span>
                     <div>
                       <b className="text-base font-semibold md:text-xl">{s.title}</b>
                       <div className="mt-0.5 text-sm leading-relaxed text-ink-700 md:mt-1 md:text-base">{s.desc}</div>
@@ -315,7 +415,7 @@ export default async function HomePage() {
                 <div className="flex flex-col gap-2 md:gap-3">
                   {creators.steps.map((s, i) => (
                     <div key={i} className="flex items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-3.5 md:gap-4 md:px-6 md:py-5">
-                      <span className={cn(tagClass(s.tag), "w-6 shrink-0 text-xs text-lemon-700 md:w-7")}>{s.tag}</span>
+                      <span className={cn(stepNumber, tagClass(s.tag), "bg-lemon-400 text-ink-900 shadow-none")}>{s.tag || pad2(i + 1)}</span>
                       <div>
                         <b className="text-sm font-semibold md:text-base">{s.title}</b>
                         <div className="hidden text-sm text-ink-700 md:block">{s.desc}</div>
@@ -343,10 +443,10 @@ export default async function HomePage() {
                     <TwoTone text={inf.title} markedClassName="text-neutral-500" />
                   </h2>
                   <p className="mt-3 max-w-[460px] text-[15px] leading-relaxed text-ink-700 md:mt-4 md:text-lg">{inf.subtitle}</p>
-                  <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[13px] text-ink-700 md:mt-8 md:max-w-[420px] md:flex-col md:gap-0">
+                  <div className="mt-5 flex flex-col gap-2.5 text-[14px] text-ink-700 md:mt-8 md:max-w-[420px] md:gap-3">
                     {inf.bullets.map((b, i) => (
-                      <div key={i} className={cn("flex items-center gap-2 md:gap-3.5 md:border-t md:border-border md:py-3", i === inf.bullets.length - 1 && "md:border-b")}>
-                        <span className={cn(tagClass(b.tag), "shrink-0 text-[11px] text-pink-700 md:w-9")}>{b.tag}</span>
+                      <div key={i} className="flex items-center gap-3">
+                        <span className={cn(stepNumber, tagClass(b.tag), "h-8 w-8 text-[13px] md:h-9 md:w-9 md:text-sm")}>{b.tag || pad2(i + 1)}</span>
                         <span className="md:text-[15px]">{b.text}</span>
                       </div>
                     ))}

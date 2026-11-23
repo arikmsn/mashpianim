@@ -40,6 +40,8 @@ function RegisterContent({ texts }: { texts: AuthTexts }) {
   // Adding the other role to a signed-in account (the profile sends ?add=1): the phone is already verified,
   // the account's name and phone prefill the form
   const addRole = searchParams.get("add") === "1";
+  // Where a new business lands after registering (?next=billing: straight into the purchase screen)
+  const nextScreen: "billing" | null = searchParams.get("next") === "billing" ? "billing" : null;
   const [me, setMe] = useState<{ phone: string; name: string } | null>(null);
   const [chosen, setChosen] = useState<UserType>(null);
   const userType: UserType = initialType ?? chosen ?? (addRole ? null : stored);
@@ -72,8 +74,8 @@ function RegisterContent({ texts }: { texts: AuthTexts }) {
   // Registration starts with the phone code, not with the form (QA 18): without a verified phone the
   // login screen takes over and sends new phones back here with verified=1 (the chosen type rides along)
   useEffect(() => {
-    if (!isPreVerified) router.replace(withType("/login", initialType ?? stored));
-  }, [isPreVerified, initialType, stored, router]);
+    if (!isPreVerified) router.replace(withType(nextScreen ? `/login?next=${nextScreen}` : "/login", initialType ?? stored));
+  }, [isPreVerified, initialType, stored, nextScreen, router]);
 
   if (!isPreVerified) {
     return (
@@ -100,6 +102,7 @@ function RegisterContent({ texts }: { texts: AuthTexts }) {
     preVerifiedPhone: verifiedPhone || me?.phone || null,
     initialName: me?.name || null,
     addRole,
+    nextScreen,
     onSwitch: () => setChosen(otherPersona(userType)),
     onBack: () => (addRole ? router.push("/profile") : setChosen(null)),
   };
@@ -117,6 +120,7 @@ interface FormProps {
   preVerifiedPhone?: string | null;
   initialName?: string | null;
   addRole?: boolean;
+  nextScreen?: "billing" | null;
 }
 
 // The frame around one registration form: persona chip, title, progress, the white card, the swap links
@@ -369,7 +373,7 @@ function CreatorRegistration({ texts, onBack, onSwitch, preVerifiedUserId, preVe
   );
 }
 
-function BrandRegistration({ texts, onBack, onSwitch, preVerifiedUserId, preVerifiedPhone, initialName, addRole }: FormProps) {
+function BrandRegistration({ texts, onBack, onSwitch, preVerifiedUserId, preVerifiedPhone, initialName, addRole, nextScreen }: FormProps) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [otpChannel, setOtpChannel] = useState<OtpChannel>("whatsapp");
@@ -434,7 +438,7 @@ function BrandRegistration({ texts, onBack, onSwitch, preVerifiedUserId, preVeri
       storePersona("brand");
       clearCache();
       await refreshAuth();
-      router.push("/brand");
+      router.push(nextScreen === "billing" ? "/brand/billing" : "/brand");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : texts.err_register;
       toast(msg, "error");
