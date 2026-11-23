@@ -26,6 +26,11 @@ export function personaForRole(role: string | null | undefined): Persona | null 
   return role === "brand" ? "brand" : role === "creator" ? "creator" : null;
 }
 
+// Where a signed-in creator or business lives; null for admins and unknown roles (they are left where they are)
+export function homeForRole(role: string | null | undefined): "/feed" | "/brand" | null {
+  return role === "brand" ? "/brand" : role === "creator" ? "/feed" : null;
+}
+
 export function readStoredPersona(): Persona | null {
   try {
     return parsePersona(window.sessionStorage.getItem(PERSONA_STORAGE_KEY)) ?? parsePersona(window.localStorage.getItem(PERSONA_STORAGE_KEY));

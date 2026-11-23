@@ -12,6 +12,7 @@ import { useToast } from "@/components/ui";
 import { RoleOptions, chooseRole, roleLabel, type AppRole } from "@/components/features";
 import { AuthShell, PersonaSwap, SwapLine, authField, authLabel, personaButton } from "@/components/auth/auth-shell";
 import { PersonaChooser } from "@/components/auth/persona-chooser";
+import { SignedInRedirect } from "@/components/features/signed-in-redirect";
 
 type AuthTexts = SectionContent<"auth">;
 
@@ -272,6 +273,8 @@ function LoginContent({ texts }: { texts: AuthTexts }) {
         ) : null
       }
     >
+      {/* Already signed in on this device (an installed app, a kept session): straight to the account's screen */}
+      {step === "phone" && <SignedInRedirect brandHome={nextScreen === "billing" ? "/brand/billing" : "/brand"} />}
       {step === "phone" && (
         <form onSubmit={handleSendOTP} className="flex flex-col gap-3.5">
           <div>

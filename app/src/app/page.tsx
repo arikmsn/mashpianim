@@ -10,6 +10,7 @@ import { CreatorFan } from "@/components/home/creator-fan";
 import { Reveal } from "@/components/home/reveal";
 import { StickyCta } from "@/components/home/sticky-cta";
 import { InfluencerQuiz } from "@/components/features/influencer-quiz";
+import { SignedInRedirect } from "@/components/features/signed-in-redirect";
 import { bento, container, display, eyebrow, eyebrowLight, isMonoText, pillCreator, pillDark, pillInkLemon, pillOutline, pillPrimary, stepNumber, tagClass } from "@/components/home/styles";
 
 // The home page (design package v3 "Pop warm"): a server component that reads the content registry and renders
@@ -209,6 +210,8 @@ export default async function HomePage() {
       />
 
       <main>
+        {/* A signed-in creator or business goes straight to their own screen */}
+        <SignedInRedirect />
         {/* HERO */}
         <section className="relative overflow-hidden bg-surface-ink pb-28 pt-24 text-on-ink md:pb-52 md:pt-36">
           <div className="absolute inset-0" style={{ background: "radial-gradient(60% 50% at 50% 0%, #2e2745 0%, #0b051d 70%)" }} aria-hidden="true" />

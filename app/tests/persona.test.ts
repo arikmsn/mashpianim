@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { manifestHref, otherPersona, parsePersona, personaForRole, resolvePersona, withType } from "../src/lib/persona.ts";
+import { homeForRole, manifestHref, otherPersona, parsePersona, personaForRole, resolvePersona, withType } from "../src/lib/persona.ts";
 
 describe("identity colour of the auth screens (design package v3)", () => {
   test("parse and resolve", () => {
@@ -23,6 +23,13 @@ describe("identity colour of the auth screens (design package v3)", () => {
     assert.equal(manifestHref("creator"), "/api/manifest?persona=creator");
     assert.equal(manifestHref("brand"), "/api/manifest?persona=brand");
     assert.equal(manifestHref(null), "/manifest.json");
+  });
+
+  test("homeForRole sends creators to the feed and businesses to the gallery; admins and unknown roles stay", () => {
+    assert.equal(homeForRole("creator"), "/feed");
+    assert.equal(homeForRole("brand"), "/brand");
+    assert.equal(homeForRole("admin"), null);
+    assert.equal(homeForRole(undefined), null);
   });
 
   test("withType keeps existing query strings", () => {
