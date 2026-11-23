@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { verifyAdmin, isSupabaseConfigured } from "@/lib/admin-auth";
 import { logActivity } from "@/lib/notifications";
+import { SITE_CONTENT_DEFAULTS } from "@/lib/site-content";
 
 // "עדכון מהמערכת" on the stats section of /admin/content: fills the creators and videos numbers from real counts
 // and saves them (the page always shows the saved values, never a live query).
@@ -19,9 +20,13 @@ export async function POST() {
   if (creatorsRes.error || videosRes.error) {
     return NextResponse.json({ error: "לא הצלחנו לספור" }, { status: 500 });
   }
-  const creators = String(creatorsRes.count || 0);
-  const videos = String(videosRes.count || 0);
   const prev = ((existing.data as { data?: Record<string, unknown> } | null)?.data || {}) as Record<string, unknown>;
+  // The creators number never drops below the value on the page (the owner shows "500+" until the real count
+  // passes it); the videos number is always the real count
+  const shownCreators = typeof prev.stat1_value === "string" ? prev.stat1_value : SITE_CONTENT_DEFAULTS.home_stats.stat1_value;
+  const floor = Number(shownCreators.replace(/\D/g, "")) || 0;
+  const creators = String(Math.max(creatorsRes.count || 0, floor));
+  const videos = String(videosRes.count || 0);
   const data = { ...prev, stat1_value: creators, stat2_value: videos };
 
   const { error } = await supabase

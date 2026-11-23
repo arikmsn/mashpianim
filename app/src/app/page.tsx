@@ -216,7 +216,10 @@ export default async function HomePage() {
             <h1 className="mx-auto mt-4 max-w-[980px] font-display text-[34px] leading-[1.06] tracking-[-1px] text-on-ink md:mt-6 md:text-[56px] md:tracking-[-1.5px] lg:text-[72px] lg:leading-[1.02]">
               <TwoTone text={hero.title} markedClassName="signature-text" />
             </h1>
-            <p className="mx-auto mt-4 max-w-[640px] text-base leading-relaxed text-on-ink/70 md:mt-6 md:text-[19px]">{hero.subtitle}</p>
+            <p className="mx-auto mt-4 max-w-[640px] text-base leading-relaxed text-on-ink/70 md:mt-6 md:text-[19px]">
+              <span className="block">{hero.subtitle}</span>
+              {hero.subtitle2 && <span className="mt-1.5 block md:mt-2">{hero.subtitle2}</span>}
+            </p>
             <div className="mt-6 flex flex-col justify-center gap-2.5 sm:flex-row sm:gap-3 md:mt-8">
               <Link href={REGISTER_BRAND} className={cn(pillPrimary, "h-[52px] px-7 text-base")}>
                 <Briefcase className="h-[18px] w-[18px]" aria-hidden="true" />
@@ -339,7 +342,12 @@ export default async function HomePage() {
             {statTiles.map((s, i) => (
               <Reveal key={i} delay={0.06 * i} className={cn(i === 2 && "col-span-2 md:col-span-1")}>
                 <div className={cn("h-full rounded-2xl border p-5 md:px-6 md:pb-6 md:pt-7", s.dark ? "border-white/10 bg-surface-ink" : "border-border bg-surface")}>
-                  <div className={cn("font-display text-[40px] leading-none tracking-[-1px] tabular-nums md:text-[60px] md:tracking-[-1.5px]", s.dark ? "text-lemon-400" : "text-ink-900")} dir="ltr" style={{ textAlign: "right" }}>
+                  <div
+                    className={cn("font-display text-[40px] leading-none tracking-[-1px] tabular-nums md:text-[60px] md:tracking-[-1.5px]", s.dark ? "text-lemon-400" : "text-ink-900")}
+                    // Digits with a symbol keep the Latin order ("137+"); a Hebrew word next to the number reads right to left
+                    dir={isMonoText(s.value) && isMonoText(s.suffix) ? "ltr" : "rtl"}
+                    style={{ textAlign: "right" }}
+                  >
                     {s.value}
                     {s.suffix && <span className={cn(s.suffix === "+" ? "text-pink-500" : "font-sans text-[22px] font-normal md:text-[28px]", "ms-1")}>{s.suffix}</span>}
                   </div>

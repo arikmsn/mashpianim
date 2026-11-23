@@ -261,6 +261,32 @@ body {
   background: var(--surface) radial-gradient(110% 80% at 0% 100%, var(--glow) 0%, #FFADC900 60%);
 }
 
+/* פס הסרטונים בהירו על טלפון: נע כל הזמן (שני עותקים של הרשימה = לולאה חלקה); בדסקטופ המניפה עומדת */
+@keyframes fan-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(50%); }
+}
+.fan-track {
+  animation: fan-marquee 50s linear infinite;
+  will-change: transform;
+}
+.fan-track[data-paused="true"] {
+  animation-play-state: paused;
+}
+@media (min-width: 768px) {
+  .fan-track {
+    animation: none;
+    will-change: auto;
+  }
+}
+
+/* הסליידר בשאלון המשפיענים (על רקע כהה) */
+.quiz-range {
+  accent-color: var(--pink-500);
+  height: 28px;
+  cursor: pointer;
+}
+
 button, a, [role="button"] {
   -webkit-tap-highlight-color: transparent;
   user-select: none;

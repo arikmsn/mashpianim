@@ -39,7 +39,7 @@ describe("site content registry (design package v3, ניהול תוכן מהאד
 
   test("defaults, merge and coercion", () => {
     const d = defaultsFromSchema();
-    assert.equal(d.home_hero.title, "התוכן הנכון. *האנשים הנכונים.*");
+    assert.equal(d.home_hero.title, "ביקורות וידאו מיוצרי תוכן אמיתיים. *בלי לרדוף אחרי לקוחות.*");
     const merged = mergeSiteContent({
       home_hero: { title: "כותרת חדשה", sticker1: "", unknown_key: "x", subtitle: 42 },
       home_stats: { stat1_value: "200", stat3_dark: "false" },
@@ -86,16 +86,19 @@ describe("site content registry (design package v3, ניהול תוכן מהאד
     assert.equal(vars.creators, SITE_CONTENT_DEFAULTS.home_stats.stat1_value);
     const resolved = resolveSiteContent(SITE_CONTENT_DEFAULTS, vars);
     assert.equal(resolved.home_brands.price_note, "חבילות מ-99 ₪ לסרטון. 15% הנחה ברכישה הראשונה.");
-    assert.equal(resolved.home_hero.counter_line, `${vars.videos} סרטונים · ${vars.creators} יוצרים`);
+    assert.equal(resolved.home_hero.counter_line, "", "the counter line under the fan is off by default (owner, round 3)");
+    const withCounter = resolveSiteContent(mergeSiteContent({ home_hero: { counter_line: "{videos} סרטונים · {creators} יוצרים" } }), vars);
+    assert.equal(withCounter.home_hero.counter_line, `${vars.videos} סרטונים · ${vars.creators} יוצרים`);
     assert.equal(resolved.home_how.steps[2].desc.includes("{days}"), false, "variables inside list items are resolved too");
-    assert.equal(resolved.home_stats.stat3_value, "10");
+    assert.equal(resolved.home_stats.stat3_value, "כ-7", "the days number is a fixed text now (owner, round 3); {days} still resolves when typed");
+    assert.equal(resolveSiteContent(mergeSiteContent({ home_stats: { stat3_value: "{days}" } }), vars).home_stats.stat3_value, "10");
   });
 
   test("field validation warns, never blocks", () => {
     const hero = getSection("home_hero")!;
     const title = hero.fields.find((f) => f.key === "title")!;
     assert.deepEqual(validateFieldValue(title, "קצר"), []);
-    assert.equal(validateFieldValue(title, "x".repeat(61)).length, 1);
+    assert.equal(validateFieldValue(title, "x".repeat(title.max! + 1)).length, 1);
     assert.match(validateFieldValue(title, "{what}")[0], /משתנה לא מוכר/);
     const nav = getSection("home_nav")!;
     const href = nav.fields.find((f) => f.key === "link1_href")!;
@@ -155,13 +158,18 @@ describe("site content registry (design package v3, ניהול תוכן מהאד
   test("quiz option keys match the lead schema of migration 026", () => {
     const q = SITE_CONTENT_DEFAULTS.quiz;
     const keys = (opts: Record<string, string>[]) => opts.map((o) => o.key);
-    assert.deepEqual(keys(q.q1_options), ["nano", "micro", "macro", "unsure"]);
-    assert.deepEqual(keys(q.q2_options), ["instagram", "tiktok", "youtube", "undecided"]);
-    assert.deepEqual(keys(q.q3_options), ["beauty", "fashion", "food", "home", "tech", "other"]);
-    assert.deepEqual(keys(q.q4_options), ["all", "center", "north", "south_jerusalem"]);
-    assert.deepEqual(keys(q.q5_options), ["content", "post", "both", "unsure"]);
-    assert.equal(q.q2_multi, true);
-    assert.equal(q.q1_multi, false);
+    assert.deepEqual(keys(q.q1_options), ["nano", "micro", "mid", "macro"], "the follower slider, smallest first");
+    assert.deepEqual(keys(q.q2_options), ["instagram", "tiktok", "youtube", "facebook"]);
+    assert.deepEqual(keys(q.q3_options), ["all", "north", "haifa", "sharon", "center", "tel_aviv", "jerusalem", "shfela", "south", "eilat", "judea_samaria"]);
+    assert.deepEqual(keys(q.q4_options), ["one", "few", "several", "many", "unsure"]);
+    assert.deepEqual(keys(q.q5_options), ["physical", "digital", "service", "unsure"]);
+    assert.equal(q.q1_multi, false, "one slider value");
+    assert.equal(q.q2_multi, true, "several platforms");
+    assert.equal(q.q3_multi, true, "several regions");
+    assert.equal(q.q4_multi, false);
+    assert.equal(q.q5_multi, false);
+    // Every slider stop has a range label, every region title is one of the system's regions
+    for (const o of q.q1_options) assert.ok(o.tag, `slider stop ${o.key} needs a range label`);
   });
 
   test("acceptance: no Hebrew in the public page components (everything comes from the registry)", () => {

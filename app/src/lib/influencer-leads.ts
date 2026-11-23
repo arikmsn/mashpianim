@@ -20,8 +20,9 @@ export function isLeadStatus(value: unknown): value is LeadStatus {
   return typeof value === "string" && (LEAD_STATUSES as readonly string[]).includes(value);
 }
 
-// Question keys, in the quiz order (the answers object is keyed by them)
-export const QUIZ_QUESTION_KEYS = ["tier", "platforms", "categories", "region", "goal"] as const;
+// Question keys, in the quiz order (the answers object is keyed by them): the follower slider, the platforms,
+// the regions of the audience, how many videos, what kind of product
+export const QUIZ_QUESTION_KEYS = ["tier", "platforms", "regions", "videos", "product"] as const;
 export type QuizQuestionKey = (typeof QUIZ_QUESTION_KEYS)[number];
 
 export interface QuizOption {

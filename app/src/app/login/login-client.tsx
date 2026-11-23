@@ -256,7 +256,7 @@ function LoginContent({ texts }: { texts: AuthTexts }) {
       below={
         step === "phone" || step === "otp" ? (
           <>
-            <SwapLine label={texts.no_account} linkLabel={brand ? texts.brand_no_account_cta : texts.creator_no_account_cta} href={withType("/register", p)} />
+            {texts.no_account && <SwapLine label={texts.no_account} linkLabel={brand ? texts.brand_no_account_cta : texts.creator_no_account_cta} href={withType("/register", p)} />}
             <PersonaSwap label={texts.wrong_type} chipLabel={brand ? texts.brand_wrong_type_cta : texts.creator_wrong_type_cta} target={otherPersona(p)} href={loginHref(otherPersona(p))} />
           </>
         ) : null

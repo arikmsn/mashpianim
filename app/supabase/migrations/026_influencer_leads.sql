@@ -6,11 +6,11 @@ create table if not exists public.influencer_leads (
   created_at timestamptz not null default now(),
   -- תשובות השאלון, כפי שנבחרו (מפתחות יציבים, לא טקסט תצוגה)
   answers jsonb not null default '{}'::jsonb,
-  -- answers: { tier: 'nano'|'micro'|'macro'|'unsure',
-  --            platforms: ['instagram','tiktok','youtube','undecided'],
-  --            categories: ['beauty','fashion','food','home','tech','other'],
-  --            region: 'all'|'center'|'north'|'south_jerusalem',
-  --            goal: 'content'|'post'|'both'|'unsure' }
+  -- answers: { tier: 'nano'|'micro'|'mid'|'macro'                       (סליידר עוקבים)
+  --            platforms: ['instagram','tiktok','youtube','facebook'],
+  --            regions: ['all','north','haifa','sharon','center','tel_aviv','jerusalem','shfela','south','eilat','judea_samaria'],
+  --            videos: 'one'|'few'|'several'|'many'|'unsure',
+  --            product: 'physical'|'digital'|'service'|'unsure' }
   full_name text not null,
   business_name text,
   phone text not null,

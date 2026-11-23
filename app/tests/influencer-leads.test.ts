@@ -7,16 +7,16 @@ const questions = quizQuestions(SITE_CONTENT_DEFAULTS.quiz);
 
 describe("influencer quiz leads (design package v3, Phase C)", () => {
   test("the five questions come from the content with their stable keys", () => {
-    assert.deepEqual(questions.map((q) => q.key), ["tier", "platforms", "categories", "region", "goal"]);
+    assert.deepEqual(questions.map((q) => q.key), ["tier", "platforms", "regions", "videos", "product"]);
     assert.equal(questions[0].multi, false);
     assert.equal(questions[1].multi, true);
-    assert.equal(questions[2].options.length, 6);
+    assert.equal(questions[2].options.length, 11, "the regions of the system plus all of Israel");
     assert.ok(questions.every((q) => q.question && q.options.every((o) => o.key && o.title)));
   });
 
   test("answers keep only known keys; single choice keeps one", () => {
-    const a = normalizeAnswers({ tier: "micro", platforms: ["tiktok", "nope", "instagram", "tiktok"], categories: "food", region: ["center", "north"], goal: 7, extra: "x" }, questions);
-    assert.deepEqual(a, { tier: "micro", platforms: ["tiktok", "instagram"], categories: ["food"], region: "center" });
+    const a = normalizeAnswers({ tier: "micro", platforms: ["tiktok", "nope", "instagram", "tiktok"], regions: "center", videos: ["few", "many"], product: 7, extra: "x" }, questions);
+    assert.deepEqual(a, { tier: "micro", platforms: ["tiktok", "instagram"], regions: ["center"], videos: "few" });
   });
 
   test("phone normalisation accepts Israeli numbers in every common form", () => {
@@ -53,7 +53,7 @@ describe("influencer quiz leads (design package v3, Phase C)", () => {
   });
 
   test("summary uses the titles of the content, statuses are closed", () => {
-    assert.equal(answersSummary({ tier: "micro", platforms: ["instagram", "tiktok"], goal: "both" }, questions), "מיקרו · אינסטגרם, טיקטוק · שניהם");
+    assert.equal(answersSummary({ tier: "micro", platforms: ["instagram", "tiktok"], product: "physical" }, questions), "מיקרו · אינסטגרם, טיקטוק · מוצר פיזי");
     assert.equal(answersSummary({ tier: "ghost" }, questions), "ghost", "an unknown key shows as is");
     assert.equal(answersSummary(null, questions), "");
     assert.deepEqual([...LEAD_STATUSES], ["new", "contacted", "qualified", "closed"]);
