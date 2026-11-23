@@ -319,7 +319,7 @@ export default function ProductPage() {
                     <p className="font-medium text-neutral-900 truncate">{product.brand_name}</p>
                     <p className="text-xs text-neutral-400">העסק שמאחורי המוצר</p>
                   </div>
-                  <span className="text-xs text-pink-500 font-medium">פרופיל העסק ›</span>
+                  <span className="text-xs text-pink-600 font-medium">פרופיל העסק ›</span>
                 </button>
               )}
             </div>
@@ -369,7 +369,7 @@ export default function ProductPage() {
                     <p className="text-xs text-neutral-500">
                       מספר מעקב: <span className="font-mono">{conn.tracking_number}</span>
                       {conn.tracking_url && (
-                        <a href={conn.tracking_url} target="_blank" rel="noreferrer" className="text-pink-500 mr-2 hover:underline">מעקב ›</a>
+                        <a href={conn.tracking_url} target="_blank" rel="noreferrer" className="text-pink-600 mr-2 hover:underline">מעקב ›</a>
                       )}
                     </p>
                   )}

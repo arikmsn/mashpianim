@@ -3,17 +3,26 @@
 import { forwardRef, type ButtonHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
+// Design system v3 (2026-11-23). Two persona colours: `primary` is pink for businesses, `creator` is lemon
+// for content creators (dark text on lemon, never white). `persona` follows the nearest data-persona
+// container. Fills only, no coloured shadows; the focus ring is dark so it reads on pink as well.
 const variants = {
   primary:
-    "ig-gradient-bg text-white hover:opacity-90 shadow-lg shadow-ig-pink/25",
+    "bg-pink-600 text-white hover:bg-pink-700 active:bg-pink-700",
+  creator:
+    "bg-lemon-400 text-ink-900 hover:bg-lemon-300 active:bg-lemon-300",
+  persona:
+    "bg-persona text-persona-foreground hover:bg-persona-hover active:bg-persona-hover",
   secondary:
-    "bg-ig-pink/10 text-ig-pink hover:bg-ig-pink/15",
+    "bg-pink-50 text-pink-800 hover:bg-pink-100",
   outline:
-    "border-2 border-ig-pink text-ig-pink hover:bg-ig-pink/5",
+    "border-2 border-border-strong bg-transparent text-ink-900 hover:border-ink-900",
+  "outline-light":
+    "border-2 border-white/40 bg-transparent text-foreground-on-ink hover:border-foreground-on-ink",
   ghost:
     "text-neutral-600 hover:bg-neutral-100",
   dark:
-    "bg-foreground text-background hover:opacity-90",
+    "bg-surface-ink text-foreground-on-ink hover:bg-ink-700",
   danger:
     "bg-red-500 text-white hover:bg-red-600",
 } as const;
@@ -52,7 +61,8 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         className={cn(
-          "inline-flex items-center justify-center gap-2 font-medium transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none",
+          "inline-flex items-center justify-center gap-2 font-bold transition-colors duration-150 disabled:opacity-50 disabled:pointer-events-none",
+          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
           variants[variant],
           sizes[size],
           fullWidth && "w-full",

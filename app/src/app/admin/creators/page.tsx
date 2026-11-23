@@ -126,7 +126,7 @@ export default function AdminCreatorsPage() {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${filter === f ? "bg-white shadow-sm text-pink-500" : "text-neutral-500"}`}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${filter === f ? "bg-white shadow-sm text-pink-600" : "text-neutral-500"}`}
               >
                 {f === "all" ? "הכל" : f === "active" ? "פעילים" : "מושעים"}
               </button>

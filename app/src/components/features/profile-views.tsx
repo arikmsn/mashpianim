@@ -406,7 +406,7 @@ export function BrandProfileView({ profile, compact = false }: { profile: BrandP
             {profile.memberSince && <span className="text-xs text-neutral-500">בפלטפורמה מ-{memberSinceLabel(profile.memberSince)}</span>}
           </div>
           {siteHref && (
-            <a href={siteHref} target="_blank" rel="noopener noreferrer" className="text-sm text-pink-500 hover:underline mt-1 inline-block truncate max-w-full" dir="ltr">
+            <a href={siteHref} target="_blank" rel="noopener noreferrer" className="text-sm text-pink-600 hover:underline mt-1 inline-block truncate max-w-full" dir="ltr">
               🔗 {site}
             </a>
           )}
@@ -447,7 +447,7 @@ export function BrandProfileView({ profile, compact = false }: { profile: BrandP
                     )}
                     <div className="p-1.5">
                       <p className="text-[11px] font-medium truncate">{p.name}</p>
-                      <p className="text-[11px] text-pink-500">₪{Number(p.price) || 0}</p>
+                      <p className="text-[11px] text-pink-600">₪{Number(p.price) || 0}</p>
                     </div>
                   </button>
                   {marker && (

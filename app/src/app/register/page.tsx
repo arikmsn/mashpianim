@@ -143,7 +143,7 @@ function RegisterContent() {
 
         <p className="text-center mt-6 text-sm text-neutral-400">
           כבר יש לכם חשבון?{" "}
-          <Link href="/login" className="text-pink-500 font-medium hover:underline">
+          <Link href="/login" className="text-pink-600 font-medium hover:underline">
             התחברו כאן
           </Link>
         </p>

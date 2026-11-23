@@ -1193,7 +1193,7 @@ export default function ProfilePage() {
             onClick={() => setActiveTab("videos")}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
               activeTab === "videos"
-                ? "bg-white text-pink-500 shadow-sm"
+                ? "bg-white text-pink-600 shadow-sm"
                 : "text-neutral-500"
             }`}
           >
@@ -1203,7 +1203,7 @@ export default function ProfilePage() {
             onClick={() => setActiveTab("badges")}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
               activeTab === "badges"
-                ? "bg-white text-pink-500 shadow-sm"
+                ? "bg-white text-pink-600 shadow-sm"
                 : "text-neutral-500"
             }`}
           >

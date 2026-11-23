@@ -13,6 +13,8 @@ const paddings = {
   lg: "p-8",
 };
 
+// The system card (design system v3): white, 1px warm border, 16px radius, soft ink shadow.
+// Hover lifts the shadow and warms the border to pink-200. Never a gradient border.
 function Card({
   className,
   hover = false,
@@ -23,9 +25,9 @@ function Card({
   return (
     <div
       className={cn(
-        "bg-white rounded-2xl shadow-sm border border-neutral-100",
+        "bg-surface rounded-2xl shadow-sm border border-border",
         paddings[padding],
-        hover && "hover:shadow-md hover:border-pink-100 transition-all duration-200 cursor-pointer",
+        hover && "hover:shadow-md hover:border-pink-200 transition-all duration-200 cursor-pointer",
         className
       )}
       {...props}
@@ -67,7 +69,7 @@ function CardContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
 function CardFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("mt-4 pt-4 border-t border-neutral-100 flex items-center gap-3", className)}
+      className={cn("mt-4 pt-4 border-t border-border flex items-center gap-3", className)}
       {...props}
     />
   );

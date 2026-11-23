@@ -212,7 +212,7 @@ export default function NotificationsPage() {
                     <span className="text-xs text-neutral-400 flex-shrink-0 mr-2">{formatTime(notification.created_at)}</span>
                   </div>
                   <p className={`text-sm ${isNew ? "text-neutral-600" : "text-neutral-400"}`}>{notification.body}</p>
-                  {href && <p className="text-[11px] text-pink-500 mt-1">פתיחה ›</p>}
+                  {href && <p className="text-[11px] text-pink-600 mt-1">פתיחה ›</p>}
                 </div>
                 {isNew && <div className="w-2.5 h-2.5 rounded-full bg-pink-500 flex-shrink-0 mt-2" />}
               </motion.button>

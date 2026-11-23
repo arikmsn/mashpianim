@@ -173,7 +173,7 @@ export default function BrandBillingPage() {
           {includesOpen && (
             <ul className="px-4 pb-4 space-y-1.5 text-sm text-neutral-700">
               {includes.map((line, i) => (
-                <li key={i} className="flex gap-2"><span className="text-pink-500">•</span><span>{line}</span></li>
+                <li key={i} className="flex gap-2"><span className="text-pink-600">•</span><span>{line}</span></li>
               ))}
             </ul>
           )}

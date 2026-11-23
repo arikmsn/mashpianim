@@ -50,7 +50,7 @@ export function RoleOptions({ roles, current, busy, onPick }: { roles: AppRole[]
               <p className="text-sm font-semibold text-neutral-900">{opt.label}</p>
               <p className="text-xs text-neutral-400">{opt.desc}</p>
             </div>
-            {isCurrent && <span className="text-[11px] text-pink-500 font-medium">מחובר/ת</span>}
+            {isCurrent && <span className="text-[11px] text-pink-600 font-medium">מחובר/ת</span>}
           </button>
         );
       })}

@@ -209,7 +209,7 @@ export default function AdminModerationPage() {
         <button
           onClick={() => setTab("videos")}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            tab === "videos" ? "bg-white shadow-sm text-pink-500" : "text-neutral-500"
+            tab === "videos" ? "bg-white shadow-sm text-pink-600" : "text-neutral-500"
           }`}
         >
           🎬 סרטונים ({pendingCount})
@@ -217,7 +217,7 @@ export default function AdminModerationPage() {
         <button
           onClick={() => setTab("portfolio")}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            tab === "portfolio" ? "bg-white shadow-sm text-pink-500" : "text-neutral-500"
+            tab === "portfolio" ? "bg-white shadow-sm text-pink-600" : "text-neutral-500"
           }`}
         >
           🗂️ תיקי עבודות ({portfolio.length})
@@ -225,7 +225,7 @@ export default function AdminModerationPage() {
         <button
           onClick={() => setTab("chat")}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            tab === "chat" ? "bg-white shadow-sm text-pink-500" : "text-neutral-500"
+            tab === "chat" ? "bg-white shadow-sm text-pink-600" : "text-neutral-500"
           }`}
         >
           💬 הודעות חסומות ({chatFlags.length})

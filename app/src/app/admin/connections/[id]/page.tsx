@@ -152,7 +152,7 @@ export default function AdminConnectionPage() {
 
   return (
     <div>
-      <Link href="/admin/connections" className="text-sm text-pink-500 hover:underline">‹ כל החיבורים</Link>
+      <Link href="/admin/connections" className="text-sm text-pink-600 hover:underline">‹ כל החיבורים</Link>
 
       <Card padding="md" className="mt-4 mb-6">
         <div className="flex items-start gap-4 flex-wrap">

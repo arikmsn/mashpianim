@@ -87,7 +87,7 @@ export default function AdminMessagesPage() {
         </div>
         <div className="flex gap-1 bg-neutral-50 rounded-lg p-0.5">
           {[7, 30, 90].map((d) => (
-            <button key={d} onClick={() => setDays(d)} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${days === d ? "bg-white shadow-sm text-pink-500" : "text-neutral-500"}`}>
+            <button key={d} onClick={() => setDays(d)} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${days === d ? "bg-white shadow-sm text-pink-600" : "text-neutral-500"}`}>
               {d} ימים
             </button>
           ))}

@@ -421,13 +421,13 @@ export default function BrandProductsPage() {
                             <div className="flex gap-3">
                               <button
                                 onClick={() => openEditModal(product)}
-                                className="text-xs text-pink-500 font-medium"
+                                className="text-xs text-pink-600 font-medium"
                               >
                                 עריכה
                               </button>
                               <button
                                 onClick={() => router.push(`/brand/products/${product.id}/brief`)}
-                                className={`text-xs font-medium ${hasBrief ? "text-pink-500" : "text-amber-600"}`}
+                                className={`text-xs font-medium ${hasBrief ? "text-pink-600" : "text-amber-600"}`}
                               >
                                 {hasBrief ? "בריף" : "בריף ✎ חסר"}
                               </button>
@@ -701,7 +701,7 @@ export default function BrandProductsPage() {
               {editingProduct ? (
                 <>
                   בריף מפורט (אורך, סגנון, מה חייב להופיע) —{" "}
-                  <button type="button" className="text-pink-500 font-medium" onClick={() => { setShowAddModal(false); router.push(`/brand/products/${editingProduct.id}/brief`); }}>
+                  <button type="button" className="text-pink-600 font-medium" onClick={() => { setShowAddModal(false); router.push(`/brand/products/${editingProduct.id}/brief`); }}>
                     לעריכה במסך הבריף ›
                   </button>
                 </>

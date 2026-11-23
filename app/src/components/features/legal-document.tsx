@@ -54,7 +54,7 @@ export function LegalPage({ doc }: { doc: LegalDocument }) {
   return (
     <main className="min-h-screen bg-background px-6 py-12">
       <div className="max-w-3xl mx-auto">
-        <Link href="/" className="inline-flex items-center gap-1 text-sm text-pink-500 hover:underline mb-8">
+        <Link href="/" className="inline-flex items-center gap-1 text-sm text-pink-600 hover:underline mb-8">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M9 18l6-6-6-6" />
           </svg>
@@ -70,7 +70,7 @@ export function LegalPage({ doc }: { doc: LegalDocument }) {
           <span>מסמכים נוספים:</span>
           <span className="flex gap-4">
             {others.map((slug: LegalSlug) => (
-              <Link key={slug} href={`/${slug}`} className="text-pink-500 hover:underline">
+              <Link key={slug} href={`/${slug}`} className="text-pink-600 hover:underline">
                 {LEGAL_DOCUMENTS[slug].title}
               </Link>
             ))}

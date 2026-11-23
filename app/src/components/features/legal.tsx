@@ -66,7 +66,7 @@ function LegalModalPanel({ onClose, initial }: { onClose: () => void; initial: L
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4">
           <LegalDocumentView doc={doc} compact />
           <p className="mt-6 text-xs text-neutral-400 text-center">
-            <Link href={`/${tab}`} target="_blank" className="text-pink-500 hover:underline">
+            <Link href={`/${tab}`} target="_blank" className="text-pink-600 hover:underline">
               לפתיחת המסמך בדף מלא
             </Link>
           </p>
@@ -149,9 +149,9 @@ export function TermsGate() {
         <LegalDocumentView doc={TERMS} compact />
         <p className="mt-6 text-xs text-neutral-500 bg-neutral-50 rounded-xl p-3">
           התנאים כוללים גם את{" "}
-          <Link href="/privacy" target="_blank" className="text-pink-500 hover:underline">מדיניות הפרטיות</Link>
+          <Link href="/privacy" target="_blank" className="text-pink-600 hover:underline">מדיניות הפרטיות</Link>
           {" "}ואת{" "}
-          <Link href="/refunds" target="_blank" className="text-pink-500 hover:underline">מדיניות הביטולים וההחזרים</Link>
+          <Link href="/refunds" target="_blank" className="text-pink-600 hover:underline">מדיניות הביטולים וההחזרים</Link>
           . {LEGAL_UPDATED_LABEL}.
         </p>
       </div>

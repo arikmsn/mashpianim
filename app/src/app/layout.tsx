@@ -1,11 +1,20 @@
 import type { Metadata, Viewport } from "next";
-import { Heebo } from "next/font/google";
+import { Rubik, IBM_Plex_Mono } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
 
-const heebo = Heebo({
-  variable: "--font-heebo",
+// Design system v3 (2026-11-23): Rubik carries every word (400/500 body, 700 headings and buttons, 900 display);
+// IBM Plex Mono is reserved for digits and Latin tags, so it needs no Hebrew subset.
+const rubik = Rubik({
+  variable: "--font-rubik",
   subsets: ["latin", "hebrew"],
+  weight: ["400", "500", "700", "900"],
+});
+
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-plex-mono",
+  subsets: ["latin"],
+  weight: ["400", "500"],
 });
 
 export const metadata: Metadata = {
@@ -69,12 +78,12 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: "cover",
-  themeColor: "#E1306C",
+  themeColor: "#dc1363",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="he" dir="rtl" className={`${heebo.variable} h-full antialiased`}>
+    <html lang="he" dir="rtl" className={`${rubik.variable} ${plexMono.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col font-sans bg-background text-foreground touch-manipulation">
         <Providers>{children}</Providers>
       </body>

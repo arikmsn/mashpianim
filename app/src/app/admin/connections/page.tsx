@@ -144,7 +144,7 @@ function ConnectionsContent() {
               <button
                 key={f.key}
                 onClick={() => pick(f.key)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${filter === f.key ? "bg-white shadow-sm text-pink-500" : "text-neutral-500"}`}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${filter === f.key ? "bg-white shadow-sm text-pink-600" : "text-neutral-500"}`}
               >
                 {f.label}
               </button>

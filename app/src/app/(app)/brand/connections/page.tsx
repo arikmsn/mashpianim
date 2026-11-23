@@ -401,7 +401,7 @@ function BrandConnectionsPageInner() {
                     setActiveTab(tab.id);
                   }}
                   className={`relative flex-1 min-w-fit whitespace-nowrap py-2 px-2.5 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === tab.id ? "bg-white text-pink-500 shadow-sm" : "text-neutral-500"
+                    activeTab === tab.id ? "bg-white text-pink-600 shadow-sm" : "text-neutral-500"
                   }`}
                 >
                   {tab.label}
@@ -468,7 +468,7 @@ function BrandConnectionsPageInner() {
                             {statusInfo.label}
                           </Badge>
                         </div>
-                        <p className="text-xs text-pink-500">{conn.productName}</p>
+                        <p className="text-xs text-pink-600">{conn.productName}</p>
                         <p className="text-xs text-neutral-400 mt-0.5">
                           {conn.mutualAt ? `מאטץ' מ-${formatDate(conn.mutualAt)}` : formatDate(conn.createdAt)}
                         </p>

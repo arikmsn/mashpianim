@@ -225,7 +225,7 @@ function ProductBriefPageInner() {
         <Card padding="sm" className="bg-neutral-50">
           <button type="button" onClick={() => setPreview((p) => !p)} className="w-full flex items-center justify-between text-sm font-bold text-neutral-900">
             <span>כך היוצר/ת רואה את הבריף</span>
-            <span className="text-pink-500 text-xs font-medium">{preview ? "הסתרה" : "תצוגה מקדימה"}</span>
+            <span className="text-pink-600 text-xs font-medium">{preview ? "הסתרה" : "תצוגה מקדימה"}</span>
           </button>
           {preview && (
             <div className="mt-3 bg-white rounded-xl p-3">

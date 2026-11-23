@@ -249,7 +249,7 @@ function ConnectionsPageInner() {
                 key={tab.key}
                 onClick={() => { tabPickedRef.current = true; setActiveTab(tab.key); }}
                 className={`relative flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === tab.key ? "bg-white text-pink-500 shadow-sm" : "text-neutral-500 hover:text-neutral-700"
+                  activeTab === tab.key ? "bg-white text-pink-600 shadow-sm" : "text-neutral-500 hover:text-neutral-700"
                 }`}
               >
                 {tab.label}

@@ -176,7 +176,7 @@ export default function AdminCreatorPage() {
 
   return (
     <div>
-      <Link href="/admin/creators" className="text-sm text-pink-500 hover:underline">‹ כל היוצרים</Link>
+      <Link href="/admin/creators" className="text-sm text-pink-600 hover:underline">‹ כל היוצרים</Link>
 
       <Card padding="md" className="mt-4 mb-6">
         <div className="flex items-start gap-4">
