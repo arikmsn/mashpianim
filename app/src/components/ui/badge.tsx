@@ -1,20 +1,20 @@
 import { cn } from "@/lib/utils";
 
-// Design system v3 (2026-11-23): `pink` keeps its name and gets pink-50 / pink-800 (the old pink-600 text
-// fell under 4.5:1). The track tags of the home page (`biz`, `ugc`, `influencer`) and the mandatory
-// `demo` tag for non-real data live here too. The dot takes the text colour.
+// Design package v3 (docs/design-package): `pink` keeps its name with pink-50 / pink-800 (the old
+// pink-600 text fell under 4.5:1); `ugc` / `influencer` / `business` are the home page track tags and
+// `demo` is mandatory on any interface that shows non-real data.
 const variantMap = {
   default: "bg-neutral-100 text-neutral-600",
   pink: "bg-pink-50 text-pink-800",
-  success: "bg-success-soft text-success",
-  warning: "bg-warning-soft text-warning",
-  danger: "bg-danger-soft text-danger",
-  info: "bg-info-soft text-info",
-  purple: "bg-tangerine-100 text-tangerine-700",
-  biz: "bg-surface-ink text-foreground-on-ink font-semibold",
   ugc: "bg-pink-100 text-pink-800 font-semibold",
   influencer: "bg-lemon-100 text-lemon-900 font-semibold",
-  demo: "bg-transparent border border-dashed border-border-strong text-neutral-500",
+  business: "bg-surface-ink text-on-ink font-semibold",
+  demo: "border border-dashed border-border-strong text-neutral-500",
+  success: "bg-emerald-50 text-emerald-600",
+  warning: "bg-amber-50 text-amber-600",
+  danger: "bg-red-50 text-red-600",
+  info: "bg-blue-50 text-blue-600",
+  purple: "bg-purple-50 text-purple-600",
 };
 
 const sizeMap = {
@@ -47,7 +47,19 @@ function Badge({
         className
       )}
     >
-      {dot && <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" aria-hidden="true" />}
+      {dot && (
+        <span
+          className={cn("w-1.5 h-1.5 rounded-full", {
+            "bg-neutral-400": variant === "default",
+            "bg-pink-600": variant === "pink",
+            "bg-emerald-500": variant === "success",
+            "bg-amber-500": variant === "warning",
+            "bg-red-500": variant === "danger",
+            "bg-blue-500": variant === "info",
+            "bg-purple-500": variant === "purple",
+          })}
+        />
+      )}
       {children}
     </span>
   );

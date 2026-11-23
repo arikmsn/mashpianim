@@ -1,589 +1,404 @@
-"use client";
-
-import Link from "next/link";
+import type { Metadata } from "next";
 import Image from "next/image";
-import { motion, useScroll, useTransform } from "framer-motion";
-import { useRef, useEffect, useState } from "react";
+import Link from "next/link";
+import { ArrowDown, ArrowLeft, Briefcase, Sparkles, UserRound } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { splitMarker } from "@/lib/site-content";
+import { getSiteContent } from "@/lib/site-content-server";
+import { SiteNav } from "@/components/home/site-nav";
+import { CreatorFan } from "@/components/home/creator-fan";
+import { Reveal } from "@/components/home/reveal";
+import { StickyCta } from "@/components/home/sticky-cta";
+import { InfluencerQuiz } from "@/components/features/influencer-quiz";
+import { bento, container, display, eyebrow, eyebrowLight, mono, pillCreator, pillDark, pillInkLemon, pillOutline, pillPrimary } from "@/components/home/styles";
 
-type SiteContent = Record<string, Record<string, string>>;
+// The home page (design package v3 "Pop warm"): a server component that reads the content registry and renders
+// the sections in the package's order. Every visible string comes from lib/site-content.ts through
+// getSiteContent(); the interactive parts are small client components that receive their texts as props.
+export const revalidate = 60;
 
-const defaults: SiteContent = {
-  hero: {
-    badge: "הפלטפורמה ליוצרי תוכן ומותגים בישראל",
-    title_line1: "יוצרים תוכן.",
-    title_line2: "מחברים מותגים.",
-    subtitle: "קבלו מוצרים חינם, צלמו סרטונים אותנטיים, וצמחו כיוצרי תוכן. עסקים — קבלו תוכן UGC איכותי במחיר שפוי.",
-    cta_creator: "אני יוצר/ת תוכן",
-    cta_brand: "אני בעל/ת עסק",
-  },
-  how_it_works: {
-    section_title: "שלושה צעדים פשוטים",
-    step1_title: "בחרו מוצר",
-    step1_desc: "גלו מוצרים מעניינים מעסקים מובילים ושלחו בקשת חיבור",
-    step2_title: "צלמו סרטון",
-    step2_desc: "קבלו את המוצר חינם וצלמו סרטון UGC אותנטי תוך 10 ימים",
-    step3_title: "צמחו",
-    step3_desc: "צברו ניסיון, עלו ברמות, והפכו ליוצרי תוכן מבוקשים",
-  },
-  creators: {
-    title_line1: "הפכו את",
-    title_line2: "התשוקה למקצוע",
-    benefit1: "קבלו מוצרים חינם מהמותגים המובילים",
-    benefit2: "צלמו תוכן בסגנון שלכם, בקצב שלכם",
-    benefit3: "צמחו עם מערכת דירוגים ייחודית",
-    benefit4: "בנו פורטפוליו מקצועי מרשים",
-    cta: "הצטרפו כיוצרי תוכן",
-  },
-  stats: {
-    stat1_value: "100%",
-    stat1_label: "חינם ליוצרים",
-    stat2_value: "10",
-    stat2_label: "ימים ליצירת סרטון",
-    stat3_value: "3",
-    stat3_label: "צעדים פשוטים",
-  },
-  brands: {
-    title_line1: "תוכן שעובד",
-    title_line2: "בלי הפקות יקרות",
-    benefit1: "תוכן UGC אותנטי שמביא תוצאות",
-    benefit2: "מחירים שפויים — פנייה אחת = סרטון אחד",
-    benefit3: "יוצרים מאומתים ומדורגים",
-    benefit4: "ניהול קל דרך לוח בקרה חכם",
-    cta: "הצטרפו כמפרסמים",
-  },
-  cta_final: {
-    title_line1: "מוכנים",
-    title_line2: "להתחיל?",
-    subtitle: "הצטרפו לקהילת היוצרים והמותגים הגדלה. חינם לגמרי ליוצרי תוכן.",
-    cta_primary: "הרשמה חינם",
-    cta_secondary: "אני מפרסם",
-  },
-  footer: {
-    tagline: "הפלטפורמה ליוצרי תוכן ומותגים",
-    copyright: "Mashpian. כל הזכויות שמורות.",
-  },
-};
+const REGISTER_BRAND = "/register?type=brand";
+const REGISTER_CREATOR = "/register?type=creator";
+const LOGIN = "/login";
 
-function useSiteContent(): SiteContent {
-  const [content, setContent] = useState<SiteContent>(defaults);
-
-  useEffect(() => {
-    async function loadContent() {
-      try {
-        const res = await fetch("/api/admin/content");
-        if (res.ok) {
-          const data = await res.json();
-          if (data.content) {
-            const merged: SiteContent = {};
-            for (const section of Object.keys(defaults)) {
-              merged[section] = { ...defaults[section], ...data.content[section] };
-            }
-            setContent(merged);
-            return;
-          }
-        }
-      } catch {
-        // Fall through to localStorage
-      }
-      try {
-        const stored = localStorage.getItem("mashpian_site_content");
-        if (stored) {
-          const parsed = JSON.parse(stored) as SiteContent;
-          const merged: SiteContent = {};
-          for (const section of Object.keys(defaults)) {
-            merged[section] = { ...defaults[section], ...parsed[section] };
-          }
-          setContent(merged);
-        }
-      } catch {
-        // use defaults
-      }
-    }
-    loadContent();
-  }, []);
-
-  return content;
+export async function generateMetadata(): Promise<Metadata> {
+  const { content } = await getSiteContent();
+  const seo = content.seo;
+  return {
+    title: seo.title,
+    description: seo.description,
+    keywords: seo.keywords.map((k) => k.value).filter(Boolean),
+    openGraph: { title: seo.og_title, description: seo.og_description, type: "website", locale: "he_IL", url: "https://www.mashpian.online" },
+    twitter: { card: "summary_large_image", title: seo.og_title, description: seo.og_description },
+  };
 }
 
-function FadeIn({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
+// "before *marked* after" → the marked part in its own span
+function TwoTone({ text, markedClassName }: { text: string; markedClassName: string }) {
+  const { before, marked, after } = splitMarker(text);
+  if (!marked) return <>{text}</>;
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 32 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-60px" }}
-      transition={{ duration: 0.7, delay, ease: [0.22, 1, 0.36, 1] }}
-      className={className}
-    >
-      {children}
-    </motion.div>
+    <>
+      {before}
+      <span className={markedClassName}>{marked}</span>
+      {after}
+    </>
   );
 }
 
-function Icon({ d, className = "" }: { d: string; className?: string }) {
-  return (
-    <svg className={`w-6 h-6 ${className}`} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d={d} />
-    </svg>
-  );
-}
+export default async function HomePage() {
+  const { content } = await getSiteContent();
+  const nav = content.home_nav;
+  const hero = content.home_hero;
+  const tracks = content.home_tracks;
+  const brands = content.home_brands;
+  const stats = content.home_stats;
+  const how = content.home_how;
+  const creators = content.home_creators;
+  const inf = content.home_influencers;
+  const closing = content.home_cta;
+  const footer = content.home_footer;
+  const mobile = content.home_mobile;
 
-const stepIcon1 = "M21 11.25v8.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 109.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1114.625 7.5H12m0 0V21m-8.25-9.75h18c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125h-18c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z";
-const stepIcon2 = "M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z";
-const stepIcon3 = "M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.281m5.94 2.28l-2.28 5.941";
-const checkIcon = "M4.5 12.75l6 6 9-13.5";
-const arrowIcon = "M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18";
-const playIcon = "M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z";
+  const navLinks = [
+    { label: nav.link1_label, href: nav.link1_href },
+    { label: nav.link2_label, href: nav.link2_href },
+    { label: nav.link3_label, href: nav.link3_href },
+    { label: nav.link4_label, href: nav.link4_href },
+  ].filter((l) => l.label && l.href);
 
-const heroVideos = [
-  { label: "ביוטי", img: "/demo/v1.jpg" },
-  { label: "אופנה", img: "/demo/v2.jpg" },
-  { label: "אוכל", img: "/demo/v3.jpg" },
-];
-
-function FloatingOrb({ className, delay = 0 }: { className: string; delay?: number }) {
-  return (
-    <motion.div
-      className={`absolute rounded-full pointer-events-none ${className}`}
-      animate={{ y: [-20, 20, -20], x: [-10, 10, -10], scale: [1, 1.1, 1] }}
-      transition={{ duration: 8, delay, repeat: Infinity, ease: "easeInOut" }}
-    />
-  );
-}
-
-export default function HomePage() {
-  const heroRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: heroRef,
-    offset: ["start start", "end start"],
-  });
-  const heroOpacity = useTransform(scrollYProgress, [0, 0.7], [1, 0]);
-  const heroScale = useTransform(scrollYProgress, [0, 0.7], [1, 0.96]);
-  const c = useSiteContent();
+  const statTiles = [
+    { value: stats.stat1_value, suffix: stats.stat1_suffix, label: stats.stat1_label, source: stats.stat1_source, dark: stats.stat1_dark },
+    { value: stats.stat2_value, suffix: stats.stat2_suffix, label: stats.stat2_label, source: stats.stat2_source, dark: stats.stat2_dark },
+    { value: stats.stat3_value, suffix: stats.stat3_suffix, label: stats.stat3_label, source: stats.stat3_source, dark: stats.stat3_dark },
+  ];
 
   return (
-    <main className="min-h-screen bg-white overflow-x-hidden">
-      {/* Nav */}
-      <motion.nav
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.4, delay: 0.3 }}
-        className="fixed top-0 left-0 right-0 z-50"
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3">
-          <div className="flex items-center justify-between glass rounded-2xl px-5 py-3 shadow-lg shadow-black/[0.04] border border-white/60">
-            <Link href="/" className="flex items-center gap-2 text-lg font-bold tracking-tight text-neutral-900">
-              <Image src="/icon-192.png" alt="משפיען אונליין" width={36} height={36} unoptimized className="rounded-lg" />
-              <span><span className="ig-gradient-text">M</span>ashpian</span>
-            </Link>
-            <div className="flex items-center gap-2">
-              <Link href="/login" className="text-sm font-medium ig-gradient-bg text-white px-5 py-2.5 rounded-full hover:opacity-90 transition-all shadow-lg shadow-ig-pink/25">
-                התחברות
+    <div className="bg-canvas text-ink-900 pb-[80px] md:pb-0" id="top">
+      <SiteNav
+        brandName={nav.brand_name}
+        links={navLinks}
+        loginLabel={nav.login}
+        loginHref={LOGIN}
+        ctaCreator={nav.cta_creator}
+        ctaCreatorHref={REGISTER_CREATOR}
+        ctaBrand={nav.cta_brand}
+        ctaBrandHref={REGISTER_BRAND}
+        menuLabel={nav.menu_label}
+        menuClose={mobile.menu_close}
+        menuLogin={mobile.menu_login}
+      />
+
+      <main>
+        {/* HERO */}
+        <section className="relative overflow-hidden bg-surface-ink pb-28 pt-24 text-on-ink md:pb-52 md:pt-36">
+          <div className="absolute inset-0" style={{ background: "radial-gradient(60% 50% at 50% 0%, #2e2745 0%, #0b051d 70%)" }} aria-hidden="true" />
+          <div className={cn(container, "relative z-[2] text-center")}>
+            <span className={eyebrowLight}>{hero.eyebrow}</span>
+            <h1 className="mx-auto mt-4 max-w-[980px] font-display text-[34px] leading-[1.06] tracking-[-1px] text-on-ink md:mt-6 md:text-[56px] md:tracking-[-1.5px] lg:text-[72px] lg:leading-[1.02]">
+              <TwoTone text={hero.title} markedClassName="signature-text" />
+            </h1>
+            <p className="mx-auto mt-4 max-w-[600px] text-base leading-relaxed text-on-ink/70 md:mt-6 md:text-[19px]">{hero.subtitle}</p>
+            <div className="mt-6 flex flex-col justify-center gap-2.5 sm:flex-row sm:gap-3 md:mt-8">
+              <Link href={REGISTER_BRAND} className={cn(pillPrimary, "h-[52px] px-7 text-base")}>
+                <Briefcase className="h-[18px] w-[18px]" aria-hidden="true" />
+                {hero.cta_primary}
+              </Link>
+              <Link href={REGISTER_CREATOR} className={cn(pillCreator, "h-[52px] px-7 text-base")}>
+                <UserRound className="h-[18px] w-[18px]" aria-hidden="true" />
+                {hero.cta_secondary}
               </Link>
             </div>
-          </div>
-        </div>
-      </motion.nav>
-
-      {/* Hero */}
-      <motion.section ref={heroRef} style={{ opacity: heroOpacity, scale: heroScale }} className="relative pt-28 sm:pt-32 pb-20 sm:pb-28 px-4 sm:px-6">
-        {/* Animated gradient orbs */}
-        <FloatingOrb className="top-16 left-[10%] w-[350px] h-[350px] bg-ig-purple/20 blur-[120px]" delay={0} />
-        <FloatingOrb className="top-48 right-[5%] w-[300px] h-[300px] bg-ig-pink/25 blur-[100px]" delay={2} />
-        <FloatingOrb className="top-32 left-[50%] w-[400px] h-[400px] bg-ig-orange/15 blur-[140px]" delay={4} />
-        <FloatingOrb className="bottom-20 left-[20%] w-[250px] h-[250px] bg-ig-yellow/20 blur-[100px]" delay={1} />
-
-        <div className="relative max-w-3xl mx-auto text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass text-ig-pink text-xs font-semibold tracking-wide border border-ig-pink/20 shadow-sm">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-ig-orange opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 ig-gradient-bg" />
+            <a href="#how" className="mt-4 inline-flex items-center gap-1.5 border-b border-on-ink/30 pb-0.5 text-sm text-on-ink/70 hover:text-on-ink md:mt-5">
+              {hero.how_link}
+              <ArrowDown className="h-4 w-4" aria-hidden="true" />
+            </a>
+            {hero.sticker1 && (
+              <span className={cn(mono, "absolute right-[calc(50%-560px)] top-10 hidden rotate-[-6deg] rounded-full bg-lemon-400 px-3.5 py-2.5 text-xs text-ink-900 shadow-[0_8px_24px_#00000055] xl:inline-block")}>
+                {hero.sticker1}
               </span>
-              {c.hero.badge}
-            </span>
-          </motion.div>
+            )}
+            {hero.sticker2 && (
+              <span className={cn(mono, "absolute left-[calc(50%-560px)] top-44 hidden rotate-[5deg] rounded-full bg-pink-500 px-3.5 py-2.5 text-xs text-white shadow-[0_8px_24px_#00000055] xl:inline-block")}>
+                {hero.sticker2}
+              </span>
+            )}
+          </div>
+          <div className="relative z-[1] mt-9 md:mt-14">
+            <CreatorFan label={hero.fan_label} counterLine={hero.counter_line} demoNote={hero.demo_note} />
+          </div>
+        </section>
 
-          <motion.h1
-            className="mt-8 text-5xl md:text-7xl font-extrabold leading-[1.08] tracking-tight text-neutral-900"
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-          >
-            {c.hero.title_line1}
-            <br />
-            <span className="ig-gradient-text">{c.hero.title_line2}</span>
-          </motion.h1>
-
-          <motion.p
-            className="mt-6 text-lg text-neutral-600 max-w-md mx-auto leading-relaxed"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.45 }}
-          >
-            {c.hero.subtitle}
-          </motion.p>
-
-          <motion.div
-            className="mt-10 flex flex-col sm:flex-row gap-3 justify-center"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.55 }}
-          >
-            <Link
-              href="/register?type=creator"
-              className="group inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full ig-gradient-bg-animated text-white font-semibold transition-all shadow-lg shadow-ig-pink/30 hover:shadow-xl hover:shadow-ig-pink/40 hover:scale-[1.02]"
-            >
-              {c.hero.cta_creator}
-              <Icon d={arrowIcon} className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            </Link>
-            <Link
-              href="/register?type=brand"
-              className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full glass border border-neutral-200/80 text-neutral-700 font-semibold hover:border-ig-pink/30 hover:shadow-lg transition-all"
-            >
-              {c.hero.cta_brand}
-            </Link>
-          </motion.div>
-
-          {/* Hero illustration card */}
-          <motion.div
-            className="mt-14 sm:mt-16 mx-auto max-w-lg"
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.7 }}
-          >
-            <div className="relative rounded-3xl p-[2px] bg-gradient-to-br from-ig-purple via-ig-pink to-ig-orange shadow-2xl shadow-ig-pink/20">
-              <div className="bg-white rounded-[22px] p-5">
-                <div className="flex items-center gap-3 mb-4 pb-4 border-b border-neutral-100">
-                  <Image src="/icon-192.png" alt="משפיען" width={40} height={40} unoptimized className="rounded-lg shadow-md shadow-ig-pink/30" />
-                  <div className="flex-1">
-                    <div className="text-sm font-semibold text-neutral-900">הפרופיל שלך</div>
-                    <div className="text-xs text-neutral-500">רמה &middot; סרטונים &middot; דירוג</div>
-                  </div>
-                  <span className="text-xs font-medium bg-emerald-50 text-emerald-600 px-2.5 py-1 rounded-full border border-emerald-100">פעילה</span>
-                </div>
-                <div className="grid grid-cols-3 gap-2.5">
-                  {heroVideos.map((video) => (
-                    <div key={video.label} className="relative aspect-[9/16] rounded-2xl overflow-hidden group cursor-pointer bg-neutral-100 shadow-sm">
-                      <img src={video.img} alt={video.label} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <div className="w-10 h-10 rounded-full glass shadow-lg flex items-center justify-center">
-                          <svg className="w-5 h-5 text-ig-pink mr-[-2px]" fill="currentColor" viewBox="0 0 24 24">
-                            <path d={playIcon} />
-                          </svg>
-                        </div>
-                      </div>
-                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent p-2.5 pt-8">
-                        <p className="text-white text-[11px] font-semibold text-center">{video.label}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      </motion.section>
-
-      {/* Scrolling social proof ticker */}
-      <div className="relative py-6 overflow-hidden bg-neutral-50/80">
-        <div className="absolute inset-0 bg-gradient-to-l from-neutral-50 via-transparent to-neutral-50 z-10 pointer-events-none" />
-        <motion.div
-          className="flex gap-8 items-center whitespace-nowrap"
-          animate={{ x: ["0%", "-50%"] }}
-          transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
-        >
-          {[...Array(2)].map((_, j) => (
-            <div key={j} className="flex gap-8 items-center">
-              {["ביוטי", "אופנה", "אוכל", "טכנולוגיה", "כושר", "בית", "ספורט", "משחקים", "מוזיקה", "טיולים"].map((cat) => (
-                <span key={`${j}-${cat}`} className="text-sm font-medium text-neutral-500 flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full ig-gradient-bg" />
-                  {cat}
+        {/* TRACK CARDS on the seam */}
+        <section aria-label={tracks.aria_label} className={cn(container, "relative z-[4] -mt-20 md:-mt-36")} id="tracks">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4">
+            <Reveal delay={0}>
+              <Link href={REGISTER_BRAND} className="group relative flex h-full flex-col gap-3 rounded-3xl border border-pink-200 bg-pink-100 p-6 text-pink-900 shadow-lg transition-transform duration-200 hover:-translate-y-1 md:min-h-[280px] md:p-8">
+                <span className={cn(mono, "absolute left-4 top-4 rounded-full bg-primary px-2.5 py-1.5 text-[11px] text-white")}>{tracks.brand_tag}</span>
+                <span className="grid h-12 w-12 place-items-center rounded-full bg-primary text-white md:h-[52px] md:w-[52px]">
+                  <Briefcase className="h-6 w-6" aria-hidden="true" />
                 </span>
-              ))}
-            </div>
-          ))}
-        </motion.div>
-      </div>
+                <span className="font-display text-[22px] leading-tight md:text-[25px]">{tracks.brand_title}</span>
+                <span className="flex-1 text-sm leading-relaxed md:text-[15px]">{tracks.brand_desc}</span>
+                <span className={cn(pillPrimary, "self-start")}>
+                  {tracks.brand_cta}
+                  <ArrowLeft className="h-[18px] w-[18px]" aria-hidden="true" />
+                </span>
+              </Link>
+            </Reveal>
+            <Reveal delay={0.08}>
+              <Link href={REGISTER_CREATOR} className="group relative flex h-full flex-col gap-3 rounded-3xl border border-lemon-300 bg-lemon-100 p-6 text-lemon-900 shadow-lg transition-transform duration-200 hover:-translate-y-1 md:min-h-[280px] md:p-8">
+                <span className={cn(mono, "absolute left-4 top-4 rounded-full bg-lemon-400 px-2.5 py-1.5 text-[11px] text-ink-900")}>{tracks.creator_tag}</span>
+                <span className="grid h-12 w-12 place-items-center rounded-full bg-lemon-400 text-ink-900 md:h-[52px] md:w-[52px]">
+                  <UserRound className="h-6 w-6" aria-hidden="true" />
+                </span>
+                <span className="font-display text-[22px] leading-tight md:text-[25px]">{tracks.creator_title}</span>
+                <span className="flex-1 text-sm leading-relaxed md:text-[15px]">{tracks.creator_desc}</span>
+                <span className={cn(pillInkLemon, "self-start")}>
+                  {tracks.creator_cta}
+                  <ArrowLeft className="h-[18px] w-[18px]" aria-hidden="true" />
+                </span>
+              </Link>
+            </Reveal>
+            <Reveal delay={0.16}>
+              <a href="#inf" className="group relative flex h-full flex-col gap-3 rounded-3xl border border-border bg-surface p-6 text-ink-900 shadow-lg transition-transform duration-200 hover:-translate-y-1 md:min-h-[280px] md:p-8">
+                <span className={cn(mono, "absolute left-4 top-4 rotate-[-4deg] rounded-full bg-tangerine-500 px-2.5 py-1.5 text-[11px] text-white")}>{tracks.influencer_badge}</span>
+                <span className="grid h-12 w-12 place-items-center rounded-full bg-tangerine-100 text-tangerine-700 md:h-[52px] md:w-[52px]">
+                  <Sparkles className="h-6 w-6" aria-hidden="true" />
+                </span>
+                <span className="font-display text-[22px] leading-tight md:text-[25px]">{tracks.influencer_title}</span>
+                <span className="flex-1 text-sm leading-relaxed text-ink-700 md:text-[15px]">{tracks.influencer_desc}</span>
+                <span className={cn(pillDark, "self-start")}>{tracks.influencer_cta}</span>
+              </a>
+            </Reveal>
+          </div>
+        </section>
 
-      {/* How it works */}
-      <section className="px-4 sm:px-6 py-24 sm:py-28 relative overflow-hidden">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-px bg-gradient-to-l from-transparent via-ig-pink/30 to-transparent" />
-        <div className="max-w-5xl mx-auto">
-          <FadeIn>
-            <div className="flex items-center justify-center gap-2 mb-3">
-              <div className="h-px w-8 bg-gradient-to-l from-ig-purple to-ig-pink" />
-              <p className="text-sm font-semibold ig-gradient-text tracking-wide">איך זה עובד</p>
-              <div className="h-px w-8 bg-gradient-to-l from-ig-pink to-ig-orange" />
-            </div>
-            <h2 className="text-3xl md:text-5xl font-bold text-center text-neutral-900">{c.how_it_works.section_title}</h2>
-          </FadeIn>
+        {/* BUSINESSES */}
+        <section id="biz" className={cn(container, "pb-16 pt-16 md:pb-24 md:pt-28")}>
+          <Reveal>
+            <span className={eyebrow}>{brands.eyebrow}</span>
+            <h2 className={cn(display, "mt-3 max-w-[880px] text-[32px] leading-[1.1] md:text-[48px] md:leading-[1.08]")}>
+              <TwoTone text={brands.title} markedClassName="text-neutral-500" />
+            </h2>
+            <p className="mt-3 max-w-[560px] text-base leading-relaxed text-ink-700 md:mt-4 md:text-lg">{brands.subtitle}</p>
+          </Reveal>
 
-          <div className="mt-14 sm:mt-16 grid md:grid-cols-3 gap-5 sm:gap-6">
-            {[
-              { step: "01", title: c.how_it_works.step1_title, desc: c.how_it_works.step1_desc, icon: stepIcon1, color: "from-ig-purple to-ig-magenta" },
-              { step: "02", title: c.how_it_works.step2_title, desc: c.how_it_works.step2_desc, icon: stepIcon2, color: "from-ig-pink to-ig-orange" },
-              { step: "03", title: c.how_it_works.step3_title, desc: c.how_it_works.step3_desc, icon: stepIcon3, color: "from-ig-orange to-ig-yellow" },
-            ].map((item, i) => (
-              <FadeIn key={item.step} delay={i * 0.12}>
-                <div className="relative bg-white rounded-2xl p-7 sm:p-8 pt-10 border border-neutral-100 hover:border-transparent hover:shadow-2xl hover:shadow-ig-pink/[0.08] transition-all duration-500 group">
-                  <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" style={{ background: "linear-gradient(135deg, rgba(131,58,180,0.03), rgba(225,48,108,0.03), rgba(247,119,55,0.03))" }} />
-                  <div className={`absolute top-4 left-4 w-9 h-9 rounded-xl bg-gradient-to-br ${item.color} flex items-center justify-center shadow-md shadow-ig-pink/20`}>
-                    <span className="text-white text-xs font-bold">{item.step}</span>
-                  </div>
-                  <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${item.color} bg-opacity-10 flex items-center justify-center mb-5 transition-all duration-300`} style={{ background: `linear-gradient(135deg, ${i === 0 ? "rgba(131,58,180,0.08)" : i === 1 ? "rgba(225,48,108,0.08)" : "rgba(247,119,55,0.08)"}, ${i === 0 ? "rgba(193,53,132,0.08)" : i === 1 ? "rgba(247,119,55,0.08)" : "rgba(252,175,69,0.08)"})` }}>
-                    <Icon d={item.icon} className={`w-7 h-7 ${i === 0 ? "text-ig-purple" : i === 1 ? "text-ig-pink" : "text-ig-orange"}`} />
-                  </div>
-                  <h3 className="text-xl font-bold text-neutral-900">{item.title}</h3>
-                  <p className="mt-3 text-neutral-600 text-sm leading-relaxed">{item.desc}</p>
+          <div className="mt-7 grid grid-cols-1 gap-3 md:mt-12 md:grid-cols-3 md:gap-4">
+            <Reveal className="md:col-span-2" delay={0}>
+              <div className={cn(bento, "bento-glow h-full md:min-h-[340px]")}>
+                <div className="font-display text-[22px] md:text-[27px]">{brands.bento1_title}</div>
+                <p className="mt-1.5 max-w-[320px] text-sm leading-relaxed text-ink-700 md:mt-2 md:text-base">{brands.bento1_desc}</p>
+                <div className="mt-4 grid grid-cols-3 gap-2 md:absolute md:-bottom-10 md:left-8 md:mt-0 md:w-[440px] md:gap-2.5 md:rounded-t-2xl md:border md:border-border md:bg-surface md:p-4 md:shadow-lg" aria-hidden="true">
+                  <div className="h-[90px] rounded-[10px] bg-pink-100 md:h-[140px]" />
+                  <div className="h-[90px] rounded-[10px] bg-surface-2 md:h-[140px]" />
+                  <div className="h-[90px] rounded-[10px] bg-lemon-100 md:h-[140px]" />
+                  <div className="hidden h-2 rounded bg-border md:block" />
+                  <div className="hidden h-2 rounded bg-border md:block" />
+                  <div className="hidden h-2 rounded bg-border md:block" />
                 </div>
-              </FadeIn>
+                <span className={cn(mono, "mt-3 block text-[11px] text-neutral-500 md:absolute md:bottom-5 md:right-8 md:mt-0")}>{brands.screenshot_caption}</span>
+              </div>
+            </Reveal>
+            <Reveal delay={0.08}>
+              <div className={cn(bento, "flex h-full flex-col md:min-h-[340px]")}>
+                <div className="font-display text-[22px] md:text-[27px]">{brands.bento2_title}</div>
+                <p className="mt-1.5 text-sm leading-relaxed text-ink-700 md:mt-2 md:text-base">{brands.bento2_desc}</p>
+                <div className="mt-5 flex items-center gap-2 rounded-xl border border-border bg-canvas px-3.5 py-3 md:mt-auto" aria-hidden="true">
+                  <span className="h-9 w-9 shrink-0 rounded-full bg-pink-200" />
+                  <span className="flex-1 text-[13px]">{brands.bento2_sample}</span>
+                  <span className="rounded-full bg-success-soft px-2.5 py-1.5 text-xs font-semibold text-success">{brands.bento2_sample_tag}</span>
+                </div>
+              </div>
+            </Reveal>
+            <Reveal delay={0.16}>
+              <div className={cn(bento, "flex h-full flex-col md:min-h-[300px]")}>
+                <div className="font-display text-[22px] md:text-[27px]">{brands.bento3_title}</div>
+                <p className="mt-1.5 text-sm leading-relaxed text-ink-700 md:mt-2 md:text-base">{brands.bento3_desc}</p>
+                <div className="mt-5 flex flex-col gap-1.5 md:mt-auto" aria-hidden="true">
+                  <span className="self-start rounded-[12px_12px_12px_4px] border border-border bg-canvas px-3 py-2 text-[13px]">{brands.bento3_bubble1}</span>
+                  <span className="self-end rounded-[12px_12px_4px_12px] bg-surface-ink px-3 py-2 text-[13px] text-on-ink">{brands.bento3_bubble2}</span>
+                </div>
+              </div>
+            </Reveal>
+            <Reveal className="md:col-span-2" delay={0.24}>
+              <div className={cn(bento, "flex h-full flex-col gap-5 md:min-h-[300px] md:flex-row md:items-center md:gap-8")} style={{ background: "var(--surface) radial-gradient(110% 80% at 100% 0%, #ffadc959 0%, #ffadc900 60%)" }}>
+                <div className="flex-1">
+                  <div className="font-display text-[22px] md:text-[27px]">{brands.bento4_title}</div>
+                  <p className="mt-1.5 max-w-[380px] text-sm leading-relaxed text-ink-700 md:mt-2 md:text-base">{brands.bento4_desc}</p>
+                </div>
+                <div className="flex gap-2.5" aria-hidden="true">
+                  <div className="h-[120px] w-[68px] rounded-[14px] bg-[#c9a6a0] md:h-[170px] md:w-[96px]" />
+                  <div className="h-[120px] w-[68px] rounded-[14px] bg-[#b9b09a] md:h-[170px] md:w-[96px]" />
+                  <div className="h-[120px] w-[68px] rounded-[14px] bg-[#8fa3b5] md:h-[170px] md:w-[96px]" />
+                </div>
+              </div>
+            </Reveal>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-3 md:mt-4 md:grid-cols-3 md:gap-4">
+            {statTiles.map((s, i) => (
+              <Reveal key={i} delay={0.06 * i} className={cn(i === 2 && "col-span-2 md:col-span-1")}>
+                <div className={cn("h-full rounded-2xl border p-5 md:px-6 md:pb-6 md:pt-7", s.dark ? "border-white/10 bg-surface-ink" : "border-border bg-surface")}>
+                  <div className={cn("font-display text-[40px] leading-none tracking-[-1px] tabular-nums md:text-[60px] md:tracking-[-1.5px]", s.dark ? "text-lemon-400" : "text-ink-900")} dir="ltr" style={{ textAlign: "right" }}>
+                    {s.value}
+                    {s.suffix && <span className={cn(s.suffix === "+" ? "text-pink-500" : "font-sans text-[22px] font-normal md:text-[28px]", "ms-1")}>{s.suffix}</span>}
+                  </div>
+                  <div className={cn("mt-2 text-[13px] md:text-sm", s.dark ? "text-on-ink/80" : "text-ink-700")}>{s.label}</div>
+                  <div className={cn(mono, "mt-2.5 text-[10px] md:text-[11px]", s.dark ? "text-on-ink/60" : "text-neutral-500")} style={{ textAlign: "right" }} dir="ltr">
+                    {s.source}
+                  </div>
+                </div>
+              </Reveal>
             ))}
           </div>
-        </div>
-      </section>
 
-      {/* For Creators */}
-      <section className="px-4 sm:px-6 py-24 sm:py-28 relative bg-gradient-to-b from-white to-neutral-50/50">
-        <FloatingOrb className="top-1/2 left-0 w-[300px] h-[300px] bg-ig-purple/10 blur-[100px] -translate-y-1/2" delay={1} />
-        <div className="max-w-5xl mx-auto grid md:grid-cols-2 gap-12 md:gap-20 items-center relative">
-          <FadeIn>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="h-px w-8 bg-gradient-to-l from-ig-purple to-ig-pink" />
-              <p className="text-sm font-semibold ig-gradient-text tracking-wide">ליוצרי תוכן</p>
-            </div>
-            <h2 className="text-3xl md:text-5xl font-bold leading-tight text-neutral-900">
-              {c.creators.title_line1} <span className="ig-gradient-text">{c.creators.title_line2}</span>
-            </h2>
-            <div className="mt-8 space-y-4">
-              {[c.creators.benefit1, c.creators.benefit2, c.creators.benefit3, c.creators.benefit4].map((text, i) => (
-                <motion.div
-                  key={text}
-                  className="flex items-start gap-3"
-                  initial={{ opacity: 0, x: 20 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.08, duration: 0.4 }}
-                >
-                  <div className="w-6 h-6 rounded-lg ig-gradient-bg flex items-center justify-center mt-0.5 shrink-0 shadow-sm shadow-ig-pink/20">
-                    <Icon d={checkIcon} className="w-3.5 h-3.5 text-white" />
-                  </div>
-                  <p className="text-neutral-600 leading-relaxed">{text}</p>
-                </motion.div>
-              ))}
-            </div>
-            <Link
-              href="/register?type=creator"
-              className="group inline-flex items-center gap-2 mt-8 px-7 py-3.5 rounded-full ig-gradient-bg-animated text-white font-semibold transition-all shadow-lg shadow-ig-pink/25 hover:shadow-xl hover:shadow-ig-pink/35 hover:scale-[1.02]"
-            >
-              {c.creators.cta}
-              <Icon d={arrowIcon} className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+          <div className="mt-6 flex flex-col gap-3 md:mt-10 md:flex-row md:items-center">
+            <Link href={REGISTER_BRAND} className={cn(pillPrimary, "w-full md:w-auto")}>
+              {brands.cta_primary}
+              <ArrowLeft className="h-[18px] w-[18px]" aria-hidden="true" />
             </Link>
-          </FadeIn>
+            <a href="#how" className={cn(pillOutline, "hidden md:inline-flex")}>
+              {brands.cta_secondary}
+            </a>
+            <span className="text-center text-[13px] text-neutral-500 md:ms-2 md:text-start md:text-sm">{brands.price_note}</span>
+          </div>
+        </section>
 
-          <FadeIn delay={0.15}>
-            <div className="relative rounded-3xl p-[1.5px] bg-gradient-to-br from-ig-purple/40 via-ig-pink/40 to-ig-orange/40">
-              <div className="bg-white rounded-[22px] p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-2 h-2 rounded-full ig-gradient-bg" />
-                  <p className="text-xs font-semibold text-neutral-600">החיבורים שלך</p>
-                </div>
-                <div className="space-y-2.5">
-                  {[
-                    { name: "סרום פנים פרימיום", brand: "Beauty Lab", status: "ממתין לאישור", statusColor: "amber" },
-                    { name: "חולצת כותנה אורגנית", brand: "GreenWear", status: "אושר — צלמו", statusColor: "ig" },
-                    { name: "שייקר חלבון", brand: "FitMix", status: "סרטון הועלה", statusColor: "emerald" },
-                  ].map((item, i) => (
-                    <motion.div
-                      key={i}
-                      className="flex items-center justify-between bg-neutral-50/80 rounded-xl px-4 py-3.5 border border-neutral-100 hover:border-ig-pink/20 hover:bg-white transition-all"
-                      initial={{ opacity: 0, y: 12 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ delay: 0.2 + i * 0.1, duration: 0.4 }}
-                    >
-                      <div>
-                        <p className="text-sm font-semibold text-neutral-900">{item.name}</p>
-                        <p className="text-xs text-neutral-500 mt-0.5">{item.brand}</p>
-                      </div>
-                      <span className={`text-[11px] font-semibold px-3 py-1.5 rounded-full ${
-                        item.statusColor === "amber" ? "bg-amber-50 text-amber-600 border border-amber-100" :
-                        item.statusColor === "ig" ? "bg-gradient-to-l from-ig-purple/10 to-ig-pink/10 text-ig-pink border border-ig-pink/20" :
-                        "bg-emerald-50 text-emerald-600 border border-emerald-100"
-                      }`}>
-                        {item.status}
-                      </span>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </FadeIn>
-        </div>
-      </section>
-
-      {/* Stats */}
-      <section className="px-4 sm:px-6 py-20 sm:py-24 relative overflow-hidden">
-        <div className="absolute inset-0 ig-gradient-bg-animated opacity-95" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(255,255,255,0.1),transparent_50%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_50%,rgba(255,255,255,0.08),transparent_50%)]" />
-        <div className="max-w-5xl mx-auto grid grid-cols-3 gap-6 sm:gap-8 text-center relative">
-          {[
-            { value: c.stats.stat1_value, label: c.stats.stat1_label },
-            { value: c.stats.stat2_value, label: c.stats.stat2_label },
-            { value: c.stats.stat3_value, label: c.stats.stat3_label },
-          ].map((stat, i) => (
-            <FadeIn key={i} delay={i * 0.1}>
-              <div className="py-4">
-                <div className="text-4xl md:text-6xl font-extrabold tracking-tight text-white drop-shadow-lg">{stat.value}</div>
-                <div className="text-white/70 text-sm mt-3 font-medium">{stat.label}</div>
-              </div>
-            </FadeIn>
-          ))}
-        </div>
-      </section>
-
-      {/* How the platform works — for brands */}
-      <section className="px-4 sm:px-6 py-24 sm:py-28 relative bg-neutral-900 overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(225,48,108,0.08),transparent_50%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(131,58,180,0.06),transparent_50%)]" />
-        <div className="max-w-3xl mx-auto relative">
-          <FadeIn>
-            <div className="text-center mb-16">
-              <div className="flex items-center justify-center gap-2 mb-3">
-                <div className="h-px w-8 bg-gradient-to-l from-ig-orange to-ig-pink" />
-                <p className="text-sm font-semibold text-ig-pink tracking-wide">למותגים ועסקים</p>
-                <div className="h-px w-8 bg-gradient-to-l from-ig-pink to-ig-purple" />
-              </div>
-              <h2 className="text-3xl md:text-5xl font-extrabold text-white">ככה הפלטפורמה עובדת</h2>
-            </div>
-          </FadeIn>
-
-          <div className="relative">
-            {/* Vertical timeline line */}
-            <div className="absolute top-0 bottom-0 right-[23px] sm:right-auto sm:left-1/2 sm:-translate-x-1/2 w-[2px] bg-gradient-to-b from-ig-purple via-ig-pink to-ig-orange" />
-
-            {[
-              {
-                step: "1",
-                title: "העלו מוצר",
-                desc: "הוסיפו את המוצר שלכם לפלטפורמה בקליק. תיאור, תמונות, ופרטי משלוח — ויוצרי התוכן כבר רואים אותו.",
-                gradient: "from-ig-purple to-ig-magenta",
-              },
-              {
-                step: "2",
-                title: "התחברו ליוצרים",
-                desc: "יוצרי תוכן מאומתים שולחים בקשות חיבור. בחרו את המתאימים לפי סגנון, קטגוריה ודירוג.",
-                gradient: "from-ig-pink to-ig-orange",
-              },
-              {
-                step: "3",
-                title: "שלחו את המוצר",
-                desc: "אשרו את החיבור ושלחו את המוצר ישירות ליוצר — הפלטפורמה מנהלת את כל התהליך.",
-                gradient: "from-ig-orange to-ig-yellow",
-              },
-              {
-                step: "4",
-                title: "קבלו תוכן UGC",
-                desc: "תוך 10 ימים תקבלו סרטון UGC אותנטי מוכן לפרסום ברשתות החברתיות שלכם.",
-                gradient: "from-ig-yellow to-emerald-400",
-              },
-            ].map((item, i) => (
-              <FadeIn key={item.step} delay={i * 0.12}>
-                <div className={`relative flex items-start gap-5 sm:gap-8 mb-12 last:mb-0 ${i % 2 === 0 ? "sm:flex-row" : "sm:flex-row-reverse"}`}>
-                  {/* Step number circle */}
-                  <div className="relative z-10 shrink-0">
-                    <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-lg shadow-ig-pink/30`}>
-                      <span className="text-white text-lg font-bold">{item.step}</span>
+        {/* HOW */}
+        <section id="how" className="border-y border-border bg-surface">
+          <div className={cn(container, "py-16 md:py-24")}>
+            <Reveal>
+              <span className={eyebrow}>{how.eyebrow}</span>
+              <h2 className={cn(display, "mt-3 text-[32px] leading-[1.1] md:text-[48px] md:leading-[1.08]")}>
+                <TwoTone text={how.title} markedClassName="text-neutral-500" />
+              </h2>
+            </Reveal>
+            <div className="mt-7 grid grid-cols-1 gap-5 md:mt-12 md:grid-cols-4 md:gap-6">
+              {how.steps.map((s, i) => (
+                <Reveal key={i} delay={0.06 * i}>
+                  <div className="flex gap-3.5 md:flex-col md:gap-3 md:border-t md:border-border md:pt-5">
+                    <span className={cn(mono, "w-8 shrink-0 pt-1 text-xs text-pink-700 md:w-auto md:pt-0")}>{s.tag}</span>
+                    <div>
+                      <b className="text-base font-semibold md:text-xl">{s.title}</b>
+                      <div className="mt-0.5 text-sm leading-relaxed text-ink-700 md:mt-1 md:text-base">{s.desc}</div>
                     </div>
                   </div>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </section>
 
-                  {/* Content card */}
-                  <div className={`flex-1 bg-white/[0.06] backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-ig-pink/30 transition-all ${i % 2 === 0 ? "sm:mr-auto" : "sm:ml-auto"}`}>
-                    <h3 className="text-xl font-bold text-white mb-2">{item.title}</h3>
-                    <p className="text-neutral-400 text-sm leading-relaxed">{item.desc}</p>
+        {/* UGC CREATORS */}
+        <section id="ugc" className={cn(container, "py-16 md:py-24")}>
+          <Reveal>
+            <div className="relative overflow-hidden rounded-3xl border border-border bg-surface p-5 md:rounded-[32px] md:p-16">
+              <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(70% 90% at 100% 50%, #fff1bf 0%, #fff1bf00 70%)" }} aria-hidden="true" />
+              <div className="relative grid grid-cols-1 items-center gap-6 md:grid-cols-2 md:gap-12">
+                <div>
+                  <span className={eyebrow}>{creators.eyebrow}</span>
+                  <h2 className={cn(display, "mt-3 text-[30px] leading-[1.1] md:text-[46px] md:leading-[1.08]")}>
+                    <TwoTone text={creators.title} markedClassName="text-neutral-500" />
+                  </h2>
+                  <p className="mt-3 max-w-[480px] text-[15px] leading-relaxed text-ink-700 md:mt-4 md:text-lg">{creators.subtitle}</p>
+                  <div className="mt-6 hidden gap-3 md:flex">
+                    <Link href={REGISTER_CREATOR} className={pillCreator}>
+                      {creators.cta_primary}
+                    </Link>
+                    <a href="#how" className={pillOutline}>
+                      {creators.cta_secondary}
+                    </a>
                   </div>
                 </div>
-              </FadeIn>
-            ))}
-          </div>
-
-          <FadeIn delay={0.5}>
-            <div className="text-center mt-14">
-              <Link
-                href="/register?type=brand"
-                className="group inline-flex items-center gap-2 px-8 py-4 rounded-full ig-gradient-bg-animated text-white font-semibold transition-all shadow-lg shadow-ig-pink/30 hover:shadow-xl hover:shadow-ig-pink/40 hover:scale-[1.02]"
-              >
-                {c.brands.cta}
-                <Icon d={arrowIcon} className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-              </Link>
-            </div>
-          </FadeIn>
-        </div>
-      </section>
-
-      {/* Final CTA */}
-      <section className="px-4 sm:px-6 py-24 sm:py-28 relative overflow-hidden">
-        <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(131,58,180,0.06), rgba(225,48,108,0.06), rgba(247,119,55,0.04), rgba(252,175,69,0.03))" }} />
-        <FloatingOrb className="top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-ig-pink/10 blur-[120px]" delay={0} />
-        <FadeIn>
-          <div className="max-w-2xl mx-auto text-center relative">
-            <h2 className="text-4xl md:text-6xl font-extrabold tracking-tight text-neutral-900">
-              {c.cta_final.title_line1} <span className="ig-gradient-text">{c.cta_final.title_line2}</span>
-            </h2>
-            <p className="mt-5 text-neutral-600 max-w-sm mx-auto leading-relaxed text-lg">
-              {c.cta_final.subtitle}
-            </p>
-            <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
-              <Link
-                href="/register?type=creator"
-                className="group inline-flex items-center justify-center gap-2 px-8 py-4 rounded-full ig-gradient-bg-animated text-white font-semibold transition-all shadow-lg shadow-ig-pink/25 hover:shadow-xl hover:shadow-ig-pink/40 hover:scale-[1.02]"
-              >
-                {c.cta_final.cta_primary}
-                <Icon d={arrowIcon} className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-              </Link>
-              <Link
-                href="/register?type=brand"
-                className="inline-flex items-center justify-center px-8 py-4 rounded-full glass border border-neutral-200/80 text-neutral-700 font-semibold hover:border-ig-pink/30 hover:shadow-lg transition-all"
-              >
-                {c.cta_final.cta_secondary}
-              </Link>
-            </div>
-          </div>
-        </FadeIn>
-      </section>
-
-      {/* Footer */}
-      <footer className="px-4 sm:px-6 py-12 bg-neutral-900 text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,rgba(131,58,180,0.08),transparent_50%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(247,119,55,0.05),transparent_50%)]" />
-        <div className="max-w-5xl mx-auto relative">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div>
-              <div className="flex items-center gap-2">
-                <Image src="/icon-192.png" alt="משפיען אונליין" width={32} height={32} unoptimized className="rounded-lg" />
-                <p className="text-lg font-bold">
-                  <span className="ig-gradient-text">M</span>ashpian
-                </p>
+                <div className="flex flex-col gap-2 md:gap-3">
+                  {creators.steps.map((s, i) => (
+                    <div key={i} className="flex items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-3.5 md:gap-4 md:px-6 md:py-5">
+                      <span className={cn(mono, "w-6 shrink-0 text-xs text-lemon-700 md:w-7")}>{s.tag}</span>
+                      <div>
+                        <b className="text-sm font-semibold md:text-base">{s.title}</b>
+                        <div className="hidden text-sm text-ink-700 md:block">{s.desc}</div>
+                      </div>
+                    </div>
+                  ))}
+                  <Link href={REGISTER_CREATOR} className={cn(pillCreator, "mt-2 w-full md:hidden")}>
+                    {creators.cta_primary}
+                  </Link>
+                </div>
               </div>
-              <p className="text-neutral-400 text-sm mt-1">{c.footer.tagline}</p>
             </div>
-            <div className="flex gap-6 text-sm text-neutral-400">
-              <Link href="/terms" className="hover:text-white transition-colors">תנאי שירות</Link>
-              <Link href="/privacy" className="hover:text-white transition-colors">פרטיות</Link>
-              <Link href="/refunds" className="hover:text-white transition-colors">החזרים</Link>
-              <Link href="/accessibility" className="hover:text-white transition-colors">נגישות</Link>
-              <Link href="/login" className="hover:text-white transition-colors">התחברות</Link>
+          </Reveal>
+        </section>
+
+        {/* INFLUENCERS: the quiz */}
+        <section id="inf" className={cn(container, "pb-16 md:pb-24")}>
+          <Reveal>
+            <div className="relative overflow-hidden rounded-3xl border border-border bg-surface p-5 md:rounded-[32px] md:p-16">
+              <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(70% 90% at 0% 50%, #ffd6e4 0%, #ffd6e400 70%)" }} aria-hidden="true" />
+              <div className="relative grid grid-cols-1 items-center gap-6 md:grid-cols-2 md:gap-14">
+                <div>
+                  <span className={eyebrow}>{inf.eyebrow}</span>
+                  <h2 className={cn(display, "mt-3 text-[30px] leading-[1.1] md:text-[46px] md:leading-[1.08]")}>
+                    <TwoTone text={inf.title} markedClassName="text-neutral-500" />
+                  </h2>
+                  <p className="mt-3 max-w-[460px] text-[15px] leading-relaxed text-ink-700 md:mt-4 md:text-lg">{inf.subtitle}</p>
+                  <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[13px] text-ink-700 md:mt-8 md:max-w-[420px] md:flex-col md:gap-0">
+                    {inf.bullets.map((b, i) => (
+                      <div key={i} className={cn("flex items-center gap-2 md:gap-3.5 md:border-t md:border-border md:py-3", i === inf.bullets.length - 1 && "md:border-b")}>
+                        <span className={cn(mono, "shrink-0 text-[11px] text-pink-700 md:w-9")}>{b.tag}</span>
+                        <span className="md:text-[15px]">{b.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <InfluencerQuiz quiz={content.quiz} texts={{ card_eyebrow: inf.card_eyebrow, privacy_note: inf.privacy_note, cta_next: inf.cta_next, cta_back: inf.cta_back }} homeHref="#top" />
+              </div>
             </div>
+          </Reveal>
+        </section>
+
+        {/* CLOSING + FOOTER */}
+        <section id="closing" className="bg-surface-ink text-on-ink">
+          <div className={cn(container, "py-16 text-center md:py-32")}>
+            <Reveal>
+              <span className={eyebrowLight}>{closing.eyebrow}</span>
+              <h2 className="mx-auto mt-4 max-w-[860px] font-display text-[30px] leading-[1.06] text-on-ink md:text-[60px] md:leading-[1.04] md:tracking-[-1.2px]">
+                <TwoTone text={closing.title} markedClassName="text-lemon-400" />
+              </h2>
+              <p className="mx-auto mt-4 max-w-[520px] text-[15px] leading-relaxed text-on-ink/70 md:mt-6 md:text-lg">{closing.subtitle}</p>
+              <div className="mt-7 flex flex-col justify-center gap-2.5 sm:flex-row sm:gap-3 md:mt-10">
+                <Link href={REGISTER_BRAND} className={pillPrimary}>
+                  {closing.cta_primary}
+                </Link>
+                <Link href={REGISTER_CREATOR} className={pillCreator}>
+                  {closing.cta_secondary}
+                </Link>
+              </div>
+            </Reveal>
           </div>
-          <div className="mt-8 pt-8 border-t border-neutral-800 text-center text-neutral-500 text-xs">
-            &copy; {new Date().getFullYear()} {c.footer.copyright}
-          </div>
-        </div>
-      </footer>
-    </main>
+          <footer className="border-t border-white/10">
+            <div className={cn(container, "flex flex-col items-center gap-4 py-7 text-sm text-on-ink/70 md:flex-row md:justify-between")}>
+              <div className="flex items-center gap-2.5 font-display text-[17px] text-on-ink">
+                <Image src="/icon-192.png" alt="" width={28} height={28} unoptimized className="h-7 w-7 rounded-[7px]" />
+                {footer.logo_tagline}
+              </div>
+              <nav className="flex flex-wrap justify-center gap-x-6 gap-y-2">
+                {footer.links.map((l, i) => (
+                  <Link key={`${l.href}-${i}`} href={l.href} className="hover:text-on-ink">
+                    {l.label}
+                  </Link>
+                ))}
+                <Link href={LOGIN} className="hover:text-on-ink">
+                  {footer.login}
+                </Link>
+              </nav>
+              <div className={cn(mono, "text-xs")}>{footer.copyright}</div>
+            </div>
+          </footer>
+        </section>
+      </main>
+
+      <StickyCta brandLabel={mobile.sticky_primary} brandHref={REGISTER_BRAND} creatorLabel={mobile.sticky_secondary} creatorHref={REGISTER_CREATOR} />
+    </div>
   );
 }

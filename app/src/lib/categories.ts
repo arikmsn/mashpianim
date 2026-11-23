@@ -15,6 +15,20 @@ export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number];
 
 export const DEFAULT_CATEGORY: ProductCategory = "כללי";
 
+// What the registration screens offer (creators pick several, a business picks one); each maps onto a feed
+// category through REGISTRATION_TO_FEED below
+export const REGISTRATION_CATEGORIES = [
+  "ביוטי וטיפוח",
+  "אופנה",
+  "מזון ומשקאות",
+  "ניקיון ובית",
+  "ילדים ותינוקות",
+  "ספורט ובריאות",
+  "טכנולוגיה",
+  "חיות מחמד",
+  "אחר",
+] as const;
+
 // Registration offers a longer list (creators and brands pick these); each maps onto a feed category
 export const REGISTRATION_TO_FEED: Record<string, ProductCategory> = {
   "אופנה": "אופנה",

@@ -3,57 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>משפיען אונליין — אופליין</title>
+  <title>משפיען אונליין: אין חיבור לאינטרנט</title>
   <link rel="icon" href="/favicon.ico">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: linear-gradient(135deg, #fff5f7 0%, #ffffff 100%);
-      color: #333;
-      text-align: center;
-      padding: 2rem;
-    }
-    .container {
-      max-width: 400px;
-    }
-    .icon {
-      font-size: 4rem;
-      margin-bottom: 1.5rem;
-    }
-    h1 {
-      font-size: 1.5rem;
-      margin-bottom: 0.75rem;
-      color: #1a1a1a;
-    }
-    p {
-      font-size: 1rem;
-      color: #666;
-      margin-bottom: 2rem;
-      line-height: 1.6;
-    }
-    .btn {
-      display: inline-block;
-      padding: 0.75rem 2rem;
-      background: linear-gradient(135deg, #833AB4, #E1306C, #F77737);
-      color: white;
-      border: none;
-      border-radius: 9999px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      text-decoration: none;
-    }
-    .btn:hover { opacity: 0.9; }
+    body { font-family: Rubik, system-ui, -apple-system, "Segoe UI", sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #faf7f2; color: #0b051d; text-align: center; padding: 2rem; }
+    .container { max-width: 400px; }
+    h1 { font-size: 1.5rem; font-weight: 900; letter-spacing: -0.02em; margin-bottom: 0.75rem; }
+    p { font-size: 1rem; color: #2e2745; margin-bottom: 2rem; line-height: 1.6; }
+    .btn { display: inline-block; padding: 0.85rem 2rem; background: #dc1363; color: #fff; border: none; border-radius: 9999px; font: 700 1rem Rubik, system-ui, sans-serif; cursor: pointer; }
+    .btn:hover { background: #be1257; }
   </style>
 </head>
 <body>
   <div class="container">
-    <img src="/icon-192.png" alt="משפיען אונליין" width="80" height="80" style="border-radius:16px;margin-bottom:1.5rem;box-shadow:0 8px 24px rgba(225,48,108,0.2)">
+    <img src="/icon-192.png" alt="" width="80" height="80" style="border-radius:20px;margin-bottom:1.5rem;box-shadow:0 16px 40px #0b051d1f">
     <h1>אין חיבור לאינטרנט</h1>
     <p>נראה שאתם לא מחוברים כרגע. בדקו את החיבור לאינטרנט ונסו שוב.</p>
     <button class="btn" onclick="location.reload()">נסו שוב</button>

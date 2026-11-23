@@ -9,9 +9,9 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   icon?: React.ReactNode;
 }
 
-// Design system v3 (2026-11-23): warm border-strong at rest, a dark double ring on focus (not pink, so a
-// focused field is never confused with an erroneous one), danger border + soft fill on error. 16px text so
-// iOS does not zoom. The icon sits on the right, which is the start in RTL.
+// Design package v3 (docs/design-package): warm border at rest, dark focus (never pink, so a focused
+// field is not confused with an erroneous one), danger border + soft fill on error. The repo adds the
+// aria wiring between the field and its error line.
 const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ className, label, error, icon, id, ...props }, ref) => {
     const inputId = id || label?.replace(/\s+/g, "-").toLowerCase();
@@ -21,7 +21,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="block text-sm font-semibold mb-2 text-neutral-700"
+            className="block text-sm font-medium mb-2 text-neutral-700"
           >
             {label}
           </label>
@@ -38,11 +38,11 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             aria-invalid={error ? true : undefined}
             aria-describedby={errorId}
             className={cn(
-              "w-full px-4 py-3 rounded-xl border bg-surface text-base text-ink-900 outline-none transition-colors duration-150",
+              "w-full px-4 py-3 rounded-xl border bg-white text-neutral-900 outline-none transition-all duration-200",
               "placeholder:text-neutral-400",
-              "focus:border-ink-900 focus:ring-2 focus:ring-focus-ring focus:ring-offset-2 focus:ring-offset-surface",
+              "focus:ring-2 focus:ring-focus-ring/15 focus:border-ink-900",
               error
-                ? "border-danger bg-danger-soft focus:border-danger focus:ring-danger"
+                ? "border-danger bg-danger-soft focus:border-danger focus:ring-danger/20"
                 : "border-border-strong",
               icon && "pr-10",
               className
@@ -51,7 +51,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           />
         </div>
         {error && (
-          <p id={errorId} className="mt-1.5 text-xs text-danger">{error}</p>
+          <p id={errorId} className="mt-1.5 text-sm text-danger">{error}</p>
         )}
       </div>
     );

@@ -22,6 +22,8 @@ export const RATE_LIMITS = {
   feedbackUser: { limit: 5, windowSeconds: 60 * 60 },
   // Orders opened at SUMIT per business (each one is a pending transaction row + an API call)
   checkoutUser: { limit: 10, windowSeconds: 60 * 60 },
+  // The public influencer quiz (home page): leads per IP
+  influencerLeadIp: { limit: 5, windowSeconds: 60 * 60 },
 } as const satisfies Record<string, RateLimitRule>;
 
 // First hop of x-forwarded-for (set by Vercel), else x-real-ip, else "unknown"

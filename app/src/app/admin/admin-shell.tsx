@@ -14,6 +14,7 @@ const navItems = [
   { href: "/admin/connections", label: "חיבורים", icon: "🤝" },
   { href: "/admin/moderation", label: "מודרציה", icon: "🛡️" },
   { href: "/admin/content", label: "תוכן האתר", icon: "✏️" },
+  { href: "/admin/leads", label: "לידים (משפיענים)", icon: "⭐" },
   { href: "/admin/feedback", label: "פניות ותקלות", icon: "📨" },
   { href: "/admin/messages", label: "הודעות", icon: "📱" },
   { href: "/admin/settings", label: "הגדרות", icon: "⚙️" },

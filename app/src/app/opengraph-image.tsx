@@ -1,15 +1,20 @@
 import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { getSiteContent } from "@/lib/site-content-server";
 
+// The share image (design package v3): dark ink ground, the signature pink-to-tangerine bar, the headline and the
+// second line from the seo section of the content registry.
 export const runtime = "nodejs";
-export const alt = "משפיען אונליין — הפלטפורמה הישראלית ליוצרי תוכן UGC";
+export const revalidate = 3600;
+export const alt = "Mashpian";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 export default async function OGImage() {
-  const logoData = await readFile(join(process.cwd(), "public", "logo.png"));
+  const [logoData, { content }] = await Promise.all([readFile(join(process.cwd(), "public", "logo.png")), getSiteContent()]);
   const logoBase64 = `data:image/png;base64,${logoData.toString("base64")}`;
+  const seo = content.seo;
 
   return new ImageResponse(
     (
@@ -21,48 +26,15 @@ export default async function OGImage() {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          background: "linear-gradient(135deg, #833AB4 0%, #E1306C 35%, #F77737 65%, #FCAF45 100%)",
+          background: "radial-gradient(60% 50% at 50% 0%, #2e2745 0%, #0b051d 70%)",
+          color: "#faf7f2",
           fontFamily: "Arial, sans-serif",
         }}
       >
-        <img
-          src={logoBase64}
-          width={160}
-          height={160}
-          style={{ borderRadius: 36, marginBottom: 32, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
-        />
-        <div
-          style={{
-            fontSize: 64,
-            fontWeight: 800,
-            color: "white",
-            marginBottom: 16,
-            direction: "rtl",
-          }}
-        >
-          משפיען אונליין
-        </div>
-        <div
-          style={{
-            fontSize: 28,
-            color: "rgba(255,255,255,0.9)",
-            direction: "rtl",
-            textAlign: "center",
-            maxWidth: 800,
-          }}
-        >
-          הפלטפורמה הישראלית לחיבור יוצרי תוכן עם מותגים
-        </div>
-        <div
-          style={{
-            fontSize: 22,
-            color: "rgba(255,255,255,0.7)",
-            direction: "rtl",
-            marginTop: 12,
-          }}
-        >
-          מוצרים בחינם בתמורה לסרטונים אותנטיים
-        </div>
+        <img src={logoBase64} width={140} height={140} style={{ borderRadius: 32, marginBottom: 28, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} />
+        <div style={{ width: 64, height: 6, borderRadius: 999, background: "linear-gradient(135deg, #ff2e7e, #ff7a1a)", marginBottom: 24 }} />
+        <div style={{ fontSize: 60, fontWeight: 800, direction: "rtl", textAlign: "center", maxWidth: 1000, lineHeight: 1.1 }}>{seo.og_image_text}</div>
+        <div style={{ fontSize: 28, color: "rgba(250,247,242,0.75)", direction: "rtl", textAlign: "center", maxWidth: 900, marginTop: 18 }}>{seo.og_image_sub}</div>
       </div>
     ),
     { ...size }

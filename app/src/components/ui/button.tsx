@@ -3,28 +3,26 @@
 import { forwardRef, type ButtonHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
-// Design system v3 (2026-11-23). Two persona colours: `primary` is pink for businesses, `creator` is lemon
-// for content creators (dark text on lemon, never white). `persona` follows the nearest data-persona
-// container. Fills only, no coloured shadows; the focus ring is dark so it reads on pink as well.
+// Design package v3 (docs/design-package). `primary` is the business pink, `creator` is lemon with dark
+// text (never white on lemon), `persona` follows the nearest [data-persona] container. Fills only, no
+// coloured shadows. `outline-light` is the repo's addition for outline buttons on the dark sections.
 const variants = {
   primary:
-    "bg-pink-600 text-white hover:bg-pink-700 active:bg-pink-700",
-  creator:
-    "bg-lemon-400 text-ink-900 hover:bg-lemon-300 active:bg-lemon-300",
-  persona:
-    "bg-persona text-persona-foreground hover:bg-persona-hover active:bg-persona-hover",
+    "bg-primary text-white hover:bg-primary-hover",
   secondary:
     "bg-pink-50 text-pink-800 hover:bg-pink-100",
+  creator: "bg-lemon-400 text-ink-900 hover:bg-lemon-300",
+  persona: "bg-persona text-persona-fg hover:opacity-90",
   outline:
-    "border-2 border-border-strong bg-transparent text-ink-900 hover:border-ink-900",
+    "border-2 border-border-strong text-ink-900 hover:border-ink-900",
   "outline-light":
-    "border-2 border-white/40 bg-transparent text-foreground-on-ink hover:border-foreground-on-ink",
+    "border-2 border-white/40 text-on-ink hover:border-on-ink",
   ghost:
     "text-neutral-600 hover:bg-neutral-100",
   dark:
-    "bg-surface-ink text-foreground-on-ink hover:bg-ink-700",
+    "bg-surface-ink text-on-ink hover:opacity-90",
   danger:
-    "bg-red-500 text-white hover:bg-red-600",
+    "bg-danger text-white hover:opacity-90",
 } as const;
 
 const sizes = {
@@ -61,8 +59,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         className={cn(
-          "inline-flex items-center justify-center gap-2 font-bold transition-colors duration-150 disabled:opacity-50 disabled:pointer-events-none",
-          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
+          "inline-flex items-center justify-center gap-2 font-semibold transition-colors duration-150 disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
           variants[variant],
           sizes[size],
           fullWidth && "w-full",

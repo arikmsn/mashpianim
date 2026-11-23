@@ -2,7 +2,7 @@ import { NextResponse, after } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { logActivity } from "@/lib/notifications";
-import { TERMS_VERSION } from "@/lib/legal";
+import { getTermsVersion } from "@/lib/site-content-server";
 
 function getAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -21,6 +21,8 @@ export async function POST() {
   const admin = getAdmin();
   if (!admin) return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
 
+  // The current version: the admin's stored one (bumped on a material change in /admin/content) or the constant
+  const TERMS_VERSION = await getTermsVersion();
   const now = new Date().toISOString();
   const { data, error } = await (admin.from("users") as any)
     .update({ terms_accepted_at: now, terms_version: TERMS_VERSION })

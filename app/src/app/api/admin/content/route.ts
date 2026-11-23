@@ -1,97 +1,30 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 import { verifyAdmin, isSupabaseConfigured } from "@/lib/admin-auth";
-import { createClient } from "@/lib/supabase/server";
 import { logActivity } from "@/lib/notifications";
-import { ONBOARDING_CONTENT_DEFAULTS } from "@/lib/onboarding";
-import { BILLING_CONTENT_DEFAULTS, BILLING_CONTENT_SECTION } from "@/lib/billing-content";
+import { getSection, mergeSiteContent, sanitizeSectionInput, sectionViewHref, SITE_CONTENT_DEFAULTS, validateFieldValue } from "@/lib/site-content";
+import { loadSiteContentRows } from "@/lib/site-content-server";
 
-const defaultContent: Record<string, Record<string, string>> = {
-  // The creator walkthrough copy, editable like the landing text (lib/onboarding.ts is the source of truth)
-  ...ONBOARDING_CONTENT_DEFAULTS,
-  // The business's "סרטונים וחיוב" page (lib/billing-content.ts)
-  [BILLING_CONTENT_SECTION]: BILLING_CONTENT_DEFAULTS,
-  hero: {
-    badge: "הפלטפורמה ליוצרי תוכן ומותגים בישראל",
-    title_line1: "יוצרים תוכן.",
-    title_line2: "מחברים מותגים.",
-    subtitle: "קבלו מוצרים חינם, צלמו סרטונים אותנטיים, וצמחו כיוצרי תוכן. עסקים — קבלו תוכן UGC איכותי במחיר שפוי.",
-    cta_creator: "אני יוצר/ת תוכן",
-    cta_brand: "אני בעל/ת עסק",
-  },
-  how_it_works: {
-    section_title: "שלושה צעדים פשוטים",
-    step1_title: "בחרו מוצר",
-    step1_desc: "גלו מוצרים מעניינים מעסקים מובילים ושלחו בקשת חיבור",
-    step2_title: "צלמו סרטון",
-    step2_desc: "קבלו את המוצר חינם וצלמו סרטון UGC אותנטי תוך 10 ימים",
-    step3_title: "צמחו",
-    step3_desc: "צברו ניסיון, עלו ברמות, והפכו ליוצרי תוכן מבוקשים",
-  },
-  stats: {
-    stat1_value: "100%",
-    stat1_label: "חינם ליוצרים",
-    stat2_value: "10",
-    stat2_label: "ימים ליצירת סרטון",
-    stat3_value: "3",
-    stat3_label: "צעדים פשוטים",
-  },
-  creators: {
-    title_line1: "הפכו את",
-    title_line2: "התשוקה למקצוע",
-    benefit1: "קבלו מוצרים חינם מהמותגים המובילים",
-    benefit2: "צלמו תוכן בסגנון שלכם, בקצב שלכם",
-    benefit3: "צמחו עם מערכת דירוגים ייחודית",
-    benefit4: "בנו פורטפוליו מקצועי מרשים",
-    cta: "הצטרפו כיוצרי תוכן",
-  },
-  brands: {
-    title_line1: "תוכן שעובד",
-    title_line2: "בלי הפקות יקרות",
-    benefit1: "תוכן UGC אותנטי שמביא תוצאות",
-    benefit2: "מחירים שפויים — פנייה אחת = סרטון אחד",
-    benefit3: "יוצרים מאומתים ומדורגים",
-    benefit4: "ניהול קל דרך לוח בקרה חכם",
-    cta: "הצטרפו כמפרסמים",
-  },
-  cta_final: {
-    title_line1: "מוכנים",
-    title_line2: "להתחיל?",
-    subtitle: "הצטרפו לקהילת היוצרים והמותגים הגדלה. חינם לגמרי ליוצרי תוכן.",
-    cta_primary: "הרשמה חינם",
-    cta_secondary: "אני מפרסם",
-  },
-  footer: {
-    tagline: "הפלטפורמה ליוצרי תוכן ומותגים",
-    copyright: "Mashpian. כל הזכויות שמורות.",
-  },
-};
+// The content registry's API (design package v3, "ניהול תוכן מהאדמין"). The schema in lib/site-content.ts is the
+// single source of truth: GET answers with the defaults merged with the stored overrides (public: the pages and
+// the in-app walkthrough read it), PUT stores one section after sanitising it against the schema.
 
 export async function GET() {
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ content: defaultContent });
+    return NextResponse.json({ content: SITE_CONTENT_DEFAULTS, stored: {}, meta: {} });
   }
-
-  // Content reading is public (landing page needs it)
-  try {
-    const supabase = await (await import("@/lib/supabase/server")).createClient();
-    const { data, error } = await supabase
-      .from("site_content")
-      .select("id, data");
-
-    if (error) {
-      return NextResponse.json({ content: defaultContent });
-    }
-
-    const content = { ...defaultContent };
-    for (const row of (data || []) as any[]) {
-      content[row.id] = row.data as Record<string, string>;
-    }
-
-    return NextResponse.json({ content });
-  } catch {
-    return NextResponse.json({ content: defaultContent });
+  const { rows, meta } = await loadSiteContentRows();
+  const content = mergeSiteContent(rows);
+  // The stored rows, limited to the keys the schema knows (what "restore default" compares against)
+  const stored: Record<string, unknown> = {};
+  for (const [id, data] of Object.entries(rows)) {
+    const section = getSection(id);
+    if (section) stored[id] = sanitizeSectionInput(section, data);
   }
+  return NextResponse.json({ content, stored, meta }, { headers: { "Cache-Control": "no-store" } });
 }
+
+const today = () => new Date().toISOString().slice(0, 10);
 
 export async function PUT(request: NextRequest) {
   if (!isSupabaseConfigured()) {
@@ -103,19 +36,29 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
   }
 
-  const body = await request.json();
-  const { section, data } = body as { section: string; data: Record<string, string> };
-
-  if (!section || !data) {
+  const body = (await request.json().catch(() => null)) as { section?: string; data?: unknown; materialChange?: boolean } | null;
+  const sectionId = body?.section;
+  const section = sectionId ? getSection(sectionId) : undefined;
+  if (!section || !body?.data) {
     return NextResponse.json({ error: "פרטים חסרים" }, { status: 400 });
   }
 
+  const data = sanitizeSectionInput(section, body.data);
+
+  // The terms: a material change bumps the version (every user re-accepts); a wording change keeps it
+  if (section.id === "legal_terms") {
+    const { data: existing } = await supabase.from("site_content").select("data").eq("id", section.id).maybeSingle();
+    const prev = (existing as { data?: { version?: unknown } } | null)?.data?.version;
+    const prevVersion = typeof prev === "string" ? prev : null;
+    if (body.materialChange === true) data.version = today();
+    else if (prevVersion) data.version = prevVersion;
+  }
+
+  const warnings = section.fields.flatMap((f) => (f.key in data ? validateFieldValue(f, data[f.key]) : []));
+
   const { error } = await supabase
     .from("site_content")
-    .upsert(
-      { id: section, data, updated_at: new Date().toISOString(), updated_by: adminId } as any,
-      { onConflict: "id" }
-    );
+    .upsert({ id: section.id, data, updated_at: new Date().toISOString(), updated_by: adminId } as any, { onConflict: "id" });
 
   if (error) {
     console.error("[admin/content] upsert error:", error);
@@ -126,8 +69,20 @@ export async function PUT(request: NextRequest) {
     actorId: adminId || undefined,
     action: "admin_update_content",
     entityType: "site_content",
-    details: { section, keys: Object.keys(data) },
+    entityId: section.id,
+    details: { section: section.id, keys: Object.keys(data), materialChange: body.materialChange === true },
   });
 
-  return NextResponse.json({ success: true });
+  // The public pages are static (ISR): refresh the one this section lives on, right now
+  const href = sectionViewHref(section);
+  const path = href.split("#")[0] || "/";
+  try {
+    revalidatePath(path === "" ? "/" : path);
+    if (section.page === "home" || section.page === "quiz" || section.id === "seo") revalidatePath("/");
+    if (section.id === "errors") revalidatePath("/", "layout");
+  } catch (err) {
+    console.error("[admin/content] revalidate:", err);
+  }
+
+  return NextResponse.json({ success: true, data, warnings, version: section.id === "legal_terms" ? data.version : undefined });
 }
