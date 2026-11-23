@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { MIN_PORTFOLIO_VIDEOS } from "@/lib/match";
 import { videoUrl } from "@/lib/video-links";
+import { MAX_DECK_PREVIEWS, previewsFromVideos } from "@/lib/deck";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -70,10 +71,11 @@ export async function GET() {
   ]);
   const passed = new Set(((passes || []) as { creator_id: string }[]).map((p) => p.creator_id));
 
-  const byCreator = new Map<string, { count: number; first: any }>();
+  const byCreator = new Map<string, { count: number; first: any; items: any[] }>();
   for (const v of (videos || []) as any[]) {
-    const entry = byCreator.get(v.creator_id) || { count: 0, first: v };
+    const entry = byCreator.get(v.creator_id) || { count: 0, first: v, items: [] };
     entry.count++;
+    if (entry.items.length < MAX_DECK_PREVIEWS) entry.items.push(v); // newest first (the query's order)
     byCreator.set(v.creator_id, entry);
   }
 
@@ -95,7 +97,7 @@ export async function GET() {
     })
     .map((u) => {
       const cp = Array.isArray(u.creator_profiles) ? u.creator_profiles[0] : u.creator_profiles;
-      const port = byCreator.get(u.id) || { count: 0, first: null };
+      const port = byCreator.get(u.id) || { count: 0, first: null, items: [] };
       // A stable public URL (lib/video-links.ts) so the CDN serves the preview
       let previewVideo: string | null = null;
       if (port.first?.storage_path) {
@@ -103,6 +105,14 @@ export async function GET() {
       } else if (port.first?.url) {
         previewVideo = port.first.url;
       }
+      // The deck's playlist (owner, 2026-11-23): the newest portfolio videos with their posters
+      const previews = previewsFromVideos(
+        port.items.map((v: any) => ({
+          url: (v.storage_path ? videoUrl(v.storage_path) : null) || v.url || null,
+          poster: v.thumbnail_url || null,
+          createdAt: v.created_at,
+        }))
+      );
       const categories: string[] = cp?.categories || [];
       const completed = cp?.completed_connections || 0;
       const followers = (cp?.tiktok_followers || 0) + (cp?.instagram_followers || 0);
@@ -135,6 +145,7 @@ export async function GET() {
         previewVideo,
         previewPoster: port.first?.thumbnail_url || null,
         previewTitle: port.first?.title || null,
+        previews,
         relation: rel
           ? {
               connectionId: rel.id,

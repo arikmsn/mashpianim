@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from "rea
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence, type PanInfo } from "framer-motion";
 import { Avatar, Badge, Button, Card, Modal, useToast } from "@/components/ui";
-import { ProfileModal, CreditsAccess } from "@/components/features";
+import { ProfileModal, CreditsAccess, MomentSheet } from "@/components/features";
 import { swrFetch, fetchJson } from "@/lib/client-cache";
+import { nextPreviewIndex } from "@/lib/deck";
 import { CREDITS_CONTACT_NOTICE, creditsCardHint } from "@/lib/credits";
 import { purchaseOutcomeText } from "@/lib/payments";
 import { toDirectImageUrl } from "@/lib/images";
@@ -37,6 +38,8 @@ interface CreatorCard {
   previewVideo: string | null;
   previewPoster: string | null;
   previewTitle: string | null;
+  // The deck's playlist: up to a few newest portfolio videos (owner, 2026-11-23: see her range on the card)
+  previews?: { url: string; poster: string | null }[];
   relation: Relation | null;
   fit: boolean;
   score: number;
@@ -54,6 +57,17 @@ interface BrandProduct {
 type Filter = "all" | "fit" | "liked";
 
 const SWIPE_THRESHOLD = 70;
+const ADD_PRODUCT_NUDGE_KEY = "mashpian:nudge-add-product";
+const ADD_PRODUCT_MOMENT = {
+  icon: "📦",
+  title: "הוסיפו את המוצר הראשון שלכם",
+  lines: [
+    "יוצרים מסמנים לב למוצר, לא לעסק — בלי מוצר אף אחד לא יכול לבחור בכם.",
+    "זה לוקח דקה: שם, תמונה, שווי, ובריף קצר של מה שתרצו בסרטון.",
+  ],
+  primary: "להוספת מוצר",
+  secondary: "אחר כך",
+};
 
 function formatFollowers(n: number) {
   if (!n) return null;
@@ -139,14 +153,12 @@ function PurchaseOutcome({ onSettled }: { onSettled: (outcome: string) => void }
 // CDN, often tens of MB), and a plain message when the browser cannot decode the file (an iPhone HEVC clip on
 // Windows or Firefox) instead of a black card.
 function DeckVideo({
-  src,
-  poster,
+  sources,
   soundOn,
   onToggleSound,
   onBlocked,
 }: {
-  src: string;
-  poster: string | null;
+  sources: { url: string; poster: string | null }[];
   soundOn: boolean;
   onToggleSound: () => void;
   onBlocked: () => void;
@@ -154,6 +166,17 @@ function DeckVideo({
   const ref = useRef<HTMLVideoElement>(null);
   const [state, setState] = useState<"loading" | "playing" | "error">("loading");
   const [slow, setSlow] = useState(false);
+  // The creator's portfolio plays as a playlist (owner, 2026-11-23): one video after another, wrapping around,
+  // so the business sees her range without opening the profile. A single video loops as before.
+  const [idx, setIdx] = useState(0);
+  const current = sources[Math.min(idx, sources.length - 1)];
+  const src = current?.url || "";
+  const poster = current?.poster || null;
+  const advance = () => {
+    if (sources.length <= 1) return;
+    setState("loading");
+    setIdx((i) => nextPreviewIndex(i, sources.length));
+  };
 
   // Apply the sound choice to this element (React does not keep `muted` in sync) and start it; a browser that
   // refuses sound without a fresh tap falls back to muted and tells the page
@@ -189,7 +212,7 @@ function DeckVideo({
         className="absolute inset-0 w-full h-full object-cover pointer-events-none"
         autoPlay
         muted
-        loop
+        loop={sources.length <= 1}
         playsInline
         preload="auto"
         controlsList="nodownload"
@@ -197,7 +220,15 @@ function DeckVideo({
         onWaiting={() => setState("loading")}
         onPlaying={() => { setState("playing"); setSlow(false); }}
         onError={() => { setState("error"); setSlow(false); }}
+        onEnded={advance}
       />
+      {sources.length > 1 && (
+        <div className="absolute top-1.5 left-1/2 -translate-x-1/2 flex items-center gap-1 pointer-events-none" aria-hidden="true">
+          {sources.map((s, i) => (
+            <span key={s.url} className={`h-1 rounded-full transition-all ${i === idx ? "w-4 bg-white" : "w-1.5 bg-white/50"}`} />
+          ))}
+        </div>
+      )}
       {state === "loading" && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none">
           <div className="w-10 h-10 rounded-full border-[3px] border-white/30 border-t-white animate-spin" aria-hidden="true" />
@@ -268,6 +299,25 @@ export default function BrandDiscoverPage() {
     setSoundOn(false);
     toast("הדפדפן מבקש הקשה כדי להשמיע קול — הקישו שוב על הרמקול", "info");
   }, [toast]);
+
+  // A business with no product gets a nudge once per session (owner, 2026-11-23): without a product nobody can
+  // heart it, and a heart is always sent on a product. Shown a moment after the screen settles.
+  const [nudgeOpen, setNudgeOpen] = useState(false);
+  useEffect(() => {
+    if (loading || products.length > 0) return;
+    try {
+      if (window.sessionStorage.getItem(ADD_PRODUCT_NUDGE_KEY)) return;
+    } catch {
+      return;
+    }
+    const t = setTimeout(() => {
+      try {
+        window.sessionStorage.setItem(ADD_PRODUCT_NUDGE_KEY, "1");
+      } catch {}
+      setNudgeOpen(true);
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [loading, products.length]);
 
   const applyCounts = useCallback((data: { chose_you?: number; match?: number }) => {
     setChoseYou(data.chose_you || 0);
@@ -514,14 +564,25 @@ export default function BrandDiscoverPage() {
               <h1 className="text-xl font-bold">גלו יוצרים</h1>
               <p className="text-xs text-neutral-500">החליקו כדי לדפדף · לב למי שמתאים לכם · ✕ למי שלא</p>
             </div>
-            <button
-              type="button"
-              onClick={() => router.push("/brand/billing")}
-              title="סרטונים וחיוב"
-              className={`text-xs font-bold px-3 py-1.5 rounded-full ${credits.remaining > 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}
-            >
-              🎬 {credits.remaining} סרטונים
-            </button>
+            {credits.total === 0 ? (
+              // Never bought (or been loaded) a package yet: a clear call to buy (owner, 2026-11-23)
+              <button
+                type="button"
+                onClick={() => router.push("/brand/billing")}
+                className="text-xs font-bold px-3.5 py-2 rounded-full ig-gradient-bg text-white shadow-sm active:scale-95 transition-transform"
+              >
+                🎬 רכישת קרדיטים
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => router.push("/brand/billing")}
+                title="קרדיטים וחיוב"
+                className={`text-xs font-bold px-3 py-1.5 rounded-full ${credits.remaining > 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}
+              >
+                🎬 {credits.remaining} סרטונים
+              </button>
+            )}
           </div>
           <div className="flex gap-2 overflow-x-auto scrollbar-hide">
             {filters.map((f) => (
@@ -591,8 +652,7 @@ export default function BrandDiscoverPage() {
               >
                 {current.previewVideo ? (
                   <DeckVideo
-                    src={current.previewVideo}
-                    poster={current.previewPoster}
+                    sources={current.previews && current.previews.length > 0 ? current.previews : [{ url: current.previewVideo, poster: current.previewPoster }]}
                     soundOn={soundOn}
                     onToggleSound={() => setSoundOn((v) => !v)}
                     onBlocked={soundBlocked}
@@ -819,6 +879,15 @@ export default function BrandDiscoverPage() {
       </Modal>
 
       <ProfileModal userId={viewProfileId} onClose={() => setViewProfileId(null)} title="פרופיל היוצר/ת" as="creator" />
+      <MomentSheet
+        open={nudgeOpen}
+        moment={ADD_PRODUCT_MOMENT}
+        onPrimary={() => {
+          setNudgeOpen(false);
+          router.push("/brand/products?add=1");
+        }}
+        onClose={() => setNudgeOpen(false)}
+      />
       {/* No online purchase yet: the owner's notice, then the in-app contact form; the team loads credits from the admin */}
       <CreditsAccess open={purchaseOpen} onClose={() => setPurchaseOpen(false)} total={credits.total} used={credits.total - credits.remaining} />
       <Suspense fallback={null}>

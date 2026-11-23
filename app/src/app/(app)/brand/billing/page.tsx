@@ -242,7 +242,20 @@ export default function BrandBillingPage() {
                           <p className="text-sm font-medium">{o.credits === 1 ? "סרטון אחד" : `${o.credits} סרטונים`} · {formatILS(o.amount)}</p>
                           <p className="text-[11px] text-neutral-400">{formatDateHe(o.created_at)}{o.payment_id ? ` · אסמכתה ${o.payment_id}` : ""}</p>
                         </div>
-                        <span className={`text-[11px] px-2 py-1 rounded-full ${st.cls}`}>{st.label}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {o.status === "completed" && o.document_id && (
+                            // The invoice-receipt SUMIT issued, served through our API (owner, 2026-11-23)
+                            <a
+                              href={`/api/payments/invoice/${o.id}`}
+                              target="_blank"
+                              rel="noopener"
+                              className="text-[11px] font-bold text-pink-600 hover:underline"
+                            >
+                              📄 חשבונית
+                            </a>
+                          )}
+                          <span className={`text-[11px] px-2 py-1 rounded-full ${st.cls}`}>{st.label}</span>
+                        </div>
                       </div>
                     </Card>
                   );

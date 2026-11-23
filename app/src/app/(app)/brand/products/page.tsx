@@ -114,6 +114,16 @@ export default function BrandProductsPage() {
     fetchProducts();
   }, []);
 
+  // "/brand/products?add=1" opens the add form straight away (the home's "add your first product" nudge,
+  // owner 2026-11-23). Read from the URL on the client, after the first paint.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("add") !== "1") return;
+    const t = setTimeout(() => openAddModal(), 50);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function fetchProducts() {
     try {
       const res = await fetch("/api/products?brand=me");

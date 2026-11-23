@@ -13,7 +13,13 @@ import { WelcomeSheet, useOnboarding, useOnboardingContent, type OnboardingUser 
 
 interface ProfilePayload {
   user?: ({ full_name?: string | null; avatar_url?: string | null; type?: string | null } & OnboardingUser) | null;
-  profile?: { shop_name?: string | null; logo_url?: string | null; portfolio_count?: number | null } | null;
+  profile?: {
+    shop_name?: string | null;
+    logo_url?: string | null;
+    portfolio_count?: number | null;
+    total_credits?: number | null;
+    used_credits?: number | null;
+  } | null;
   role?: string;
   roles?: string[];
 }
@@ -55,6 +61,7 @@ export function SideMenu({ open, onClose }: { open: boolean; onClose: () => void
   const name = isBrand ? me?.profile?.shop_name || me?.user?.full_name || "העסק שלי" : me?.user?.full_name || "הפרופיל שלי";
   const avatar = isBrand ? me?.profile?.logo_url || me?.user?.avatar_url || null : me?.user?.avatar_url || null;
   const roles = (me?.roles || []).filter((r): r is AppRole => r === "creator" || r === "brand" || r === "admin");
+  const creditsRemaining = Math.max(0, (me?.profile?.total_credits || 0) - (me?.profile?.used_credits || 0));
 
   function go(href: string) {
     onClose();
@@ -115,6 +122,14 @@ export function SideMenu({ open, onClose }: { open: boolean; onClose: () => void
               <nav className="flex-1 overflow-y-auto py-2">
                 <MenuItem icon="👤" label="הפרופיל שלי" onClick={() => go("/profile")} />
                 <MenuItem icon="🔔" label="התראות" onClick={() => go("/notifications")} />
+                {/* The business's credits and billing, one tap from the menu (owner, 2026-11-23) */}
+                {isBrand && (
+                  <MenuItem
+                    icon="🎬"
+                    label={creditsRemaining === 0 ? "רכישת קרדיטים לסרטונים" : `קרדיטים וחיוב · ${creditsRemaining} נותרו`}
+                    onClick={() => go("/brand/billing")}
+                  />
+                )}
                 {role === "creator" && (
                   <MenuItem
                     icon="❓"

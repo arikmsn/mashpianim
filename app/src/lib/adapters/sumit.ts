@@ -92,3 +92,40 @@ export async function sumitListPayments(from: Date, to: Date, maxPages = 10): Pr
   }
   return { ok: true, data: all };
 }
+
+// POST /accounting/documents/getpdf/ → the invoice-receipt PDF bytes (owner, 2026-11-23: businesses download
+// their own invoices from the billing page). A failure comes back as SUMIT's JSON envelope instead of a PDF.
+export async function sumitDocumentPdf(documentId: number, original = false): Promise<SumitResult<Uint8Array>> {
+  const credentials = sumitCredentials();
+  if (!credentials) return { ok: false, error: "SUMIT is not configured" };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(`${BASE_URL}/accounting/documents/getpdf/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/pdf, application/json" },
+      body: JSON.stringify({ Credentials: credentials, DocumentID: documentId, Original: original }),
+      signal: controller.signal,
+    });
+    const type = res.headers.get("content-type") || "";
+    if (res.ok && type.includes("application/pdf")) {
+      return { ok: true, data: new Uint8Array(await res.arrayBuffer()) };
+    }
+    const text = await res.text();
+    let envelope: unknown = null;
+    try {
+      envelope = text ? JSON.parse(text) : null;
+    } catch {
+      envelope = null;
+    }
+    const msg = (envelope ? sumitErrorMessage(envelope) : text.slice(0, 200)) || `HTTP ${res.status}`;
+    console.error(`[SUMIT] getpdf ${documentId} failed: ${msg}`);
+    return { ok: false, error: msg };
+  } catch (err) {
+    const msg = err instanceof Error ? (err.name === "AbortError" ? "timeout" : err.message) : String(err);
+    console.error(`[SUMIT] getpdf error: ${msg}`);
+    return { ok: false, error: msg };
+  } finally {
+    clearTimeout(timer);
+  }
+}
