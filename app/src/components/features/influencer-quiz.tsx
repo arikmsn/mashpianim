@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { ArrowLeft, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { tagClass } from "@/components/home/styles";
 import { quizQuestions, utmFromSearch, type LeadAnswers, type LeadError, type QuizQuestion } from "@/lib/influencer-leads";
 import type { SectionContent } from "@/lib/site-content";
 
@@ -144,7 +145,7 @@ export function InfluencerQuiz({ quiz, texts, homeHref }: Props) {
   const isForm = step === total;
   const isDone = step === total + 1;
   const progress = isDone ? 100 : Math.round(((Math.min(step, total - 1) + 1) / total) * 100);
-  const counter = isForm ? `${pad2(total)} / ${pad2(total)} · ${quiz.last_step_tag}` : `${pad2(Math.min(step, total - 1) + 1)} / ${pad2(total)}`;
+  const counter = `${pad2(Math.min(step, total - 1) + 1)} / ${pad2(total)}`;
 
   // Each step slides in on mount (24px in the reading direction, with a fade); no exit animation, so a tap on a
   // single-choice option never waits for the previous question to leave.
@@ -163,7 +164,10 @@ export function InfluencerQuiz({ quiz, texts, homeHref }: Props) {
       {!isDone && (
         <>
           <div className="mb-2.5 flex items-center justify-between">
-            <span className="font-mono text-xs text-pink-300">{counter}</span>
+            <span className="text-xs text-pink-300">
+              <span className="font-mono">{counter}</span>
+              {isForm && quiz.last_step_tag && <span className="ms-2 font-medium">{quiz.last_step_tag}</span>}
+            </span>
             <span className="inline-flex items-center gap-2 text-xs font-medium tracking-[1.2px] text-on-ink/70 before:content-[''] before:h-1.5 before:w-1.5 before:rounded-full before:bg-pink-500">{texts.card_eyebrow}</span>
           </div>
           <div className="mb-6 h-[3px] overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
@@ -191,7 +195,7 @@ export function InfluencerQuiz({ quiz, texts, homeHref }: Props) {
                       on ? "border-pink-400 bg-pink-500/15" : "border-white/15 bg-white/5 hover:-translate-y-0.5 hover:border-white/50"
                     )}
                   >
-                    <span className="w-16 shrink-0 font-mono text-[11px] text-pink-300 sm:w-auto">{o.tag}</span>
+                    {o.tag && <span className={cn("shrink-0 text-[11px] text-pink-300", tagClass(o.tag))}>{o.tag}</span>}
                     <span className="flex flex-col gap-0.5">
                       <span className="text-base font-semibold leading-tight">{o.title}</span>
                       <span className="text-[13px] text-on-ink/60">{o.sub}</span>
@@ -276,7 +280,7 @@ export function InfluencerQuiz({ quiz, texts, homeHref }: Props) {
             <span className="grid h-16 w-16 place-items-center rounded-full bg-pink-500 text-white">
               <Check className="h-7 w-7" aria-hidden="true" />
             </span>
-            <span className="mt-5 font-mono text-xs text-pink-300">{quiz.done_tag}</span>
+            {quiz.done_tag && <span className={cn("mt-5 text-xs font-medium text-pink-300", tagClass(quiz.done_tag))}>{quiz.done_tag}</span>}
             <h3 className="mb-2 mt-2.5 font-display text-[30px] leading-tight text-on-ink md:text-[34px]">{quiz.done_title}</h3>
             <p className="max-w-[420px] text-base leading-relaxed text-on-ink/70">{quiz.done_body}</p>
             <div className="mt-7 flex flex-wrap justify-center gap-3">

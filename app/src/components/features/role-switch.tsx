@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Modal, useToast } from "@/components/ui";
 import { clearCache, fetchJson } from "@/lib/client-cache";
+import { personaForRole, storePersona } from "@/lib/persona";
 
 export type AppRole = "creator" | "brand" | "admin";
 
@@ -26,6 +27,8 @@ export async function chooseRole(role: AppRole): Promise<{ ok: boolean; redirect
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) return { ok: false, error: (data as { error?: string }).error || "שגיאה בבחירת ממשק" };
+  // The device now belongs to this side: the login screen and the installed app follow its colour
+  storePersona(personaForRole(role));
   return { ok: true, redirect: (data as { redirect?: string }).redirect };
 }
 

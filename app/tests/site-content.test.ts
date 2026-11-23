@@ -86,7 +86,7 @@ describe("site content registry (design package v3, ניהול תוכן מהאד
     assert.equal(vars.creators, SITE_CONTENT_DEFAULTS.home_stats.stat1_value);
     const resolved = resolveSiteContent(SITE_CONTENT_DEFAULTS, vars);
     assert.equal(resolved.home_brands.price_note, "חבילות מ-99 ₪ לסרטון. 15% הנחה ברכישה הראשונה.");
-    assert.equal(resolved.home_hero.counter_line, `${vars.videos} VIDEOS · ${vars.creators} CREATORS`);
+    assert.equal(resolved.home_hero.counter_line, `${vars.videos} סרטונים · ${vars.creators} יוצרים`);
     assert.equal(resolved.home_how.steps[2].desc.includes("{days}"), false, "variables inside list items are resolved too");
     assert.equal(resolved.home_stats.stat3_value, "10");
   });
@@ -119,6 +119,28 @@ describe("site content registry (design package v3, ניהול תוכן מהאד
     assert.equal(sectionViewHref(getSection("legal_privacy")!), "/privacy");
     assert.equal(sectionViewHref(getSection("home_brands")!), "/#biz");
     assert.equal(sectionViewHref(getSection("quiz")!), "/#inf");
+  });
+
+  test("the hero fan and the bento posters are real system media, and tags stay out of the mono font when Hebrew", async () => {
+    const fan = SITE_CONTENT_DEFAULTS.home_fan;
+    assert.ok(fan.tiles.length >= 4 && fan.tiles.length <= 8);
+    for (const t of fan.tiles) {
+      assert.match(t.video_url, /^https:\/\/.*\/storage\/v1\/object\/public\/videos\/portfolio\//);
+      assert.match(t.poster_url, /^https:\/\/.*\/storage\/v1\/object\/public\/thumbnails\/portfolio\//);
+      assert.ok(t.caption.length > 0);
+    }
+    assert.ok(SITE_CONTENT_DEFAULTS.home_brands.gallery_posters.length >= 3);
+    assert.ok(SITE_CONTENT_DEFAULTS.home_brands.approved_posters.length >= 1);
+    // No Latin decoration left in the defaults of the public home page and the quiz
+    const latin = /[A-Za-z]{3,}/;
+    const noVars = (s: string) => s.replace(/\{[a-z_]+\}/g, "");
+    for (const [k, v] of Object.entries(SITE_CONTENT_DEFAULTS.home_hero)) if (typeof v === "string") assert.ok(!latin.test(noVars(v)), `home_hero.${k}: ${v}`);
+    for (const [k, v] of Object.entries(SITE_CONTENT_DEFAULTS.home_tracks)) if (typeof v === "string" && k !== "brand_title") assert.ok(!latin.test(noVars(v)), `home_tracks.${k}: ${v}`);
+    for (const opts of [SITE_CONTENT_DEFAULTS.quiz.q2_options, SITE_CONTENT_DEFAULTS.quiz.q4_options, SITE_CONTENT_DEFAULTS.quiz.q5_options]) for (const o of opts) assert.equal(o.tag, "");
+    const { isMonoText, tagClass } = await import("../src/components/home/styles.ts");
+    assert.ok(isMonoText("01") && isMonoText("10K-100K") && isMonoText("0 ₪") && isMonoText("") && !isMonoText("עד 10K") && !isMonoText("מהמערכת"));
+    assert.match(tagClass("02"), /font-mono/);
+    assert.doesNotMatch(tagClass("מדיניות"), /font-mono/);
   });
 
   test("quiz option keys match the lead schema of migration 026", () => {

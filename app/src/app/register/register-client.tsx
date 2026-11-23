@@ -244,6 +244,7 @@ function CreatorRegistration({ texts, onBack, onSwitch, preVerifiedUserId, preVe
       if (!registerRes.ok) throw new Error(registerData.error);
 
       toast(addRole ? texts.toast_added_creator : texts.toast_registered, "success");
+      storePersona("creator");
       clearCache();
       // The session was set server-side; refresh the auth store, then land on the first upload
       await refreshAuth();
@@ -430,6 +431,7 @@ function BrandRegistration({ texts, onBack, onSwitch, preVerifiedUserId, preVeri
       if (!registerRes.ok) throw new Error(registerData.error);
 
       toast(addRole ? texts.toast_added_brand : texts.toast_registered, "success");
+      storePersona("brand");
       clearCache();
       await refreshAuth();
       router.push("/brand");

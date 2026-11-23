@@ -13,7 +13,6 @@ function PersonaCard({ persona, title, desc, cta, href, onPick }: { persona: Per
   const cls = `relative mt-3 flex w-full flex-col gap-2.5 rounded-3xl border p-5 text-right ${brand ? "border-pink-200 bg-pink-100 text-pink-900" : "border-lemon-300 bg-lemon-100 text-lemon-900"}`;
   const inner = (
     <>
-      <span className={`absolute left-4 top-4 rounded-full px-2.5 py-1.5 font-mono text-[10px] ${brand ? "bg-pink-600 text-white" : "bg-lemon-400 text-ink-900"}`}>{brand ? "BRANDS" : "CREATORS"}</span>
       <span className={`grid h-12 w-12 place-items-center rounded-full ${brand ? "bg-pink-600 text-white" : "bg-lemon-400 text-ink-900"}`}>
         {brand ? <Briefcase className="h-6 w-6" aria-hidden="true" /> : <UserRound className="h-6 w-6" aria-hidden="true" />}
       </span>

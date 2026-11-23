@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { clearCache } from "@/lib/client-cache";
 import { normalizeIsraeliMobile, PHONE_ERROR } from "@/lib/phone";
 import { otherOtpChannel, otpChannelLabel, type OtpChannel } from "@/lib/otp-channel";
-import { otherPersona, parsePersona, readStoredPersona, storePersona, withType, type Persona } from "@/lib/persona";
+import { otherPersona, parsePersona, personaForRole, readStoredPersona, storePersona, withType, type Persona } from "@/lib/persona";
 import type { SectionContent } from "@/lib/site-content";
 import { refreshAuth } from "@/hooks/use-auth";
 import { useToast } from "@/components/ui";
@@ -140,6 +140,9 @@ function LoginContent({ texts }: { texts: AuthTexts }) {
       } else {
         toast(texts.toast_login_ok, "success");
         const role = data.role || data.userType;
+        // The device now belongs to this side (admins keep the remembered colour)
+        const signedInAs = personaForRole(role);
+        if (signedInAs) storePersona(signedInAs);
         const defaultRedirect = role === "brand" ? "/brand" : role === "admin" ? "/admin" : "/feed";
         router.push(redirect !== "/feed" ? redirect : defaultRedirect);
       }
@@ -205,6 +208,7 @@ function LoginContent({ texts }: { texts: AuthTexts }) {
 
       // The session cookie was set by the server; a full navigation picks it up
       toast(`${texts.toast_entered_as}${roleLabel(role)}`, "success");
+      storePersona(personaForRole(role));
       clearCache();
       window.location.assign(data.redirect || "/feed");
     } catch (err: unknown) {

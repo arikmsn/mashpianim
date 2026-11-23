@@ -10,7 +10,7 @@ import { CreatorFan } from "@/components/home/creator-fan";
 import { Reveal } from "@/components/home/reveal";
 import { StickyCta } from "@/components/home/sticky-cta";
 import { InfluencerQuiz } from "@/components/features/influencer-quiz";
-import { bento, container, display, eyebrow, eyebrowLight, mono, pillCreator, pillDark, pillInkLemon, pillOutline, pillPrimary } from "@/components/home/styles";
+import { bento, container, display, eyebrow, eyebrowLight, isMonoText, pillCreator, pillDark, pillInkLemon, pillOutline, pillPrimary, tagClass } from "@/components/home/styles";
 
 // The home page (design package v3 "Pop warm"): a server component that reads the content registry and renders
 // the sections in the package's order. Every visible string comes from lib/site-content.ts through
@@ -114,18 +114,18 @@ export default async function HomePage() {
               <ArrowDown className="h-4 w-4" aria-hidden="true" />
             </a>
             {hero.sticker1 && (
-              <span className={cn(mono, "absolute right-[calc(50%-560px)] top-10 hidden rotate-[-6deg] rounded-full bg-lemon-400 px-3.5 py-2.5 text-xs text-ink-900 shadow-[0_8px_24px_#00000055] xl:inline-block")}>
+              <span className={cn(tagClass(hero.sticker1), "absolute right-[calc(50%-560px)] top-10 hidden rotate-[-6deg] rounded-full bg-lemon-400 px-3.5 py-2.5 text-xs font-medium text-ink-900 shadow-[0_8px_24px_#00000055] xl:inline-block")}>
                 {hero.sticker1}
               </span>
             )}
             {hero.sticker2 && (
-              <span className={cn(mono, "absolute left-[calc(50%-560px)] top-44 hidden rotate-[5deg] rounded-full bg-pink-500 px-3.5 py-2.5 text-xs text-white shadow-[0_8px_24px_#00000055] xl:inline-block")}>
+              <span className={cn(tagClass(hero.sticker2), "absolute left-[calc(50%-560px)] top-44 hidden rotate-[5deg] rounded-full bg-pink-500 px-3.5 py-2.5 text-xs font-medium text-white shadow-[0_8px_24px_#00000055] xl:inline-block")}>
                 {hero.sticker2}
               </span>
             )}
           </div>
           <div className="relative z-[1] mt-9 md:mt-14">
-            <CreatorFan label={hero.fan_label} counterLine={hero.counter_line} demoNote={hero.demo_note} />
+            <CreatorFan tiles={content.home_fan.tiles} autoplay={content.home_fan.autoplay} label={hero.fan_label} counterLine={hero.counter_line} demoNote={hero.demo_note} />
           </div>
         </section>
 
@@ -134,7 +134,7 @@ export default async function HomePage() {
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4">
             <Reveal delay={0}>
               <Link href={REGISTER_BRAND} className="group relative flex h-full flex-col gap-3 rounded-3xl border border-pink-200 bg-pink-100 p-6 text-pink-900 shadow-lg transition-transform duration-200 hover:-translate-y-1 md:min-h-[280px] md:p-8">
-                <span className={cn(mono, "absolute left-4 top-4 rounded-full bg-primary px-2.5 py-1.5 text-[11px] text-white")}>{tracks.brand_tag}</span>
+                {tracks.brand_tag && <span className={cn(tagClass(tracks.brand_tag), "absolute left-4 top-4 rounded-full bg-primary px-2.5 py-1.5 text-[11px] font-medium text-white")}>{tracks.brand_tag}</span>}
                 <span className="grid h-12 w-12 place-items-center rounded-full bg-primary text-white md:h-[52px] md:w-[52px]">
                   <Briefcase className="h-6 w-6" aria-hidden="true" />
                 </span>
@@ -148,7 +148,7 @@ export default async function HomePage() {
             </Reveal>
             <Reveal delay={0.08}>
               <Link href={REGISTER_CREATOR} className="group relative flex h-full flex-col gap-3 rounded-3xl border border-lemon-300 bg-lemon-100 p-6 text-lemon-900 shadow-lg transition-transform duration-200 hover:-translate-y-1 md:min-h-[280px] md:p-8">
-                <span className={cn(mono, "absolute left-4 top-4 rounded-full bg-lemon-400 px-2.5 py-1.5 text-[11px] text-ink-900")}>{tracks.creator_tag}</span>
+                {tracks.creator_tag && <span className={cn(tagClass(tracks.creator_tag), "absolute left-4 top-4 rounded-full bg-lemon-400 px-2.5 py-1.5 text-[11px] font-medium text-ink-900")}>{tracks.creator_tag}</span>}
                 <span className="grid h-12 w-12 place-items-center rounded-full bg-lemon-400 text-ink-900 md:h-[52px] md:w-[52px]">
                   <UserRound className="h-6 w-6" aria-hidden="true" />
                 </span>
@@ -162,7 +162,7 @@ export default async function HomePage() {
             </Reveal>
             <Reveal delay={0.16}>
               <a href="#inf" className="group relative flex h-full flex-col gap-3 rounded-3xl border border-border bg-surface p-6 text-ink-900 shadow-lg transition-transform duration-200 hover:-translate-y-1 md:min-h-[280px] md:p-8">
-                <span className={cn(mono, "absolute left-4 top-4 rotate-[-4deg] rounded-full bg-tangerine-500 px-2.5 py-1.5 text-[11px] text-white")}>{tracks.influencer_badge}</span>
+                {tracks.influencer_badge && <span className={cn(tagClass(tracks.influencer_badge), "absolute left-4 top-4 rotate-[-4deg] rounded-full bg-tangerine-500 px-2.5 py-1.5 text-[11px] font-semibold text-white")}>{tracks.influencer_badge}</span>}
                 <span className="grid h-12 w-12 place-items-center rounded-full bg-tangerine-100 text-tangerine-700 md:h-[52px] md:w-[52px]">
                   <Sparkles className="h-6 w-6" aria-hidden="true" />
                 </span>
@@ -189,15 +189,13 @@ export default async function HomePage() {
               <div className={cn(bento, "bento-glow h-full md:min-h-[340px]")}>
                 <div className="font-display text-[22px] md:text-[27px]">{brands.bento1_title}</div>
                 <p className="mt-1.5 max-w-[320px] text-sm leading-relaxed text-ink-700 md:mt-2 md:text-base">{brands.bento1_desc}</p>
-                <div className="mt-4 grid grid-cols-3 gap-2 md:absolute md:-bottom-10 md:left-8 md:mt-0 md:w-[440px] md:gap-2.5 md:rounded-t-2xl md:border md:border-border md:bg-surface md:p-4 md:shadow-lg" aria-hidden="true">
-                  <div className="h-[90px] rounded-[10px] bg-pink-100 md:h-[140px]" />
-                  <div className="h-[90px] rounded-[10px] bg-surface-2 md:h-[140px]" />
-                  <div className="h-[90px] rounded-[10px] bg-lemon-100 md:h-[140px]" />
-                  <div className="hidden h-2 rounded bg-border md:block" />
-                  <div className="hidden h-2 rounded bg-border md:block" />
-                  <div className="hidden h-2 rounded bg-border md:block" />
+                <div className="mt-4 grid grid-cols-3 gap-2 md:absolute md:-bottom-10 md:left-8 md:mt-0 md:w-[440px] md:gap-2.5 md:rounded-t-2xl md:border md:border-border md:bg-surface md:p-4 md:shadow-lg">
+                  {brands.gallery_posters.slice(0, 6).map((p, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img key={`${p.image_url}-${i}`} src={p.image_url} alt={p.caption} loading="lazy" decoding="async" className={cn("h-[120px] w-full rounded-[10px] object-cover md:h-[150px]", i >= 3 && "hidden lg:block md:h-[60px]")} />
+                  ))}
                 </div>
-                <span className={cn(mono, "mt-3 block text-[11px] text-neutral-500 md:absolute md:bottom-5 md:right-8 md:mt-0")}>{brands.screenshot_caption}</span>
+                {brands.screenshot_caption && <span className={cn(tagClass(brands.screenshot_caption), "mt-3 block text-[11px] text-neutral-500 md:absolute md:bottom-5 md:right-8 md:mt-0")}>{brands.screenshot_caption}</span>}
               </div>
             </Reveal>
             <Reveal delay={0.08}>
@@ -227,10 +225,11 @@ export default async function HomePage() {
                   <div className="font-display text-[22px] md:text-[27px]">{brands.bento4_title}</div>
                   <p className="mt-1.5 max-w-[380px] text-sm leading-relaxed text-ink-700 md:mt-2 md:text-base">{brands.bento4_desc}</p>
                 </div>
-                <div className="flex gap-2.5" aria-hidden="true">
-                  <div className="h-[120px] w-[68px] rounded-[14px] bg-[#c9a6a0] md:h-[170px] md:w-[96px]" />
-                  <div className="h-[120px] w-[68px] rounded-[14px] bg-[#b9b09a] md:h-[170px] md:w-[96px]" />
-                  <div className="h-[120px] w-[68px] rounded-[14px] bg-[#8fa3b5] md:h-[170px] md:w-[96px]" />
+                <div className="flex gap-2.5">
+                  {brands.approved_posters.slice(0, 3).map((p, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img key={`${p.image_url}-${i}`} src={p.image_url} alt={p.caption} loading="lazy" decoding="async" className="h-[120px] w-[68px] rounded-[14px] object-cover shadow-md md:h-[170px] md:w-[96px]" />
+                  ))}
                 </div>
               </div>
             </Reveal>
@@ -245,9 +244,11 @@ export default async function HomePage() {
                     {s.suffix && <span className={cn(s.suffix === "+" ? "text-pink-500" : "font-sans text-[22px] font-normal md:text-[28px]", "ms-1")}>{s.suffix}</span>}
                   </div>
                   <div className={cn("mt-2 text-[13px] md:text-sm", s.dark ? "text-on-ink/80" : "text-ink-700")}>{s.label}</div>
-                  <div className={cn(mono, "mt-2.5 text-[10px] md:text-[11px]", s.dark ? "text-on-ink/60" : "text-neutral-500")} style={{ textAlign: "right" }} dir="ltr">
-                    {s.source}
-                  </div>
+                  {s.source && (
+                    <div className={cn(tagClass(s.source), "mt-2.5 text-[10px] md:text-[11px]", s.dark ? "text-on-ink/60" : "text-neutral-500")} style={{ textAlign: "right" }} dir={isMonoText(s.source) ? "ltr" : undefined}>
+                      {s.source}
+                    </div>
+                  )}
                 </div>
               </Reveal>
             ))}
@@ -278,7 +279,7 @@ export default async function HomePage() {
               {how.steps.map((s, i) => (
                 <Reveal key={i} delay={0.06 * i}>
                   <div className="flex gap-3.5 md:flex-col md:gap-3 md:border-t md:border-border md:pt-5">
-                    <span className={cn(mono, "w-8 shrink-0 pt-1 text-xs text-pink-700 md:w-auto md:pt-0")}>{s.tag}</span>
+                    <span className={cn(tagClass(s.tag), "w-8 shrink-0 pt-1 text-xs text-pink-700 md:w-auto md:pt-0")}>{s.tag}</span>
                     <div>
                       <b className="text-base font-semibold md:text-xl">{s.title}</b>
                       <div className="mt-0.5 text-sm leading-relaxed text-ink-700 md:mt-1 md:text-base">{s.desc}</div>
@@ -314,7 +315,7 @@ export default async function HomePage() {
                 <div className="flex flex-col gap-2 md:gap-3">
                   {creators.steps.map((s, i) => (
                     <div key={i} className="flex items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-3.5 md:gap-4 md:px-6 md:py-5">
-                      <span className={cn(mono, "w-6 shrink-0 text-xs text-lemon-700 md:w-7")}>{s.tag}</span>
+                      <span className={cn(tagClass(s.tag), "w-6 shrink-0 text-xs text-lemon-700 md:w-7")}>{s.tag}</span>
                       <div>
                         <b className="text-sm font-semibold md:text-base">{s.title}</b>
                         <div className="hidden text-sm text-ink-700 md:block">{s.desc}</div>
@@ -345,7 +346,7 @@ export default async function HomePage() {
                   <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[13px] text-ink-700 md:mt-8 md:max-w-[420px] md:flex-col md:gap-0">
                     {inf.bullets.map((b, i) => (
                       <div key={i} className={cn("flex items-center gap-2 md:gap-3.5 md:border-t md:border-border md:py-3", i === inf.bullets.length - 1 && "md:border-b")}>
-                        <span className={cn(mono, "shrink-0 text-[11px] text-pink-700 md:w-9")}>{b.tag}</span>
+                        <span className={cn(tagClass(b.tag), "shrink-0 text-[11px] text-pink-700 md:w-9")}>{b.tag}</span>
                         <span className="md:text-[15px]">{b.text}</span>
                       </div>
                     ))}
@@ -392,7 +393,7 @@ export default async function HomePage() {
                   {footer.login}
                 </Link>
               </nav>
-              <div className={cn(mono, "text-xs")}>{footer.copyright}</div>
+              <div className={cn(tagClass(footer.copyright), "text-xs")}>{footer.copyright}</div>
             </div>
           </footer>
         </section>

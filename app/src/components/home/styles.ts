@@ -15,5 +15,9 @@ export const display = "font-display text-ink-900";
 export const eyebrow = "inline-flex items-center gap-2 text-xs font-medium tracking-[1.2px] text-ink-700 before:content-[''] before:w-1.5 before:h-1.5 before:rounded-full before:bg-lemon-400";
 export const eyebrowLight = "inline-flex items-center gap-2 text-xs font-medium tracking-[1.2px] text-lemon-400 before:content-[''] before:w-1.5 before:h-1.5 before:rounded-full before:bg-lemon-400";
 export const mono = "font-mono tabular-nums";
+
+// IBM Plex Mono is for digits and Latin only: a tag the admin wrote in Hebrew falls back to Rubik
+export const isMonoText = (text: string) => /^[\x20-\x7E·₪–—]*$/.test(text);
+export const tagClass = (text: string) => (isMonoText(text) ? mono : "tabular-nums");
 export const container = "mx-auto w-full max-w-[1200px] px-4 md:px-6";
 export const bento = "relative overflow-hidden rounded-3xl border border-border bg-surface p-6 md:p-8";
