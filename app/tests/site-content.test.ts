@@ -39,7 +39,7 @@ describe("site content registry (design package v3, ניהול תוכן מהאד
 
   test("defaults, merge and coercion", () => {
     const d = defaultsFromSchema();
-    assert.equal(d.home_hero.title, "ביקורות וידאו מיוצרי תוכן אמיתיים. *בלי לרדוף אחרי לקוחות.*");
+    assert.equal(d.home_hero.title, "ביקורות וידאו מיוצרי תוכן אמיתיים. *יוצרים אמון אצל לקוחות.*");
     const merged = mergeSiteContent({
       home_hero: { title: "כותרת חדשה", sticker1: "", unknown_key: "x", subtitle: 42 },
       home_stats: { stat1_value: "200", stat3_dark: "false" },

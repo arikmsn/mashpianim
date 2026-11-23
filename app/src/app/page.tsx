@@ -37,13 +37,14 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 // "before *marked* after" → the marked part in its own span
-function TwoTone({ text, markedClassName }: { text: string; markedClassName: string }) {
+// markedBlock: the marked part starts on its own line (the hero: a white line, then the gradient line)
+function TwoTone({ text, markedClassName, markedBlock }: { text: string; markedClassName: string; markedBlock?: boolean }) {
   const { before, marked, after } = splitMarker(text);
   if (!marked) return <>{text}</>;
   return (
     <>
       {before}
-      <span className={markedClassName}>{marked}</span>
+      <span className={cn(markedClassName, markedBlock && "block")}>{marked}</span>
       {after}
     </>
   );
@@ -213,10 +214,10 @@ export default async function HomePage() {
           <div className="absolute inset-0" style={{ background: "radial-gradient(60% 50% at 50% 0%, #2e2745 0%, #0b051d 70%)" }} aria-hidden="true" />
           <div className={cn(container, "relative z-[2] text-center")}>
             <span className={eyebrowLight}>{hero.eyebrow}</span>
-            <h1 className="mx-auto mt-4 max-w-[980px] font-display text-[34px] leading-[1.06] tracking-[-1px] text-on-ink md:mt-6 md:text-[56px] md:tracking-[-1.5px] lg:text-[72px] lg:leading-[1.02]">
-              <TwoTone text={hero.title} markedClassName="signature-text" />
+            <h1 className="mx-auto mt-4 max-w-[980px] text-balance font-display text-[34px] leading-[1.06] tracking-[-1px] text-on-ink md:mt-6 md:text-[56px] md:tracking-[-1.5px] lg:text-[72px] lg:leading-[1.02]">
+              <TwoTone text={hero.title} markedClassName="signature-text" markedBlock />
             </h1>
-            <p className="mx-auto mt-4 max-w-[640px] text-base leading-relaxed text-on-ink/70 md:mt-6 md:text-[19px]">
+            <p className="mx-auto mt-4 max-w-[640px] text-pretty text-base leading-relaxed text-on-ink/70 md:mt-6 md:text-[19px]">
               <span className="block">{hero.subtitle}</span>
               {hero.subtitle2 && <span className="mt-1.5 block md:mt-2">{hero.subtitle2}</span>}
             </p>
