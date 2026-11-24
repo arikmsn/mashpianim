@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Avatar, Badge, Button, Card, useToast } from "@/components/ui";
 import { displayName, formatFollowers, lastSeenLabel } from "@/lib/admin-creators";
+import { loginLabel } from "@/lib/login-record";
 import { formatDateHe } from "@/lib/dates";
 
 type AdminVideo = {
@@ -31,6 +32,8 @@ type Payload = {
     avatar_url: string | null;
     created_at: string;
     last_seen_at: string | null;
+    last_login_at: string | null;
+    previous_login_at: string | null;
     level: string;
     categories: string[];
     city: string | null;
@@ -206,7 +209,11 @@ export default function AdminCreatorPage() {
               <div><span className="text-neutral-400 text-xs block">עוקבים באינסטגרם</span>📸 {formatFollowers(c.instagram_followers)}{c.instagram_handle ? <span className="text-neutral-400 text-xs"> @{c.instagram_handle}</span> : null}</div>
               <div><span className="text-neutral-400 text-xs block">עוקבים בטיקטוק</span>🎵 {formatFollowers(c.tiktok_followers)}{c.tiktok_handle ? <span className="text-neutral-400 text-xs"> @{c.tiktok_handle}</span> : null}</div>
               <div><span className="text-neutral-400 text-xs block">לבבות מעסקים / מאטצ&apos;ים</span>💗 {c.hearts_from_brands} · 🤝 {c.matches}</div>
-              <div><span className="text-neutral-400 text-xs block">כניסה אחרונה</span>{lastSeenLabel(c.last_seen_at)}</div>
+              <div title={`פעילות אחרונה: ${lastSeenLabel(c.last_seen_at)}`}>
+                <span className="text-neutral-400 text-xs block">כניסה אחרונה</span>
+                {loginLabel(c.last_login_at) || lastSeenLabel(c.last_seen_at)}
+                {c.previous_login_at && <span className="block text-xs text-neutral-400">קודמת: {loginLabel(c.previous_login_at)}</span>}
+              </div>
             </div>
             <p className="text-xs text-neutral-400 mt-3">
               נרשם/ה {formatDateHe(c.created_at)}{c.city ? ` · ${c.city}` : ""}{c.categories.length ? ` · ${c.categories.join(", ")}` : ""}

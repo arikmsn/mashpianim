@@ -25,9 +25,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
     }
 
-    // Brands only — judged by the role this session is signed in as
+    // Brands only — judged by the role this session is signed in as; admins too (the product editor in /admin/products)
     const viewer = await resolveViewer(supabase, user.id, await readActiveRole());
-    if (!viewer || viewer.role !== "brand") {
+    if (!viewer || (viewer.role !== "brand" && viewer.role !== "admin")) {
       return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
     }
     const dbUser = { id: viewer.userId, type: viewer.role };

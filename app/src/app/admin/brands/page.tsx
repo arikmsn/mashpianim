@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { Avatar, Badge, Button, Card, Modal, Input, useToast } from "@/components/ui";
+import { lastSeenLabel } from "@/lib/admin-creators";
+import { loginLabel } from "@/lib/login-record";
 
 type Brand = {
   id: string;
@@ -22,6 +24,10 @@ type Brand = {
   dualRoleAllowed: boolean;
   hasCreatorProfile: boolean;
   joined: string;
+  // Completed sign-ins (027) and the activity stamp
+  lastLoginAt: string | null;
+  previousLoginAt: string | null;
+  lastSeenAt: string | null;
   category?: string;
   websiteUrl?: string;
   description?: string;
@@ -97,6 +103,9 @@ export default function AdminBrandsPage() {
             hasCreatorProfile: b.has_creator_profile === true,
             usedCredits: (b.used_credits as number) || 0,
             joined: b.created_at ? new Date(b.created_at as string).toLocaleDateString("he-IL") : "",
+            lastLoginAt: (b.last_login_at as string) || null,
+            previousLoginAt: (b.previous_login_at as string) || null,
+            lastSeenAt: (b.last_seen_at as string) || null,
             category: (Array.isArray(b.categories) && (b.categories as string[]).length > 0
               ? (b.categories as string[]).join(" · ")
               : (b.category as string)) || undefined,
@@ -217,6 +226,7 @@ export default function AdminBrandsPage() {
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">נוצלו</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">לבבות ששלחו</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">גם יוצר/ת</th>
+                <th className="px-4 py-3 text-xs font-medium text-neutral-400">כניסה אחרונה</th>
                 <th className="px-4 py-3 text-xs font-medium text-neutral-400">פעולות</th>
               </tr>
             </thead>
@@ -265,6 +275,10 @@ export default function AdminBrandsPage() {
                         {brand.dualRoleAllowed ? "✅ מאושר" : "🎬 לאפשר"}
                       </button>
                     )}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-neutral-600 whitespace-nowrap" title={`פעילות אחרונה: ${lastSeenLabel(brand.lastSeenAt)}`}>
+                    {loginLabel(brand.lastLoginAt) || <span className="text-neutral-400">{lastSeenLabel(brand.lastSeenAt)}</span>}
+                    {brand.previousLoginAt && <span className="block text-[11px] text-neutral-400">קודמת: {loginLabel(brand.previousLoginAt)}</span>}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1">

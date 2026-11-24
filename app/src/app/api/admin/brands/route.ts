@@ -75,6 +75,10 @@ export async function GET() {
       is_active: u.is_active,
       avatar_url: u.avatar_url,
       created_at: u.created_at,
+      // Completed sign-ins (027): the latest and the one before it; last_seen_at stays the activity stamp
+      last_seen_at: u.last_seen_at || null,
+      last_login_at: u.last_login_at || null,
+      previous_login_at: u.previous_login_at || null,
       shop_name: profile?.shop_name || "",
       category: profile?.category || "",
       categories: Array.isArray(profile?.categories) && profile.categories.length > 0

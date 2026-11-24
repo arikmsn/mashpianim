@@ -8,6 +8,7 @@ import { isAllowedRegistrationType } from "@/lib/authz";
 import { registrationMode } from "@/lib/viewer";
 import { checkRateLimit, rateLimitedResponse, clientIp, RATE_LIMITS } from "@/lib/rate-limit";
 import { setActiveRoleCookie } from "@/lib/active-role";
+import { recordLogin } from "@/lib/login-record";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -195,6 +196,9 @@ export async function POST(request: NextRequest) {
         );
       }
     }
+
+    // A finished registration is this account's first sign-in (the admin lists show when it last came in)
+    await recordLogin(supabaseAdmin, dbUserId);
 
     // The session acts as the role just registered: a new account's only role, or the role just added
     const response = NextResponse.json({ success: true, userType: existingUser?.type || effectiveType, role: effectiveType, added: mode === "add_role" && createdProfile });

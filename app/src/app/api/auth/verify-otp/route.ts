@@ -4,6 +4,7 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { checkRateLimit, rateLimitedResponse, clientIp, RATE_LIMITS } from "@/lib/rate-limit";
 import { resolveViewer } from "@/lib/viewer";
 import { clearActiveRoleCookie, homeForRole, setActiveRoleCookie } from "@/lib/active-role";
+import { recordLogin } from "@/lib/login-record";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -209,6 +210,8 @@ export async function POST(request: NextRequest) {
       const viewer = await resolveViewer(supabaseAdmin, authUserId);
       roles = viewer?.roles || [];
       if (roles.length === 1) role = roles[0];
+      // A completed sign-in of a registered account (the admin lists show when it last came in)
+      await recordLogin(supabaseAdmin, (dbUser as { id?: string } | null)?.id);
     }
 
     const response = NextResponse.json({

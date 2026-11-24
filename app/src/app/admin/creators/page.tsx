@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Avatar, Badge, Card, useToast } from "@/components/ui";
 import { displayName, formatFollowers, lastSeenLabel, matchesSearch } from "@/lib/admin-creators";
+import { loginLabel } from "@/lib/login-record";
 
 // What /api/admin/creators returns per creator
 type Creator = {
@@ -15,6 +16,8 @@ type Creator = {
   avatar_url: string | null;
   created_at: string;
   last_seen_at: string | null;
+  last_login_at: string | null;
+  previous_login_at: string | null;
   level: string;
   categories: string[];
   city: string | null;
@@ -211,8 +214,9 @@ export default function AdminCreatorsPage() {
                         </button>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs text-neutral-600 whitespace-nowrap" title={c.last_seen_at || ""}>
-                      {lastSeenLabel(c.last_seen_at)}
+                    <td className="px-4 py-3 text-xs text-neutral-600 whitespace-nowrap" title={`פעילות אחרונה: ${lastSeenLabel(c.last_seen_at)}`}>
+                      {loginLabel(c.last_login_at) || <span className="text-neutral-400">{lastSeenLabel(c.last_seen_at)}</span>}
+                      {c.previous_login_at && <span className="block text-[11px] text-neutral-400">קודמת: {loginLabel(c.previous_login_at)}</span>}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">

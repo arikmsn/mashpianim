@@ -4,8 +4,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { toPublicProduct, pickProductUpdates } from "@/lib/authz";
 import { CLOSED_STATUSES, OCCUPYING_STATUSES, normalizeMaxCreators, spotsLeft, brandRevealedToCreator, hideBrand } from "@/lib/connection-flow";
 import { getTimelineSettings } from "@/lib/settings";
-import { heartClosesWithProduct } from "@/lib/hearts";
-import { createNotification, logActivity, notificationData } from "@/lib/notifications";
+import { closeWaitingHearts } from "@/lib/product-removal";
 import { resolveViewer } from "@/lib/viewer";
 import { readActiveRole } from "@/lib/active-role";
 
@@ -230,31 +229,8 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
 
   // A creator's heart lives until the business removes the product (owner, 2026-11-19): close every heart still
   // waiting on this product — either side, mutual or not — and tell the creators. Approved connections (a credit
-  // was spent, a chat is open) are untouched.
-  const { data: waiting } = await admin
-    .from("connections")
-    .select("id, status, initiated_by, mutual_at, products(name), creator_profiles!connections_creator_id_fkey(users(id))")
-    .eq("product_id", id)
-    .eq("status", "pending");
-  let closed = 0;
-  for (const conn of (waiting || []) as any[]) {
-    if (!heartClosesWithProduct(conn)) continue;
-    await (admin.from("connections") as any)
-      .update({ status: "cancelled", rejection_reason: "product_removed" })
-      .eq("id", conn.id);
-    const creatorUser = conn.creator_profiles?.users;
-    if (creatorUser?.id) {
-      await createNotification({
-        userId: creatorUser.id,
-        type: "connection_cancelled",
-        title: "המוצר הוסר",
-        body: `העסק הסיר את המוצר "${conn.products?.name || ""}" מהאתר, ולכן הלב שלך עליו בוטל. אפשר לבחור מוצר אחר.`,
-        data: notificationData(conn.id, id, "creator"),
-      });
-    }
-    await logActivity({ action: "heart_closed_product_removed", entityType: "connection", entityId: conn.id });
-    closed++;
-  }
+  // was spent, a chat is open) are untouched. Shared with the admin's removal (lib/product-removal.ts).
+  const closed = await closeWaitingHearts(admin, id);
 
   return NextResponse.json({ success: true, hearts_closed: closed });
 }

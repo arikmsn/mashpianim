@@ -65,6 +65,9 @@ export async function GET() {
       avatar_url: u.avatar_url,
       created_at: u.created_at,
       last_seen_at: u.last_seen_at || null,
+      // Completed sign-ins (027): the latest and the one before it
+      last_login_at: u.last_login_at || null,
+      previous_login_at: u.previous_login_at || null,
       level: profile?.level || "creator",
       categories: Array.isArray(profile?.categories) ? profile.categories : [],
       city: profile?.city || null,
