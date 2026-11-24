@@ -131,7 +131,7 @@ export const SITE_CONTENT_SCHEMA = [
     anchor: "top",
     fields: [
       { key: "eyebrow", label: "תגית מעל הכותרת", type: "text", default: "תוכן אמיתי, מאנשים אמיתיים", max: 40 },
-      { key: "title", label: "כותרת", help: `${MARKER_HELP} (גרדיאנט ורוד-כתום)`, type: "text", default: "ביקורות וידאו מיוצרי תוכן אמיתיים. *יוצרים אמון אצל לקוחות.*", max: 90 },
+      { key: "title", label: "כותרת", help: `${MARKER_HELP} (גרדיאנט ורוד-כתום)`, type: "text", default: "סקירת וידאו מיוצרי תוכן אמיתיים. *יוצרים אמון אצל לקוחות.*", max: 90 },
       {
         key: "subtitle",
         label: "תת כותרת, שורה 1 (לעסקים)",
@@ -297,7 +297,7 @@ export const SITE_CONTENT_SCHEMA = [
       { key: "stat1_dark", label: "מספר 1 על אריח כהה", type: "toggle", default: false },
       { key: "stat2_value", label: "מספר 2 (סרטונים)", type: "text", default: STATS_VIDEOS_DEFAULT, max: 8 },
       { key: "stat2_suffix", label: "מספר 2, סיומת", type: "text", default: "", max: 8, allowEmpty: true },
-      { key: "stat2_label", label: "מספר 2, תווית", type: "text", default: "סרטונים שנוצרו על ידי יוצרי תוכן", max: 40 },
+      { key: "stat2_label", label: "מספר 2, תווית", type: "text", default: "סרטונים שנוצרו", max: 40 },
       { key: "stat2_source", label: "מספר 2, שורת המקור (ריק = לא מוצג)", type: "text", default: "מהמערכת", max: 30, allowEmpty: true },
       { key: "stat2_dark", label: "מספר 2 על אריח כהה", type: "toggle", default: false },
       { key: "stat3_value", label: "מספר 3 (ימים)", help: `${VARIABLES_HELP} עברית מותרת, למשל "כ-7".`, type: "text", default: "כ-7", max: 8 },
@@ -698,9 +698,9 @@ export const SITE_CONTENT_SCHEMA = [
     label: "SEO ושיתוף",
     anchor: "",
     fields: [
-      { key: "title", label: "כותרת הדף (title)", type: "text", default: "משפיען אונליין | ביקורות וידאו מיוצרי תוכן אמיתיים", max: 70 },
+      { key: "title", label: "כותרת הדף (title)", type: "text", default: "משפיען אונליין | סקירת וידאו מיוצרי תוכן אמיתיים", max: 70 },
       { key: "description", label: "תיאור (description)", type: "textarea", default: "מחברים בין עסקים ליוצרי תוכן ולמשפיענים בישראל. ביקורות וידאו אמיתיות על המוצר שלכם, תיק עבודות ליוצרים, ונבחרת משפיענים לקמפיין.", max: 170 },
-      { key: "og_title", label: "כותרת לשיתוף (og:title)", type: "text", default: "משפיען אונליין: ביקורות וידאו מיוצרי תוכן אמיתיים", max: 70 },
+      { key: "og_title", label: "כותרת לשיתוף (og:title)", type: "text", default: "משפיען אונליין: סקירת וידאו מיוצרי תוכן אמיתיים", max: 70 },
       { key: "og_description", label: "תיאור לשיתוף (og:description)", type: "textarea", default: "ביקורות וידאו מיוצרי תוכן ישראלים אמיתיים, שיוצרות אמון אצל לקוחות. במחיר של המוצר שלכם.", max: 170 },
       {
         key: "keywords",
