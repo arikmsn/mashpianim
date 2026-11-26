@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { needsTermsAcceptance, needsVideoPromoConsent, LEGAL_CONSENT_TEXT, TERMS, PRIVACY, REFUNDS, ACCESSIBILITY, ACCESSIBILITY_CONTACT, LEGAL_DOCUMENTS, LEGAL_ORDER, TERMS_VERSION } from "../src/lib/legal.ts";
+import { needsTermsAcceptance, TERMS_POPUP, TERMS, PRIVACY, REFUNDS, ACCESSIBILITY, ACCESSIBILITY_CONTACT, LEGAL_DOCUMENTS, LEGAL_ORDER, TERMS_VERSION } from "../src/lib/legal.ts";
 
 describe("terms acceptance (owner, 2026-11-09)", () => {
   test("who still has to accept", () => {
@@ -57,30 +57,24 @@ describe("terms acceptance (owner, 2026-11-09)", () => {
   });
 });
 
-describe("video rights and promotion consent (owner, 2026-11-26)", () => {
-  const accepted = { terms_accepted_at: "2026-11-26T10:00:00Z", terms_version: TERMS_VERSION };
-
-  test("the separate consent is asked for only once its column exists (migration 028)", () => {
-    assert.equal(needsTermsAcceptance(accepted), false, "column missing (undefined) → only the terms count");
-    assert.equal(needsVideoPromoConsent(accepted), false);
-    assert.equal(needsTermsAcceptance({ ...accepted, video_promo_consent_at: null }), true, "column present, never consented → gate");
-    assert.equal(needsVideoPromoConsent({ ...accepted, video_promo_consent_at: null }), true);
-    assert.equal(needsTermsAcceptance({ ...accepted, video_promo_consent_at: "2026-11-26T10:00:00Z", video_promo_consent_version: TERMS_VERSION }), false);
-    assert.equal(needsTermsAcceptance({ ...accepted, video_promo_consent_at: "2026-11-10T10:00:00Z", video_promo_consent_version: "2026-11-10" }), true, "older version → ask again");
-  });
-
+describe("video rights and the first-entry popup (owner, 2026-11-26)", () => {
   test("an account that accepted the previous version is asked again", () => {
     assert.equal(needsTermsAcceptance({ terms_accepted_at: "2026-11-10T10:00:00Z", terms_version: "2026-11-10" }), true);
+    assert.equal(needsTermsAcceptance({ terms_accepted_at: "2026-11-26T10:00:00Z", terms_version: TERMS_VERSION }), false);
   });
 
   test("section 8 states both licences plainly: business on delivered videos, platform promotion with opt-out", () => {
     const s8 = (TERMS.sections.find((s) => s.title.startsWith("8.")) as { paragraphs: string[] }).paragraphs.join("\n");
-    for (const phrase of ["8.2", "רישיון מלא", "שיווק ופרסום של העסק", "8.3", "קידום הפלטפורמה", "דף הבית", "ברשתות החברתיות", "הסכמה נפרדת", "8.4", "לא ישמש עוד"]) {
+    for (const phrase of ["8.2", "רישיון מלא", "שיווק ופרסום של העסק", "8.3", "קידום הפלטפורמה", "דף הבית", "ברשתות החברתיות", "8.4", "לא ישמש עוד"]) {
       assert.ok(s8.includes(phrase), `section 8 mentions: ${phrase}`);
     }
     const privacy = PRIVACY.sections.flatMap((s) => s.bullets || []).join("\n");
     assert.ok(privacy.includes("לקדם את הפלטפורמה באמצעות סרטונים"), "privacy policy lists the promotional use");
-    assert.ok(LEGAL_CONSENT_TEXT.videoPromoCreator.includes("8.3") && LEGAL_CONSENT_TEXT.videoPromoBrand.includes("8.3"));
-    assert.ok(LEGAL_CONSENT_TEXT.brandLicense.includes("רישיון"));
+  });
+
+  test("the popup itself shows the promotional use and the opt-out, not only the linked document", () => {
+    const text = TERMS_POPUP.points.map((p) => p.text).join("\n");
+    assert.ok(text.includes("לקידום משפיען אונליין") && text.includes("דף הבית") && text.includes("צור קשר"));
+    assert.ok(text.includes("רישיון"), "business licence");
   });
 });

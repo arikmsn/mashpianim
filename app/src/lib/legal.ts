@@ -48,44 +48,37 @@ export interface LegalDocument {
   sections: LegalSection[];
 }
 
-export interface LegalAcceptanceState {
-  terms_accepted_at?: string | null;
-  terms_version?: string | null;
-  // Migration 028. undefined = the column does not exist yet (not asked for); null = never given
-  video_promo_consent_at?: string | null;
-  video_promo_consent_version?: string | null;
-}
-
-// Who still has to accept: never accepted, or accepted an older version; and, once migration 028 is in, whoever
-// has not given the separate consent to promotional use of videos under the current version. An unknown user
-// (still loading) is not blocked — the gate waits for the profile.
-export function needsTermsAcceptance(user: LegalAcceptanceState | null | undefined, currentVersion: string = TERMS_VERSION): boolean {
+// Who still has to accept: never accepted, or accepted an older version. An unknown user (still loading) is
+// not blocked — the gate waits for the profile.
+export function needsTermsAcceptance(
+  user: { terms_accepted_at?: string | null; terms_version?: string | null } | null | undefined,
+  currentVersion: string = TERMS_VERSION
+): boolean {
   if (!user) return false;
   if (!user.terms_accepted_at) return true;
-  if ((user.terms_version || "") !== currentVersion) return true;
-  return needsVideoPromoConsent(user, currentVersion);
+  return (user.terms_version || "") !== currentVersion;
 }
 
-export function needsVideoPromoConsent(user: LegalAcceptanceState | null | undefined, currentVersion: string = TERMS_VERSION): boolean {
-  if (!user || user.video_promo_consent_at === undefined) return false;
-  if (!user.video_promo_consent_at) return true;
-  return (user.video_promo_consent_version || "") !== currentVersion;
-}
-
-// The wording of the two registration / gate checkboxes, one place for both screens (owner, 2026-11-26).
-// The video-promotion consent is a separate, explicit checkbox: a creator's face and voice are in the videos, and a
-// consent hidden inside general terms is weaker. Both are required to use the platform.
-export const LEGAL_CONSENT_TEXT = {
-  terms: "קראתי ואני מסכים/ה לתנאי השירות ולכללי השימוש בפלטפורמה, למדיניות הפרטיות ולמדיניות הביטולים וההחזרים.",
-  creatorLicense:
-    "ידוע לי שעם אישור סרטון שיצרתי עבור עסק, העסק מקבל רישיון להשתמש בו לשיווק ולפרסום העסק ומוצריו (סעיף 8 בתנאים).",
-  brandLicense:
-    "ידוע לי שעם אישור סרטון שהוזמן דרך הפלטפורמה, העסק שלי מקבל רישיון מלא להשתמש בו לשיווק ולפרסום העסק ומוצריו (סעיף 8 בתנאים).",
-  videoPromoCreator:
-    "אני מסכים/ה שמשפיען אונליין תשתמש בסרטונים שאני מעלה לפלטפורמה, ובקטעים מהם, לקידום הפלטפורמה: בדף הבית, ברשתות החברתיות ובחומרים שיווקיים (סעיף 8.3 בתנאים).",
-  videoPromoBrand:
-    "אני מסכים/ה שמשפיען אונליין תשתמש בסרטונים שנוצרו עבור העסק שלי דרך הפלטפורמה, ובקטעים מהם, לקידום הפלטפורמה: בדף הבית, ברשתות החברתיות ובחומרים שיווקיים (סעיף 8.3 בתנאים).",
-  videoPromoNote: "אפשר לבקש בכל עת, דרך \"צור קשר\", שסרטון מסוים לא ישמש לקידום מכאן והלאה.",
+// The first-entry acceptance popup (owner, 2026-11-26: one light popup and one button, no checkboxes at
+// registration). The few points a user should not miss are shown in the popup itself, above all the platform's
+// promotional use of uploaded videos, so accepting is informed without reading the whole document there.
+export const TERMS_POPUP = {
+  titleNew: "רגע לפני שמתחילים",
+  titleUpdated: "עדכנו את התנאים",
+  introNew: "כמה דברים חשובים על השימוש במשפיען אונליין:",
+  introUpdated: "הוספנו הבהרה על השימוש בסרטונים. בקצרה:",
+  points: [
+    { icon: "🤝", text: "אנחנו מחברים בין יוצרי תוכן לעסקים, ולא צד לעסקה ביניהם (המוצר, המשלוח והסרטון)." },
+    { icon: "🎬", text: "עסק שאישר סרטון שנוצר עבורו מקבל רישיון להשתמש בו לשיווק העסק ומוצריו." },
+    {
+      icon: "📣",
+      text: "סרטונים שעולים למערכת עשויים לשמש אותנו לקידום משפיען אונליין: בדף הבית וברשתות החברתיות. אפשר לבקש בכל עת, דרך \"צור קשר\", שסרטון מסוים לא ישמש לכך.",
+    },
+    { icon: "💬", text: "כל התקשורת נעשית בצ׳אט של המערכת, בלי שיתוף טלפון או פרטי קשר." },
+  ],
+  accept: "מאשר/ת, אפשר להתחיל",
+  acceptUpdated: "מאשר/ת וממשיכ/ה",
+  decline: "לא מסכים/ה, יציאה",
 } as const;
 
 export const TERMS: LegalDocument = {
@@ -161,7 +154,7 @@ export const TERMS: LegalDocument = {
       paragraphs: [
         "**8.1 זכויות בפלטפורמה.** כל הזכויות בפלטפורמה עצמה — העיצוב, הקוד, הטקסטים, הסימנים והמבנה — שייכות למפעילה, ואין להעתיקן או לעשות בהן שימוש ללא הסכמה בכתב.",
         "**8.2 רישיון לעסק על הסרטונים שהזמין.** יוצר/ת התוכן מצהיר/ה שהסרטון הוא יצירה מקורית שלו/ה. עם אישור הסרטון על ידי העסק (או כשהסרטון נחשב מאושר לפי כללי האפליקציה), העסק מקבל רישיון מלא, שאינו בלעדי, בלתי מוגבל בזמן ובערוצים, להשתמש בסרטון לצורכי שיווק ופרסום של העסק ומוצריו — באתר העסק, ברשתות החברתיות, בפרסומות ממומנות ובכל ערוץ אחר — לרבות עריכה סבירה. התמורה לרישיון היא המוצר שהיוצר/ת קיבל/ה. היוצר/ת רשאי/ת להציג את הסרטון בתיק העבודות שלו/ה בפלטפורמה.",
-        "**8.3 שימוש המפעילה בסרטונים לקידום הפלטפורמה.** בכפוף להסכמה נפרדת ומפורשת שניתנת בעת ההרשמה (או במסך האישור באפליקציה), יוצר/ת התוכן והעסק מעניקים למפעילה רישיון שאינו בלעדי, ללא תמורה ובלתי מוגבל בזמן, להציג, לשכפל ולפרסם סרטונים שהועלו לפלטפורמה — סרטוני תיק עבודות וסרטונים שנוצרו ואושרו במסגרת חיבור — וקטעים מהם, לצורך שיווק וקידום הפלטפורמה עצמה: בדף הבית ובעמודי האתר, בעמודי הפלטפורמה ברשתות החברתיות, בפרסומות ובחומרים שיווקיים. בכלל זה רשאית המפעילה לציין את שם המשתמש של היוצר/ת, את שם העסק ואת המוצר המופיע בסרטון, ולבצע עריכה סבירה (קיצור, חיתוך, כיתוביות, לוגו) שאינה משנה את מהות הסרטון או מציגה אותו באור מטעה. המפעילה לא תמכור את הסרטונים ולא תעניק לצד שלישי רישיון להשתמש בהם לצרכיו.",
+        "**8.3 שימוש המפעילה בסרטונים לקידום הפלטפורמה.** יוצר/ת התוכן והעסק מעניקים למפעילה רישיון שאינו בלעדי, ללא תמורה ובלתי מוגבל בזמן, להציג, לשכפל ולפרסם סרטונים שהועלו לפלטפורמה — סרטוני תיק עבודות וסרטונים שנוצרו ואושרו במסגרת חיבור — וקטעים מהם, לצורך שיווק וקידום הפלטפורמה עצמה: בדף הבית ובעמודי האתר, בעמודי הפלטפורמה ברשתות החברתיות, בפרסומות ובחומרים שיווקיים. בכלל זה רשאית המפעילה לציין את שם המשתמש של היוצר/ת, את שם העסק ואת המוצר המופיע בסרטון, ולבצע עריכה סבירה (קיצור, חיתוך, כיתוביות, לוגו) שאינה משנה את מהות הסרטון או מציגה אותו באור מטעה. המפעילה לא תמכור את הסרטונים ולא תעניק לצד שלישי רישיון להשתמש בהם לצרכיו.",
         "**8.4 בקשה להפסקת שימוש.** יוצר/ת או עסק רשאים לבקש בכל עת, דרך \"צור קשר\", שסרטון מסוים לא ישמש עוד לקידום הפלטפורמה. המפעילה תפסיק להשתמש בו בפרסומים חדשים ותסיר אותו מעמודי האתר בתוך זמן סביר; פרסומים שכבר יצאו לפני הבקשה (למשל פוסטים ברשתות החברתיות) לא יחויבו בהסרה. סגירת חשבון מהווה בקשה כזו לגבי כל הסרטונים של החשבון.",
         "**8.5 אחריות על תוכן.** העלאת תוכן לפלטפורמה היא באחריות מי שהעלה אותו, לרבות קבלת הסכמה של כל אדם נוסף המופיע בסרטון גם לשימושים המפורטים בסעיף זה. המפעילה רשאית להציג סרטונים, מוצרים ופרופילים בתוך הפלטפורמה לצורך פעולתה, להסיר תוכן שמפר את התנאים או את הדין, ואינה מתחייבת לבדוק כל תוכן מראש.",
       ],
@@ -243,7 +236,7 @@ export const PRIVACY: LegalDocument = {
         "לשפר את השירות: סטטיסטיקות שימוש ומדדי ביצוע, בדרך כלל במידע מצרפי שאינו מזהה אותך.",
         "לעמוד בחובות שבדין, לרבות הנהלת חשבונות ומענה לרשויות מוסמכות.",
         "לשלוח עדכונים שיווקיים — רק בהסכמתך, ובכל הודעה כזו תהיה דרך פשוטה להסרה.",
-        "לקדם את הפלטפורמה באמצעות סרטונים שהועלו אליה, לרבות שם המשתמש של היוצר/ת, שם העסק והמוצר המופיעים בהם — בדף הבית, ברשתות החברתיות ובחומרים שיווקיים, לפי ההסכמה הנפרדת שניתנה בהרשמה ובהתאם לסעיף 8 בתנאי השירות. אפשר לבקש בכל עת שסרטון מסוים לא ישמש לכך.",
+        "לקדם את הפלטפורמה באמצעות סרטונים שהועלו אליה, לרבות שם המשתמש של היוצר/ת, שם העסק והמוצר המופיעים בהם — בדף הבית, ברשתות החברתיות ובחומרים שיווקיים, בהתאם לסעיף 8 בתנאי השירות. אפשר לבקש בכל עת שסרטון מסוים לא ישמש לכך.",
       ],
     },
     {

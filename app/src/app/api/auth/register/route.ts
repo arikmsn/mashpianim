@@ -9,9 +9,6 @@ import { registrationMode } from "@/lib/viewer";
 import { checkRateLimit, rateLimitedResponse, clientIp, RATE_LIMITS } from "@/lib/rate-limit";
 import { setActiveRoleCookie } from "@/lib/active-role";
 import { recordLogin } from "@/lib/login-record";
-import { recordLegalAcceptance } from "@/lib/legal-acceptance";
-import { getTermsVersion } from "@/lib/site-content-server";
-import { logActivity } from "@/lib/notifications";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_SUPABASE_URL;
@@ -197,31 +194,6 @@ export async function POST(request: NextRequest) {
         greenAPI.sendWelcomeBrand(phone, name, profile.shopName || "").catch((err) =>
           console.error("[register] welcome message error:", err)
         );
-      }
-    }
-
-    // The legal checkboxes on the last step (owner, 2026-11-26): the terms, privacy policy and platform rules, and
-    // separately the consent to the platform using uploaded videos for its own promotion. Recorded with the version
-    // in force. A body without them (an older cached app) registers as before and the in-app gate asks instead, so
-    // a stale client never breaks a registration.
-    const legal = body.legal && typeof body.legal === "object" ? (body.legal as { terms?: unknown; video_promo?: unknown }) : null;
-    if (legal?.terms === true) {
-      const version = await getTermsVersion();
-      const accepted = await recordLegalAcceptance(supabaseAdmin, { userId: dbUserId, version, videoPromo: legal.video_promo === true });
-      if (!accepted.ok) {
-        console.error("[register] legal acceptance error:", accepted.error);
-      } else {
-        try {
-          await logActivity({
-            actorId: dbUserId,
-            action: "terms_accepted",
-            entityType: "user",
-            entityId: dbUserId,
-            details: { version, video_promo: accepted.videoPromoRecorded, via: "register" },
-          });
-        } catch (err) {
-          console.error("[register] activity log failed:", err);
-        }
       }
     }
 
