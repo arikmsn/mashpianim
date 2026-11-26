@@ -7,9 +7,10 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Button, useToast } from "@/components/ui";
 import { useAuth } from "@/hooks/use-auth";
 import { PROFILE_UPDATED_EVENT, readCache, swrFetch, writeCache } from "@/lib/client-cache";
-import { LEGAL_ORDER, needsTermsAcceptance, type LegalSlug } from "@/lib/legal";
+import { LEGAL_ORDER, needsTermsAcceptance, needsVideoPromoConsent, type LegalAcceptanceState, type LegalSlug } from "@/lib/legal";
 import { mergeSiteContent, SITE_CONTENT_DEFAULTS, type SiteContent } from "@/lib/site-content";
 import { LegalDocumentView, legalDoc } from "./legal-document";
+import { LegalConsent, legalConsentComplete, type LegalConsentValue } from "./legal-consent";
 
 // The legal texts as the admin last saved them (defaults from lib/legal.ts until the content arrives)
 function useLegalContent(): SiteContent {
@@ -96,9 +97,11 @@ function LegalModalPanel({ onClose, initial }: { onClose: () => void; initial: L
 // The acceptance gate (owner, 2026-11-09): a creator or a business that has not accepted the current terms sees
 // them full-screen on entering the app and must tick and confirm, or is signed out. Accepted once, never again
 // (until the terms version changes: the admin bumps it on a material change). Rendered by the app layout.
+// Since 2026-11-26 it carries the same two checkboxes as registration (terms + separate video-promotion consent);
+// an account that registered with both ticked never sees it.
 // ---------------------------------------------------------------------------------------------------------------
 interface ProfilePayload {
-  user?: { id?: string; type?: string; terms_accepted_at?: string | null; terms_version?: string | null } | null;
+  user?: ({ id?: string; type?: string } & LegalAcceptanceState) | null;
   role?: string;
   [key: string]: unknown;
 }
@@ -110,7 +113,7 @@ export function TermsGate() {
   const content = useLegalContent();
   const terms = content.legal_terms;
   const [me, setMe] = useState<ProfilePayload | null>(() => readCache<ProfilePayload>("/api/profile") || null);
-  const [checked, setChecked] = useState(false);
+  const [consent, setConsent] = useState<LegalConsentValue>({ terms: false, videoPromo: false });
   const [saving, setSaving] = useState(false);
   const [leaving, setLeaving] = useState(false);
 
@@ -121,17 +124,39 @@ export function TermsGate() {
 
   const role = me?.role || me?.user?.type || "";
   const show = !!user && !!me?.user && role !== "admin" && needsTermsAcceptance(me.user, terms.version);
+  // Only the consent is missing (terms already accepted under this version): ask for that box alone
+  const termsCurrent = !!me?.user?.terms_accepted_at && me?.user?.terms_version === terms.version;
+  const onlyPromo = termsCurrent && needsVideoPromoConsent(me?.user, terms.version);
+  const ready = onlyPromo ? consent.videoPromo : legalConsentComplete(consent);
 
   async function accept() {
     setSaving(true);
     try {
-      const res = await fetch("/api/legal/accept", { method: "POST" });
-      const data = (await res.json().catch(() => ({}))) as { error?: string; terms_accepted_at?: string; terms_version?: string };
+      const res = await fetch("/api/legal/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ video_promo: consent.videoPromo }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        terms_accepted_at?: string;
+        terms_version?: string;
+        video_promo_consent_at?: string;
+        video_promo_consent_version?: string;
+      };
       if (!res.ok) {
         toast(data.error || "לא הצלחנו לשמור את האישור. נסו שוב", "error");
         return;
       }
-      const next: ProfilePayload = { ...me, user: { ...me?.user, terms_accepted_at: data.terms_accepted_at, terms_version: data.terms_version } };
+      const next: ProfilePayload = {
+        ...me,
+        user: {
+          ...me?.user,
+          terms_accepted_at: data.terms_accepted_at,
+          terms_version: data.terms_version,
+          ...(data.video_promo_consent_at ? { video_promo_consent_at: data.video_promo_consent_at, video_promo_consent_version: data.video_promo_consent_version } : {}),
+        },
+      };
       writeCache("/api/profile", next);
       window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
       setMe(next);
@@ -158,9 +183,13 @@ export function TermsGate() {
       <header className="px-5 pt-[calc(1rem+env(safe-area-inset-top))] pb-3 border-b border-border bg-gradient-to-b from-pink-50 to-white">
         <h2 id="terms-gate-title" className="text-lg font-bold">לפני שממשיכים: {terms.title}</h2>
         <p className="text-xs text-neutral-500 mt-1">
-          {role === "brand"
-            ? "כדי להשתמש במשפיען אונליין כעסק צריך לקרוא את תנאי השירות ולאשר אותם. זה נעשה פעם אחת."
-            : "כדי להשתמש במשפיען אונליין צריך לקרוא את תנאי השירות ולאשר אותם. זה נעשה פעם אחת."}
+          {onlyPromo
+            ? "נשאר רק אישור אחד: השימוש בסרטונים לקידום הפלטפורמה (סעיף 8.3 בתנאים)."
+            : me?.user?.terms_accepted_at
+              ? "עדכנו את התנאים: סעיף 8 מפרט עכשיו את זכויות השימוש בסרטונים, לעסקים ולקידום הפלטפורמה. צריך לאשר מחדש פעם אחת."
+              : role === "brand"
+                ? "כדי להשתמש במשפיען אונליין כעסק צריך לקרוא את תנאי השירות ולאשר אותם. זה נעשה פעם אחת."
+                : "כדי להשתמש במשפיען אונליין צריך לקרוא את תנאי השירות ולאשר אותם. זה נעשה פעם אחת."}
         </p>
       </header>
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4">
@@ -174,16 +203,8 @@ export function TermsGate() {
         </p>
       </div>
       <footer className="border-t border-border p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3 bg-white">
-        <label className="flex items-start gap-3 text-sm text-neutral-800 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={checked}
-            onChange={(e) => setChecked(e.target.checked)}
-            className="mt-0.5 w-5 h-5 accent-pink-600 shrink-0"
-          />
-          <span>קראתי ואני מסכים/ה לתנאי השירות, למדיניות הפרטיות ולמדיניות הביטולים וההחזרים של משפיען אונליין.</span>
-        </label>
-        <Button fullWidth disabled={!checked || leaving} loading={saving} onClick={accept}>
+        <LegalConsent persona={role === "brand" ? "brand" : "creator"} value={consent} onChange={setConsent} showTerms={!onlyPromo} />
+        <Button fullWidth disabled={!ready || leaving} loading={saving} onClick={accept}>
           ✅ מאשר/ת וממשיכ/ה
         </Button>
         <Button fullWidth variant="ghost" disabled={saving} loading={leaving} onClick={decline} className="text-neutral-500">

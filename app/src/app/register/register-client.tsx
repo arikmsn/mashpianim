@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { AuthShell, PersonaSwap, SwapLine, authField, authLabel, personaButton } from "@/components/auth/auth-shell";
 import { PersonaChooser } from "@/components/auth/persona-chooser";
 import { Markdown } from "@/components/features/markdown";
+import { LegalConsent, legalConsentComplete, type LegalConsentValue } from "@/components/features/legal-consent";
 
 type AuthTexts = SectionContent<"auth">;
 type UserType = Persona | null;
@@ -192,6 +193,7 @@ function CreatorRegistration({ texts, onBack, onSwitch, preVerifiedUserId, preVe
     categories: [] as string[],
     ageConfirmed: false,
   });
+  const [consent, setConsent] = useState<LegalConsentValue>({ terms: false, videoPromo: false });
   const router = useRouter();
   const { toast } = useToast();
 
@@ -242,7 +244,7 @@ function CreatorRegistration({ texts, onBack, onSwitch, preVerifiedUserId, preVe
       const registerRes = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, userType: "creator", profile: form }),
+        body: JSON.stringify({ userId, userType: "creator", profile: form, legal: { terms: consent.terms, video_promo: consent.videoPromo } }),
       });
       const registerData = await registerRes.json();
       if (!registerRes.ok) throw new Error(registerData.error);
@@ -360,7 +362,8 @@ function CreatorRegistration({ texts, onBack, onSwitch, preVerifiedUserId, preVe
             {form.tiktokHandle && <SummaryRow label={texts.sum_tiktok} value={form.tiktokHandle} ltr />}
             <SummaryRow label={texts.sum_categories} value={form.categories.join(", ")} />
           </div>
-          <button type="button" onClick={handleSubmit} disabled={loading} className={personaButton}>
+          <LegalConsent persona="creator" value={consent} onChange={setConsent} accentClassName="accent-persona" className="mb-5" />
+          <button type="button" onClick={handleSubmit} disabled={loading || !legalConsentComplete(consent)} className={personaButton}>
             {loading ? texts.cta_registering : preVerifiedUserId ? texts.cta_finish : texts.cta_verify_register}
           </button>
         </div>
@@ -386,6 +389,7 @@ function BrandRegistration({ texts, onBack, onSwitch, preVerifiedUserId, preVeri
     websiteUrl: "",
     region: "",
   });
+  const [consent, setConsent] = useState<LegalConsentValue>({ terms: false, videoPromo: false });
   const router = useRouter();
   const { toast } = useToast();
 
@@ -429,7 +433,7 @@ function BrandRegistration({ texts, onBack, onSwitch, preVerifiedUserId, preVeri
       const registerRes = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, userType: "brand", profile: form }),
+        body: JSON.stringify({ userId, userType: "brand", profile: form, legal: { terms: consent.terms, video_promo: consent.videoPromo } }),
       });
       const registerData = await registerRes.json();
       if (!registerRes.ok) throw new Error(registerData.error);
@@ -556,7 +560,8 @@ function BrandRegistration({ texts, onBack, onSwitch, preVerifiedUserId, preVeri
             {form.region && <SummaryRow label={texts.sum_region} value={form.region} />}
             {form.websiteUrl && <SummaryRow label={texts.sum_website} value={form.websiteUrl} ltr />}
           </div>
-          <button type="button" onClick={handleSubmit} disabled={loading} className={personaButton}>
+          <LegalConsent persona="brand" value={consent} onChange={setConsent} accentClassName="accent-persona" className="mb-5" />
+          <button type="button" onClick={handleSubmit} disabled={loading || !legalConsentComplete(consent)} className={personaButton}>
             {loading ? texts.cta_registering : preVerifiedUserId ? texts.cta_finish : texts.cta_verify_register}
           </button>
         </div>
