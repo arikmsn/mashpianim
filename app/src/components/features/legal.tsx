@@ -179,32 +179,35 @@ export function TermsPopup({
     <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="terms-gate-title">
       <motion.div className="absolute inset-0 bg-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} />
       <motion.div
-        className="relative w-full sm:max-w-md max-h-[92vh] overflow-y-auto overscroll-contain bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl px-5 pt-6 pb-[calc(1.25rem+env(safe-area-inset-bottom))]"
+        className="relative w-full sm:max-w-md max-h-[92dvh] flex flex-col bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden"
         initial={{ y: 40, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.2 }}
       >
-        <div className="text-center">
-          <span className="text-4xl block" aria-hidden="true">{updated ? "📝" : "👋"}</span>
-          <h2 id="terms-gate-title" className="mt-2 text-lg font-bold text-neutral-900">{updated ? TERMS_POPUP.titleUpdated : TERMS_POPUP.titleNew}</h2>
-          <p className="mt-1 text-sm text-neutral-500">{updated ? TERMS_POPUP.introUpdated : TERMS_POPUP.introNew}</p>
+        {/* The text scrolls on short screens (small phones, landscape); the button below always stays in view */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-6 pb-2 [@media(max-height:640px)]:pt-4">
+          <div className="text-center">
+            <span className="text-4xl block [@media(max-height:640px)]:hidden" aria-hidden="true">{updated ? "📝" : "👋"}</span>
+            <h2 id="terms-gate-title" className="mt-2 text-lg font-bold text-neutral-900">{updated ? TERMS_POPUP.titleUpdated : TERMS_POPUP.titleNew}</h2>
+            <p className="mt-1 text-sm text-neutral-500">{updated ? TERMS_POPUP.introUpdated : TERMS_POPUP.introNew}</p>
+          </div>
+          <ul className="mt-4 space-y-2.5">
+            {TERMS_POPUP.points.map((p) => (
+              <li key={p.icon} className="flex items-start gap-3 rounded-2xl bg-neutral-50 px-3.5 py-2.5 text-[13px] leading-relaxed text-neutral-700">
+                <span className="text-lg leading-6 shrink-0" aria-hidden="true">{p.icon}</span>
+                <span>{p.text}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-4 text-center text-xs leading-relaxed text-neutral-500">
+            בלחיצה על &quot;{updated ? TERMS_POPUP.acceptUpdated : TERMS_POPUP.accept}&quot; את/ה מסכים/ה ל
+            <Link href="/terms" target="_blank" className={link}>{terms.title}</Link> ולכללי המערכת, ל
+            <Link href="/privacy" target="_blank" className={link}>{content.legal_privacy.title}</Link> ול
+            <Link href="/refunds" target="_blank" className={link}>{content.legal_refunds.title}</Link>
+            {" "}(אפשר לקרוא ולהוריד כ-PDF).
+          </p>
         </div>
-        <ul className="mt-4 space-y-2.5">
-          {TERMS_POPUP.points.map((p) => (
-            <li key={p.icon} className="flex items-start gap-3 rounded-2xl bg-neutral-50 px-3.5 py-2.5 text-[13px] leading-relaxed text-neutral-700">
-              <span className="text-lg leading-6 shrink-0" aria-hidden="true">{p.icon}</span>
-              <span>{p.text}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-4 text-center text-xs leading-relaxed text-neutral-500">
-          בלחיצה על &quot;{updated ? TERMS_POPUP.acceptUpdated : TERMS_POPUP.accept}&quot; את/ה מסכים/ה ל
-          <Link href="/terms" target="_blank" className={link}>{terms.title}</Link> ולכללי המערכת, ל
-          <Link href="/privacy" target="_blank" className={link}>{content.legal_privacy.title}</Link> ול
-          <Link href="/refunds" target="_blank" className={link}>{content.legal_refunds.title}</Link>
-          {" "}(אפשר לקרוא ולהוריד כ-PDF).
-        </p>
-        <div className="mt-4 space-y-2">
+        <div className="shrink-0 border-t border-neutral-100 px-5 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] space-y-1">
           <Button fullWidth disabled={leaving} loading={saving} onClick={onAccept}>
             {updated ? TERMS_POPUP.acceptUpdated : TERMS_POPUP.accept}
           </Button>
