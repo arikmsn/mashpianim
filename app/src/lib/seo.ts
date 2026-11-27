@@ -37,6 +37,7 @@ export interface PublicPage {
 export const PUBLIC_PAGES: readonly PublicPage[] = [
   { path: "/", sections: ["home_hero", "home_brands", "home_how", "home_creators", "home_influencers", "home_faq", "home_cta", "seo"], priority: 1, changeFrequency: "weekly" },
   { path: "/about", sections: ["about", "seo"], priority: 0.6, changeFrequency: "monthly" },
+  { path: "/blog", sections: ["blog"], priority: 0.7, changeFrequency: "weekly" },
   { path: "/terms", sections: ["legal_terms"], priority: 0.3, changeFrequency: "yearly" },
   { path: "/privacy", sections: ["legal_privacy"], priority: 0.3, changeFrequency: "yearly" },
   { path: "/refunds", sections: ["legal_refunds"], priority: 0.3, changeFrequency: "yearly" },
@@ -192,6 +193,134 @@ export function aboutJsonLd(content: SiteContent): JsonLd {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
+// Blog (the content hub): the registry's `blog.posts` list, published ones only, newest first
+// ---------------------------------------------------------------------------------------------------------------
+export interface BlogPost {
+  slug: string;
+  title: string;
+  excerpt: string;
+  // YYYY-MM-DD as the admin typed it ("" when missing or malformed)
+  date: string;
+  published: boolean;
+  body: string;
+}
+
+export const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const UNPUBLISHED = new Set(["", "לא", "0", "no", "false", "off"]);
+
+// "כן" (or anything but an explicit no) publishes; an empty flag keeps a draft out of the site
+export function isPublishedFlag(value: string): boolean {
+  return !UNPUBLISHED.has(clean(value).toLowerCase());
+}
+
+export function blogPosts(content: SiteContent, options: { includeUnpublished?: boolean } = {}): BlogPost[] {
+  const raw = content.blog?.posts || [];
+  const posts: BlogPost[] = [];
+  for (const p of raw) {
+    const slug = clean(p.slug).toLowerCase();
+    const title = clean(p.title);
+    const body = clean(p.body);
+    const published = isPublishedFlag(p.published);
+    if (!SLUG_RE.test(slug) || !title || !body) continue;
+    if (!published && !options.includeUnpublished) continue;
+    if (posts.some((x) => x.slug === slug)) continue;
+    const date = clean(p.date);
+    posts.push({ slug, title, excerpt: clean(p.excerpt), date: DATE_RE.test(date) && !Number.isNaN(new Date(date).getTime()) ? date : "", published, body });
+  }
+  // Newest first; undated posts keep their list order after the dated ones
+  return posts
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => {
+      if (a.p.date && b.p.date && a.p.date !== b.p.date) return a.p.date < b.p.date ? 1 : -1;
+      if (a.p.date && !b.p.date) return -1;
+      if (!a.p.date && b.p.date) return 1;
+      return a.i - b.i;
+    })
+    .map((x) => x.p);
+}
+
+export function blogPost(content: SiteContent, slug: string): BlogPost | null {
+  const s = clean(slug).toLowerCase();
+  return blogPosts(content).find((p) => p.slug === s) || null;
+}
+
+export const blogUrl = (slug: string) => `${SITE_URL}/blog/${slug}`;
+
+// "27 בנובמבר 2026" from the admin's YYYY-MM-DD (UTC, so the day never shifts)
+export function formatPostDate(date: string): string {
+  if (!date) return "";
+  try {
+    return new Date(date).toLocaleDateString("he-IL", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+  } catch {
+    return date;
+  }
+}
+export const BLOG_ID = `${SITE_URL}/blog#blog`;
+
+export function blogSitemapEntries(content: SiteContent): SitemapEntry[] {
+  return blogPosts(content).map((p) => ({ url: blogUrl(p.slug), ...(p.date ? { lastModified: new Date(p.date) } : {}), changeFrequency: "monthly" as const, priority: 0.6 }));
+}
+
+// Words of a Markdown body (headings and link labels count, syntax does not)
+export function wordCount(markdown: string): number {
+  const text = markdown
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/[#*>\-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text ? text.split(" ").length : 0;
+}
+
+// The graph of /blog: the one organization and the Blog node listing its posts
+export function blogJsonLd(content: SiteContent): JsonLd {
+  const blog = content.blog;
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      organizationJsonLd(content),
+      {
+        "@type": "Blog",
+        "@id": BLOG_ID,
+        url: `${SITE_URL}/blog`,
+        name: clean(blog.meta_title) || clean(blog.title),
+        description: clean(blog.meta_description),
+        inLanguage: "he-IL",
+        isPartOf: { "@id": WEBSITE_ID },
+        publisher: { "@id": ORGANIZATION_ID },
+        blogPost: blogPosts(content).map((p) => ({ "@type": "BlogPosting", "@id": `${blogUrl(p.slug)}#article`, headline: p.title, url: blogUrl(p.slug), ...(p.date ? { datePublished: p.date } : {}) })),
+      },
+    ],
+  };
+}
+
+// The graph of one article
+export function articleJsonLd(content: SiteContent, post: BlogPost): JsonLd {
+  const url = blogUrl(post.slug);
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      organizationJsonLd(content),
+      {
+        "@type": "BlogPosting",
+        "@id": `${url}#article`,
+        headline: post.title,
+        description: post.excerpt,
+        url,
+        mainEntityOfPage: { "@type": "WebPage", "@id": url },
+        ...(post.date ? { datePublished: post.date, dateModified: post.date } : {}),
+        inLanguage: "he-IL",
+        wordCount: wordCount(post.body),
+        author: { "@id": ORGANIZATION_ID },
+        publisher: { "@id": ORGANIZATION_ID },
+        isPartOf: { "@id": BLOG_ID },
+        image: `${SITE_URL}/opengraph-image`,
+      },
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
 // llms.txt (https://llmstxt.org): a Markdown summary for AI crawlers, built from the registry so the admin's
 // edits reach it within the hour. Shape: H1 title, blockquote summary, a few paragraphs of facts, H2 link lists.
 // ---------------------------------------------------------------------------------------------------------------
@@ -232,6 +361,14 @@ export function llmsTxt(content: SiteContent): string {
     lines.push(`## ${clean(content.home_faq.eyebrow)}`);
     lines.push("");
     for (const i of faq) lines.push(`- **${oneLine(i.question)}** ${oneLine(i.answer)}`);
+    lines.push("");
+  }
+  const posts = blogPosts(content);
+  if (posts.length) {
+    lines.push(`## ${clean(content.blog.eyebrow) || "Blog"}`);
+    lines.push("");
+    lines.push(`- [${clean(content.blog.title)}](${absoluteUrl("/blog")})${clean(content.blog.meta_description) ? `: ${oneLine(content.blog.meta_description)}` : ""}`);
+    for (const p of posts) lines.push(`- [${oneLine(p.title)}](${blogUrl(p.slug)})${p.excerpt ? `: ${oneLine(p.excerpt)}` : ""}`);
     lines.push("");
   }
   lines.push(`## ${clean(content.legal_common.more_docs).replace(/:$/, "") || "Legal"}`);

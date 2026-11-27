@@ -6,12 +6,20 @@ import {
   ROBOTS_DISALLOW,
   SITE_URL,
   WEBSITE_ID,
+  BLOG_ID,
   aboutJsonLd,
   absoluteUrl,
+  articleJsonLd,
+  blogJsonLd,
+  blogPost,
+  blogPosts,
+  blogSitemapEntries,
   faqItemsOf,
   faqJsonLd,
+  formatPostDate,
   homeJsonLd,
   isDisallowed,
+  isPublishedFlag,
   llmsTxt,
   organizationJsonLd,
   posterAlt,
@@ -19,6 +27,7 @@ import {
   serviceJsonLd,
   sitemapEntries,
   webSiteJsonLd,
+  wordCount,
 } from "../src/lib/seo.ts";
 import { SITE_CONTENT_DEFAULTS, getSection, mergeSiteContent, resolveSiteContent, type SiteContent } from "../src/lib/site-content.ts";
 
@@ -45,7 +54,7 @@ describe("technical SEO of the public site (robots, sitemap, JSON-LD, alt texts)
     const entries = sitemapEntries({});
     assert.deepEqual(
       entries.map((e) => e.url),
-      ["/", "/about", "/terms", "/privacy", "/refunds", "/accessibility"].map((p) => `${SITE_URL}${p}`)
+      ["/", "/about", "/blog", "/terms", "/privacy", "/refunds", "/accessibility"].map((p) => `${SITE_URL}${p}`)
     );
     for (const e of entries) {
       assert.match(e.url, /^https:\/\/www\.mashpian\.online\//);
@@ -56,8 +65,9 @@ describe("technical SEO of the public site (robots, sitemap, JSON-LD, alt texts)
     const dated = sitemapEntries({ home_hero: "2026-11-24T00:13:00Z", home_cta: "2026-11-23T20:00:00Z", legal_terms: "not a date", legal_privacy: null });
     assert.equal(dated[0].lastModified?.toISOString(), "2026-11-24T00:13:00.000Z", "the latest save among the home sections");
     assert.equal(dated[1].lastModified, undefined, "/about: nothing saved yet");
-    assert.equal(dated[2].lastModified, undefined, "an unparsable date is ignored");
-    assert.equal(dated[3].lastModified, undefined);
+    assert.equal(dated[2].lastModified, undefined, "/blog: nothing saved yet");
+    assert.equal(dated[3].lastModified, undefined, "an unparsable date is ignored");
+    assert.equal(dated[4].lastModified, undefined);
     // Every section a page is dated by exists in the registry
     for (const page of PUBLIC_PAGES) for (const s of page.sections) assert.ok(getSection(s), `${page.path}: section ${s}`);
   });
@@ -159,6 +169,104 @@ describe("technical SEO of the public site (robots, sitemap, JSON-LD, alt texts)
     assert.deepEqual(page.isPartOf, { "@id": WEBSITE_ID });
     assert.equal(page.name, about.title);
     assert.ok(PUBLIC_PAGES.some((p) => p.path === "/about"), "/about is in the sitemap");
+  });
+
+  test("blog helpers: published flag, slugs, order, sitemap, Blog and BlogPosting nodes", () => {
+    for (const yes of ["כן", "yes", "1", "true", "פורסם"]) assert.ok(isPublishedFlag(yes), yes);
+    for (const no of ["", "  ", "לא", "0", "no", "false", "OFF"]) assert.ok(!isPublishedFlag(no), JSON.stringify(no));
+    const content = resolveSiteContent(
+      mergeSiteContent({
+        blog: {
+          posts: [
+            { slug: "older-post", title: "ישן", excerpt: "תקציר ישן", date: "2026-11-20", published: "כן", body: "## כותרת\n\nגוף עם [קישור](/register?type=brand) ו-{price_min} ₪." },
+            { slug: "Newest-Post", title: "חדש", excerpt: "תקציר חדש", date: "2026-11-27", published: "כן", body: "גוף חדש." },
+            { slug: "draft-post", title: "טיוטה", excerpt: "", date: "2026-11-28", published: "לא", body: "טיוטה." },
+            { slug: "bad slug!", title: "שבור", excerpt: "", date: "2026-11-26", published: "כן", body: "x" },
+            { slug: "no-body", title: "בלי גוף", excerpt: "", date: "2026-11-26", published: "כן", body: "  " },
+            { slug: "undated", title: "בלי תאריך", excerpt: "", date: "yesterday", published: "כן", body: "גוף." },
+            { slug: "older-post", title: "כפול", excerpt: "", date: "2026-11-29", published: "כן", body: "כפול." },
+          ],
+        },
+      }),
+      { creators: 500, videos: 353, price_min: 99, discount: 15, days: 7 }
+    );
+    const posts = blogPosts(content);
+    assert.deepEqual(posts.map((p) => p.slug), ["newest-post", "older-post", "undated"], "published, valid, unique, newest first, undated last");
+    assert.equal(posts[1].body, "## כותרת\n\nגוף עם [קישור](/register?type=brand) ו-99 ₪.", "variables resolve inside article bodies");
+    assert.equal(posts[2].date, "", "a malformed date is dropped, the post stays");
+    assert.equal(blogPosts(content, { includeUnpublished: true }).length, 4, "drafts show up only on request");
+    assert.equal(blogPost(content, "DRAFT-POST"), null, "a draft is never served");
+    assert.equal(blogPost(content, "Older-Post")?.title, "ישן", "slug lookup is case-insensitive");
+    assert.equal(blogPost(content, "missing"), null);
+    const sm = blogSitemapEntries(content);
+    assert.deepEqual(sm.map((e) => e.url), ["newest-post", "older-post", "undated"].map((s) => `${SITE_URL}/blog/${s}`));
+    assert.equal(sm[0].lastModified?.toISOString(), "2026-11-27T00:00:00.000Z");
+    assert.equal(sm[2].lastModified, undefined);
+    assert.equal(formatPostDate("2026-11-27"), "27 בנובמבר 2026");
+    assert.equal(formatPostDate(""), "");
+    assert.equal(wordCount("## כותרת\n\nשלוש **מילים** [כאן](/x)."), 4);
+    const blog = blogJsonLd(content);
+    const nodes = blog["@graph"] as Record<string, unknown>[];
+    assert.deepEqual(nodes.map((n) => n["@type"]), ["Organization", "Blog"]);
+    const blogNode = nodes[1] as { "@id": string; blogPost: { headline: string; url: string; datePublished?: string }[] };
+    assert.equal(blogNode["@id"], BLOG_ID);
+    assert.equal(blogNode.blogPost.length, 3);
+    assert.equal(blogNode.blogPost[0].headline, "חדש");
+    assert.equal(blogNode.blogPost[2].datePublished, undefined);
+    const article = articleJsonLd(content, posts[1]);
+    const art = (article["@graph"] as Record<string, unknown>[])[1];
+    assert.equal(art["@type"], "BlogPosting");
+    assert.equal(art.headline, "ישן");
+    assert.equal(art.datePublished, "2026-11-20");
+    assert.equal(art.url, `${SITE_URL}/blog/older-post`);
+    assert.deepEqual(art.author, { "@id": ORGANIZATION_ID });
+    assert.deepEqual(art.isPartOf, { "@id": BLOG_ID });
+    assert.equal(art.inLanguage, "he-IL");
+    // llms.txt lists the published articles only, with absolute links
+    const txt = llmsTxt(content);
+    assert.ok(txt.includes(`- [חדש](${SITE_URL}/blog/newest-post): תקציר חדש`));
+    assert.ok(!txt.includes("draft-post") && !txt.includes("טיוטה"));
+    assert.ok(txt.includes(`[${content.blog.title}](${SITE_URL}/blog)`));
+    assert.ok(PUBLIC_PAGES.some((p) => p.path === "/blog"), "/blog is in the sitemap");
+    assert.ok(!isDisallowed("/blog") && !isDisallowed("/blog/newest-post"), "the blog is crawlable");
+  });
+
+  test("the launch articles: six published Hebrew posts, structured, linked, free of em dashes and dates", () => {
+    const posts = blogPosts(SITE_CONTENT_DEFAULTS);
+    assert.ok(posts.length >= 6, `published launch articles: ${posts.length}`);
+    const slugs = posts.map((p) => p.slug);
+    for (const must of ["what-is-ugc", "ugc-video-cost-israel", "video-reviews-from-customers", "influencers-for-small-business", "ugc-vs-paid-ads", "creator-portfolio"]) {
+      assert.ok(slugs.includes(must), `article ${must}`);
+    }
+    for (const p of posts) {
+      const words = wordCount(p.body);
+      assert.ok(words >= 650 && words <= 1200, `${p.slug}: ${words} words`);
+      assert.ok(p.title.length >= 20 && p.title.length <= 70, `${p.slug}: title length ${p.title.length}`);
+      assert.ok(p.excerpt.length >= 80 && p.excerpt.length <= 200, `${p.slug}: excerpt length ${p.excerpt.length}`);
+      assert.match(p.date, /^2026-\d{2}-\d{2}$/, `${p.slug}: date`);
+      const h2 = (p.body.match(/^## /gm) || []).length;
+      assert.ok(h2 >= 4 && h2 <= 9, `${p.slug}: ${h2} H2 headings`);
+      assert.ok(!/^# /m.test(p.body), `${p.slug}: no H1 inside the body`);
+      assert.ok(p.body.includes("## השורה התחתונה"), `${p.slug}: closing section`);
+      const internal = [...p.body.matchAll(/\]\((\/[^)\s]*)\)/g)].map((m) => m[1]);
+      assert.ok(internal.length >= 2, `${p.slug}: ${internal.length} internal links`);
+      assert.ok(internal.some((l) => l.startsWith("/register?type=")), `${p.slug}: links to a registration`);
+      for (const l of internal) assert.match(l, /^\/(register\?type=(brand|creator)|#faq|#inf|about|terms|privacy|blog\/[a-z0-9-]+)$/, `${p.slug}: link ${l}`);
+      assert.ok(!/\]\(https?:/.test(p.body), `${p.slug}: no external links`);
+      for (const text of [p.title, p.excerpt, p.body]) {
+        assert.ok(!text.includes("—") && !text.includes("–") && !text.includes("..."), `${p.slug}: no em/en dashes or ellipses`);
+      }
+      assert.ok(!/\b20\d\d\b/.test(p.body), `${p.slug}: no years in the body`);
+      assert.ok(!/<[a-zA-Z/][^>]*>/.test(p.body), `${p.slug}: no HTML`);
+      assert.ok(!/\{(?!price_min\}|discount\}|creators\}|videos\}|days\})[a-z_]+\}/.test(p.body), `${p.slug}: only known placeholders`);
+      assert.ok(p.body.split("משפיען אונליין").length - 1 >= 2, `${p.slug}: names the platform`);
+    }
+    // The articles cross-link each other and the price article carries the live price placeholder
+    const cost = posts.find((p) => p.slug === "ugc-video-cost-israel")!;
+    assert.ok(cost.body.includes("{price_min}"), "the cost article quotes the live price");
+    assert.ok(posts.some((p) => /\]\(\/blog\/[a-z0-9-]+\)/.test(p.body)), "at least one article links to another");
+    const resolved = resolveSiteContent(SITE_CONTENT_DEFAULTS, { creators: 500, videos: 353, price_min: 99, discount: 15, days: 7 });
+    assert.ok(!/\{[a-z_]+\}/.test(blogPost(resolved, "ugc-video-cost-israel")!.body), "placeholders resolve at render time");
   });
 
   test("llms.txt follows llmstxt.org: H1, blockquote summary, facts, H2 link lists, the FAQ pairs, no placeholders left", () => {

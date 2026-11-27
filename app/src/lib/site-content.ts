@@ -20,10 +20,11 @@ import { ACCESSIBILITY, LEGAL_UPDATED_LABEL, PRIVACY, REFUNDS, TERMS, TERMS_VERS
 import { legalDocToMarkdown } from "./legal-markdown.ts";
 import { ONBOARDING_CONTENT_DEFAULTS, ONBOARDING_MOMENTS_SECTION, ONBOARDING_WELCOME_SECTION } from "./onboarding.ts";
 import { BILLING_CONTENT_DEFAULTS, BILLING_CONTENT_FIELDS, BILLING_CONTENT_SECTION } from "./billing-content.ts";
+import { BLOG_POST_DEFAULTS } from "./blog-posts.ts";
 import { containsHtml } from "./markdown.ts";
 
 export type FieldType = "text" | "textarea" | "list" | "select" | "toggle" | "number" | "url" | "markdown";
-export type ContentPage = "home" | "quiz" | "about" | "legal" | "seo" | "system";
+export type ContentPage = "home" | "quiz" | "about" | "blog" | "legal" | "seo" | "system";
 
 export interface ItemField {
   key: string;
@@ -67,6 +68,7 @@ export const CONTENT_PAGES: readonly { id: ContentPage; label: string; path: str
   { id: "home", label: "דף הבית", path: "/" },
   { id: "quiz", label: "שאלון", path: "/#inf" },
   { id: "about", label: "אודות", path: "/about" },
+  { id: "blog", label: "בלוג", path: "/blog" },
   { id: "legal", label: "משפטי", path: "/terms" },
   { id: "seo", label: "SEO", path: "/" },
   { id: "system", label: "מערכת", path: "/login" },
@@ -481,9 +483,10 @@ export const SITE_CONTENT_SCHEMA = [
         label: "קישורים",
         type: "list",
         minItems: 1,
-        maxItems: 6,
+        maxItems: 8,
         item: [listItem("label", "טקסט", "text", 24), listItem("href", "כתובת (יחסית או https)", "url", 120)],
         default: [
+          { label: "בלוג", href: "/blog" },
           { label: "אודות", href: "/about" },
           { label: "שאלות ותשובות", href: "/#faq" },
           { label: "תנאי שימוש", href: "/terms" },
@@ -899,7 +902,7 @@ export const SITE_CONTENT_SCHEMA = [
           "לקוחות מאמינים לאנשים כמוהם יותר מאשר לפרסומת. סרטון UGC מראה את המוצר בשימוש אמיתי, בשפה של הלקוח, ומתאים לעמוד המוצר, לפרסום הממומן ולרשתות. ההבדל ממשפיענים: הסרטון מתפרסם בערוצים של העסק, ולכן מספר העוקבים של היוצר לא משנה והמחיר נמוך בהרבה.",
           "",
           "## מי מאחורי הפלטפורמה",
-          "משפיען אונליין פועלת מישראל, בעברית, ומנוהלת על ידי צוות קטן שעונה בעצמו לכל פנייה. הכתובת שלנו: mashpian.online. שאלות נפוצות ותשובות קצרות מרוכזות ב[שאלות ותשובות](/#faq).",
+          "משפיען אונליין פועלת מישראל, בעברית, ומנוהלת על ידי צוות קטן שעונה בעצמו לכל פנייה. הכתובת שלנו: mashpian.online. שאלות נפוצות ותשובות קצרות מרוכזות ב[שאלות ותשובות](/#faq), ומדריכים מפורטים ב[בלוג](/blog).",
           "",
           "## יצירת קשר",
           "כותבים לנו ב-info@mashpian.online, או דרך \"צור קשר\" בתוך המערכת אחרי ההרשמה. המסמכים המלאים: [תנאי שימוש](/terms), [מדיניות פרטיות](/privacy), [ביטולים והחזרים](/refunds), [הצהרת נגישות](/accessibility).",
@@ -909,6 +912,55 @@ export const SITE_CONTENT_SCHEMA = [
       { key: "cta_brand", label: "כפתור עסקים", type: "text", default: "הרשמה כעסק", max: 24 },
       { key: "cta_creator", label: "כפתור יוצרים", type: "text", default: "הרשמה כיוצר/ת", max: 24 },
       { key: "back_home", label: "קישור חזרה לדף הבית", type: "text", default: "לדף הבית", max: 24 },
+    ],
+  },
+  // ------------------------------------------------------------------------------------------ blog
+  {
+    id: "blog",
+    page: "blog",
+    label: "בלוג (/blog)",
+    help: "מרכז התוכן: כל מאמר הוא פריט ברשימה (slug באנגלית לכתובת, כותרת, תקציר, תאריך YYYY-MM-DD, פורסם כן / לא, גוף ב-Markdown: כותרות עם ##, רשימות עם -, קישורים [טקסט](/נתיב)). מאמר שאינו מפורסם לא מופיע ברשימה, ב-sitemap וב-llms.txt. משתנים: {creators} {videos} {price_min} {discount} {days}.",
+    anchor: "",
+    fields: [
+      { key: "meta_title", label: "כותרת הדף (title) של רשימת המאמרים", type: "text", default: "בלוג משפיען אונליין: UGC, משפיענים וסרטונים שמוכרים", max: 90 },
+      {
+        key: "meta_description",
+        label: "תיאור הדף (description) של רשימת המאמרים",
+        type: "textarea",
+        default: "מדריכים קצרים בעברית לעסקים וליוצרי תוכן: מה זה UGC, כמה עולה סרטון, איך מקבלים ביקורות וידאו מלקוחות, משפיענים לעסק קטן ואיך בונים תיק עבודות.",
+        max: 170,
+      },
+      { key: "eyebrow", label: "תגית מעל הכותרת", type: "text", default: "בלוג", max: 30 },
+      { key: "title", label: "כותרת רשימת המאמרים", type: "text", default: "מה כדאי לדעת על UGC, משפיענים וסרטונים שמוכרים", max: 90 },
+      { key: "subtitle", label: "שורת פתיחה (ריק = לא מוצג)", type: "text", default: "מדריכים קצרים בעברית, לעסקים וליוצרי תוכן. בלי ז'רגון.", max: 140, allowEmpty: true },
+      { key: "read_more", label: "קישור למאמר ברשימה", type: "text", default: "להמשך קריאה", max: 24 },
+      { key: "empty", label: "טקסט כשאין מאמרים מפורסמים", type: "text", default: "עוד אין מאמרים. בקרוב.", max: 60 },
+      { key: "back_home", label: "קישור לדף הבית", type: "text", default: "לדף הבית", max: 24 },
+      { key: "back_blog", label: "קישור חזרה לרשימה (בעמוד מאמר)", type: "text", default: "לכל המאמרים", max: 24 },
+      { key: "published_prefix", label: "לפני התאריך בעמוד מאמר (ריק = בלי תאריך)", type: "text", default: "פורסם", max: 20, allowEmpty: true },
+      { key: "author_label", label: "שורת המחבר בעמוד מאמר", type: "text", default: "צוות משפיען אונליין", max: 40 },
+      { key: "more_title", label: "כותרת 'עוד מאמרים' בתחתית מאמר", type: "text", default: "עוד מאמרים", max: 30 },
+      { key: "cta_title", label: "כותרת בלוק ההרשמה בתחתית מאמר", type: "text", default: "רוצים סרטוני UGC מאנשים אמיתיים?", max: 60 },
+      { key: "cta_text", label: "טקסט בלוק ההרשמה", type: "text", default: "עסקים שולחים מוצר ומקבלים סרטון ביקורת. יוצרי תוכן מקבלים את המוצר במתנה ובונים תיק עבודות.", max: 160 },
+      { key: "cta_brand", label: "כפתור עסקים", type: "text", default: "הרשמה כעסק", max: 24 },
+      { key: "cta_creator", label: "כפתור יוצרים", type: "text", default: "הרשמה כיוצר/ת", max: 24 },
+      {
+        key: "posts",
+        label: "המאמרים (החדש למעלה; slug באנגלית, תאריך YYYY-MM-DD, פורסם: כן / לא)",
+        help: VARIABLES_HELP,
+        type: "list",
+        minItems: 0,
+        maxItems: 40,
+        item: [
+          listItem("slug", "slug (אותיות אנגליות קטנות ומקפים, חלק מהכתובת /blog/...; שינוי שובר קישורים קיימים)", "text", 60, { stable: true }),
+          listItem("title", "כותרת", "text", 90),
+          listItem("excerpt", "תקציר (מופיע ברשימה, בשיתוף ובתיאור לגוגל)", "textarea", 200),
+          listItem("date", "תאריך פרסום (YYYY-MM-DD)", "text", 10),
+          listItem("published", "פורסם (כן / לא)", "text", 3),
+          listItem("body", "גוף המאמר (Markdown)", "textarea", 12000),
+        ],
+        default: BLOG_POST_DEFAULTS,
+      },
     ],
   },
   // ------------------------------------------------------------------------------------------ errors
@@ -1096,6 +1148,7 @@ export function sectionViewHref(section: ContentSection): string {
     return ["terms", "privacy", "refunds", "accessibility"].includes(slug) ? `/${slug}` : "/terms";
   }
   if (section.page === "about") return "/about";
+  if (section.page === "blog") return "/blog";
   if (section.id === "auth") return "/login";
   if (section.id === "errors") return "/404-preview";
   if (section.id === BILLING_CONTENT_SECTION) return "/brand/billing";

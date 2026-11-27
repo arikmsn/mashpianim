@@ -48,9 +48,9 @@ export async function updateSession(request: NextRequest) {
   // Auth slow or unreachable: let the request through rather than hang or bounce a signed-in visitor to /login
   if (user === "unavailable") return supabaseResponse;
 
-  // Public routes that don't require auth
-  const publicRoutes = ["/", "/login", "/register", "/about", "/terms", "/privacy", "/refunds", "/accessibility"];
-  const isPublicRoute = publicRoutes.some((route) => pathname === route) || pathname.startsWith("/auth/");
+  // Public routes that don't require auth (the blog and its articles joined on 2026-11-27)
+  const publicRoutes = ["/", "/login", "/register", "/about", "/blog", "/terms", "/privacy", "/refunds", "/accessibility"];
+  const isPublicRoute = publicRoutes.some((route) => pathname === route) || pathname.startsWith("/auth/") || pathname.startsWith("/blog/");
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();

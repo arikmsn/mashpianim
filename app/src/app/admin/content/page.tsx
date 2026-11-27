@@ -445,13 +445,14 @@ function ListEditor({ field, items, onChange }: { field: ContentField; items: Li
           </div>
           <div className={`grid gap-2 ${subs.length > 2 ? "sm:grid-cols-2" : ""}`}>
             {subs.map((s) => (
-              <div key={s.key}>
+              // A long text (an article body) takes the whole row and a tall box; short ones share a row
+              <div key={s.key} className={s.type === "textarea" && (s.max ?? 0) >= 1000 ? "sm:col-span-2" : undefined}>
                 <div className="flex items-center justify-between">
                   <label className="text-[11px] text-neutral-500">{s.label}</label>
                   <Counter length={String(item[s.key] ?? "").length} max={s.max} />
                 </div>
                 {s.type === "textarea" ? (
-                  <textarea value={item[s.key] ?? ""} onChange={(e) => update(i, s.key, e.target.value)} rows={2} className={`${inputCls} resize-y mt-0.5`} />
+                  <textarea value={item[s.key] ?? ""} onChange={(e) => update(i, s.key, e.target.value)} rows={(s.max ?? 0) >= 1000 ? 16 : 2} className={`${inputCls} resize-y mt-0.5`} />
                 ) : (
                   <input
                     type="text"
