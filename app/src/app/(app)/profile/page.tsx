@@ -733,6 +733,17 @@ export default function ProfilePage() {
     return () => clearTimeout(timer);
   }, [userType]);
 
+  // From the feed's social-handles reminder (/profile?edit=social): open the edit form right away
+  useEffect(() => {
+    if (userType !== "creator" || typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("edit") !== "social") return;
+    const timer = setTimeout(() => {
+      setEditOpen(true);
+      window.history.replaceState(null, "", "/profile");
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [userType]);
+
   const handleUploadVideo = async () => {
     if (!selectedFile) {
       toast("בחרו קובץ וידאו", "error");

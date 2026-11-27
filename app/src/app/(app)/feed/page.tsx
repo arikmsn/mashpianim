@@ -13,6 +13,7 @@ import { toDirectImageUrl } from "@/lib/images";
 import { REGISTRATION_TO_FEED, displayCategory } from "@/lib/categories";
 import { feedSeed, orderKey } from "@/lib/feed-order";
 import { shouldShowWelcome } from "@/lib/onboarding";
+import { NUDGE_SESSION_KEY, NUDGE_STORAGE_KEY, dismissNudge, hasSocialHandle, parseNudgeState, recordVisit, shouldShowSocialNudge, type SocialNudgeState } from "@/lib/social-nudge";
 import { useOnboarding, useOnboardingContent, WelcomeSheet, MomentSheet, firstHeartMoment, type OnboardingUser } from "@/components/features";
 
 interface Product {
@@ -103,6 +104,23 @@ function FeedSkeleton() {
   );
 }
 
+// One visit per browser session counts toward the social-handles reminder cadence (lib/social-nudge.ts).
+// Idempotent within a session (the sessionStorage flag), so a double render can't count twice.
+function readNudgeVisit(): SocialNudgeState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    let state = parseNudgeState(localStorage.getItem(NUDGE_STORAGE_KEY));
+    if (!sessionStorage.getItem(NUDGE_SESSION_KEY)) {
+      sessionStorage.setItem(NUDGE_SESSION_KEY, "1");
+      state = recordVisit(state);
+      localStorage.setItem(NUDGE_STORAGE_KEY, JSON.stringify(state));
+    }
+    return state;
+  } catch {
+    return null; // storage blocked (private mode): no reminder
+  }
+}
+
 export default function FeedPage() {
   const [view, setView] = useState<View>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -120,6 +138,10 @@ export default function FeedPage() {
   const onboardingContent = useOnboardingContent();
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
   const [firstHeart, setFirstHeart] = useState<{ mutual: boolean } | null>(null);
+  // Optional TikTok/Instagram handles (owner, 2026-11-27): a gentle, dismissible reminder every few visits
+  const [hasHandle, setHasHandle] = useState(true);
+  // Read once on the client (the banner never renders before the profile loads, so SSR's null can't mismatch)
+  const [nudge, setNudge] = useState<SocialNudgeState | null>(() => readNudgeVisit());
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [regionFilter, setRegionFilter] = useState<string[]>([]);
@@ -143,7 +165,7 @@ export default function FeedPage() {
   const router = useRouter();
 
   useEffect(() => {
-    swrFetch<{ user?: OnboardingUser & { type?: string }; role?: string; profile?: { categories?: string[]; category?: string; portfolio_count?: number } }>(
+    swrFetch<{ user?: OnboardingUser & { type?: string }; role?: string; profile?: { categories?: string[]; category?: string; portfolio_count?: number; tiktok_handle?: string | null; instagram_handle?: string | null } }>(
       "/api/profile",
       (data) => {
         // The feed is the creator home; a session signed in as a brand belongs on /brand
@@ -158,6 +180,7 @@ export default function FeedPage() {
         setUserCategories(profile.categories || (profile.category ? [profile.category] : []));
         if (role === "creator") {
           setPortfolioCount(typeof profile.portfolio_count === "number" ? profile.portfolio_count : 0);
+          setHasHandle(hasSocialHandle(profile));
         }
         setProfileReady(true);
       }
@@ -165,6 +188,15 @@ export default function FeedPage() {
       if (fresh === null) setProfileReady(true); // offline / error: don't block the screen
     });
   }, [router]);
+
+  const dismissSocialNudge = () => {
+    if (!nudge) return;
+    const next = dismissNudge(nudge);
+    setNudge(next);
+    try {
+      localStorage.setItem(NUDGE_STORAGE_KEY, JSON.stringify(next));
+    } catch {}
+  };
 
   // Terms accepted in the gate (or a moment marked elsewhere) → the cached profile changed → re-read it
   useEffect(() => {
@@ -589,6 +621,25 @@ export default function FeedPage() {
             <span className="text-sm font-medium whitespace-nowrap">לצפייה ›</span>
           </button>
         )}
+
+        {ready && !welcomeOpen && brandHearts === 0 && sessionRole === "creator" && nudge && portfolioCount !== null &&
+          shouldShowSocialNudge({ state: nudge, hasHandle, portfolioComplete: !locked }) && (
+            <div className="shrink-0 w-full rounded-2xl border border-pink-100 bg-pink-50/60 px-3 py-2 mb-3 flex items-center gap-3">
+              <span className="text-xl" aria-hidden="true">📱</span>
+              <Link href="/profile?edit=social" className="flex-1 min-w-0 text-right">
+                <p className="text-sm font-bold text-neutral-800">יש לך TikTok או Instagram?</p>
+                <p className="text-[11px] text-neutral-500">הוספת חשבון עוזרת לנו להתאים לך מוצרים. לוקח חצי דקה.</p>
+              </Link>
+              <Link href="/profile?edit=social" className="text-sm font-medium text-pink-600 whitespace-nowrap">
+                להוספה ›
+              </Link>
+              <button type="button" onClick={dismissSocialNudge} aria-label="לא עכשיו" className="-me-1 p-1.5 rounded-full text-neutral-400 hover:text-neutral-600 hover:bg-white">
+                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
 
         {!ready ? (
           <FeedSkeleton />
