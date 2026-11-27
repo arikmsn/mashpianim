@@ -35,7 +35,8 @@ export interface PublicPage {
 
 // The pages a search engine may index. /about and /blog join the list when they exist (GEO and content hub steps).
 export const PUBLIC_PAGES: readonly PublicPage[] = [
-  { path: "/", sections: ["home_hero", "home_brands", "home_how", "home_creators", "home_influencers", "home_cta", "seo"], priority: 1, changeFrequency: "weekly" },
+  { path: "/", sections: ["home_hero", "home_brands", "home_how", "home_creators", "home_influencers", "home_faq", "home_cta", "seo"], priority: 1, changeFrequency: "weekly" },
+  { path: "/about", sections: ["about", "seo"], priority: 0.6, changeFrequency: "monthly" },
   { path: "/terms", sections: ["legal_terms"], priority: 0.3, changeFrequency: "yearly" },
   { path: "/privacy", sections: ["legal_privacy"], priority: 0.3, changeFrequency: "yearly" },
   { path: "/refunds", sections: ["legal_refunds"], priority: 0.3, changeFrequency: "yearly" },
@@ -156,12 +157,91 @@ export function faqJsonLd(items: readonly FaqItem[]): JsonLd | null {
   return { "@type": "FAQPage", "@id": `${SITE_URL}/#faq`, mainEntity: main };
 }
 
+// The registry's FAQ pairs (home_faq.items) in the shape the JSON-LD and llms.txt builders take
+export function faqItemsOf(content: SiteContent): FaqItem[] {
+  return (content.home_faq?.items || []).map((i) => ({ question: i.question, answer: i.answer }));
+}
+
 // The whole graph of the home page
-export function homeJsonLd(content: SiteContent, vars?: Partial<ContentVars>, faq: readonly FaqItem[] = []): JsonLd {
+export function homeJsonLd(content: SiteContent, vars?: Partial<ContentVars>, faq: readonly FaqItem[] = faqItemsOf(content)): JsonLd {
   const graph: JsonLd[] = [organizationJsonLd(content), webSiteJsonLd(content), serviceJsonLd(content, vars)];
   const faqNode = faqJsonLd(faq);
   if (faqNode) graph.push(faqNode);
   return { "@context": "https://schema.org", "@graph": graph };
+}
+
+// The graph of /about: the page itself, about the one organization
+export function aboutJsonLd(content: SiteContent): JsonLd {
+  const about = content.about;
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      organizationJsonLd(content),
+      {
+        "@type": "AboutPage",
+        "@id": `${SITE_URL}/about#page`,
+        url: `${SITE_URL}/about`,
+        name: clean(about.title),
+        description: clean(about.meta_description),
+        inLanguage: "he-IL",
+        isPartOf: { "@id": WEBSITE_ID },
+        about: { "@id": ORGANIZATION_ID },
+      },
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// llms.txt (https://llmstxt.org): a Markdown summary for AI crawlers, built from the registry so the admin's
+// edits reach it within the hour. Shape: H1 title, blockquote summary, a few paragraphs of facts, H2 link lists.
+// ---------------------------------------------------------------------------------------------------------------
+const oneLine = (s: string) => clean(s).replace(/\s+/g, " ");
+
+export function llmsTxt(content: SiteContent): string {
+  const seo = content.seo;
+  const about = content.about;
+  const name = clean(seo.org_name);
+  const alt = clean(seo.org_alt_name);
+  const lines: string[] = [];
+  lines.push(`# ${name}${alt ? ` (${alt})` : ""}`);
+  lines.push("");
+  lines.push(`> ${oneLine(seo.org_description)}`);
+  lines.push("");
+  if (clean(about.subtitle)) {
+    lines.push(oneLine(about.subtitle));
+    lines.push("");
+  }
+  const facts = (about.facts || []).map((f) => ({ label: oneLine(f.label), value: oneLine(f.value) })).filter((f) => f.label && f.value);
+  if (facts.length) {
+    lines.push(facts.map((f) => `${f.label}: ${f.value}`).join(". ") + ".");
+    lines.push("");
+  }
+  lines.push(`## ${clean(content.home_nav.brand_name) || name}`);
+  lines.push("");
+  const pages: { path: string; title: string; note: string }[] = [
+    { path: "/", title: clean(seo.title), note: oneLine(seo.description) },
+    { path: "/about", title: clean(about.eyebrow) || "About", note: oneLine(about.meta_description) },
+    { path: "/#faq", title: clean(content.home_faq.eyebrow), note: oneLine(content.home_faq.subtitle) },
+    { path: "/register?type=brand", title: clean(about.cta_brand), note: oneLine(content.home_tracks.brand_desc) },
+    { path: "/register?type=creator", title: clean(about.cta_creator), note: oneLine(content.home_tracks.creator_desc) },
+  ];
+  for (const p of pages) if (p.title) lines.push(`- [${p.title}](${absoluteUrl(p.path)})${p.note ? `: ${p.note}` : ""}`);
+  lines.push("");
+  const faq = faqItemsOf(content).filter((i) => clean(i.question) && clean(i.answer));
+  if (faq.length) {
+    lines.push(`## ${clean(content.home_faq.eyebrow)}`);
+    lines.push("");
+    for (const i of faq) lines.push(`- **${oneLine(i.question)}** ${oneLine(i.answer)}`);
+    lines.push("");
+  }
+  lines.push(`## ${clean(content.legal_common.more_docs).replace(/:$/, "") || "Legal"}`);
+  lines.push("");
+  for (const slug of ["terms", "privacy", "refunds", "accessibility"] as const) {
+    const doc = content[`legal_${slug}`];
+    lines.push(`- [${clean(doc.title)}](${absoluteUrl(`/${slug}`)})`);
+  }
+  lines.push("");
+  return lines.join("\n");
 }
 
 // Safe to drop into <script type="application/ld+json">: "<" can never close the tag, and the two Unicode line

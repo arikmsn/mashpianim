@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowDown, ArrowLeft, Briefcase, Check, Heart, Sparkles, UserRound, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, Briefcase, Check, ChevronDown, Heart, Sparkles, UserRound, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { splitMarker } from "@/lib/site-content";
 import { getSiteContent } from "@/lib/site-content-server";
@@ -173,6 +173,7 @@ export default async function HomePage() {
   const how = content.home_how;
   const creators = content.home_creators;
   const inf = content.home_influencers;
+  const faq = content.home_faq;
   const closing = content.home_cta;
   const footer = content.home_footer;
   const mobile = content.home_mobile;
@@ -477,6 +478,32 @@ export default async function HomePage() {
             </div>
           </Reveal>
         </section>
+
+        {/* FAQ: short, quotable answers (GEO); the same pairs feed the FAQPage node of the JSON-LD graph */}
+        {faq.items.length > 0 && (
+          <section id="faq" className={cn(container, "scroll-mt-24 pb-16 md:scroll-mt-28 md:pb-24")} aria-labelledby="faq-title">
+            <Reveal>
+              <span className={eyebrow}>{faq.eyebrow}</span>
+              <h2 id="faq-title" className={cn(display, "mt-3 text-[30px] leading-[1.1] md:text-[46px] md:leading-[1.08]")}>
+                <TwoTone text={faq.title} markedClassName="text-neutral-500" />
+              </h2>
+              {faq.subtitle && <p className="mt-3 max-w-[620px] text-[15px] leading-relaxed text-ink-700 md:mt-4 md:text-lg">{faq.subtitle}</p>}
+            </Reveal>
+            <div className="mt-6 grid grid-cols-1 gap-3 md:mt-10 md:grid-cols-2 md:gap-4">
+              {faq.items.map((item, i) => (
+                <Reveal key={i} delay={0.04 * i}>
+                  <details className="group h-full rounded-2xl border border-border bg-surface p-5 open:border-pink-200 open:shadow-md md:p-6">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-display text-[18px] leading-tight text-ink-900 [&::-webkit-details-marker]:hidden md:text-[20px]">
+                      <span>{item.question}</span>
+                      <ChevronDown className="h-5 w-5 shrink-0 text-pink-700 transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
+                    </summary>
+                    <p className="mt-3 text-[15px] leading-relaxed text-ink-700">{item.answer}</p>
+                  </details>
+                </Reveal>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* CLOSING + FOOTER */}
         <section id="closing" className="bg-surface-ink text-on-ink">

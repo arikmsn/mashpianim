@@ -34,7 +34,7 @@ describe("site content registry (design package v3, ניהול תוכן מהאד
     for (const s of sectionsForPage("home")) assert.match(s.id, /^home_/);
     for (const id of ["hero", "stats", "brands", "creators", "cta_final", "footer", "how_it_works"]) assert.equal(getSection(id), undefined, `old section ${id} is not in the schema`);
     // Every page tab has at least one section
-    for (const page of ["home", "quiz", "legal", "seo", "system"] as const) assert.ok(sectionsForPage(page).length > 0, page);
+    for (const page of ["home", "quiz", "about", "legal", "seo", "system"] as const) assert.ok(sectionsForPage(page).length > 0, page);
   });
 
   test("defaults, merge and coercion", () => {
@@ -178,6 +178,10 @@ describe("site content registry (design package v3, ניהול תוכן מהאד
       "app/page.tsx",
       "app/not-found.tsx",
       "app/opengraph-image.tsx",
+      "app/about/page.tsx",
+      "app/llms.txt/route.ts",
+      "app/robots.ts",
+      "app/sitemap.ts",
       "app/login/page.tsx",
       "app/login/login-client.tsx",
       "app/register/page.tsx",
@@ -203,6 +207,6 @@ describe("site content registry (design package v3, ניהול תוכן מהאד
         assert.ok(!text.includes("—"), `${sectionId}.${k} has an em dash`);
       }
     };
-    for (const s of SECTIONS) if (s.id.startsWith("home_") || s.id === "quiz" || s.id === "auth" || s.id === "seo" || s.id === "errors") check(s.id);
+    for (const s of SECTIONS) if (s.id.startsWith("home_") || s.id === "quiz" || s.id === "auth" || s.id === "seo" || s.id === "errors" || s.id === "about") check(s.id);
   });
 });
