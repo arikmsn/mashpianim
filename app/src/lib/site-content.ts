@@ -803,7 +803,9 @@ export const SITE_CONTENT_SCHEMA = [
       { key: "back_home", label: "קישור חזרה לדף הבית", type: "text", default: "חזרה לדף הבית", max: 24 },
       { key: "more_docs", label: "מסמכים נוספים:", type: "text", default: "מסמכים נוספים:", max: 24 },
       { key: "contact_note", label: "שורת יצירת קשר בתחתית", type: "text", default: "לשאלות ובירורים ניתן לפנות אלינו דרך \"צור קשר\" באפליקציה.", max: 120 },
-      { key: "open_full", label: "קישור פתיחה בדף מלא (מהחלון בתוך האפליקציה)", type: "text", default: "לפתיחת המסמך בדף מלא", max: 30 },
+      { key: "open_full", label: "קישור פתיחה בדף מלא (מהחלון בתוך האפליקציה)", type: "text", default: "לפתיחה בדף מלא ולהורדה כ-PDF", max: 30 },
+      { key: "download_pdf", label: "כפתור הורדה כ-PDF / הדפסה (בראש כל מסמך)", type: "text", default: "הורדה כ-PDF / הדפסה", max: 30 },
+      { key: "print_source", label: "שורת המקור בעותק המודפס / PDF", type: "text", default: "משפיען אונליין · mashpian.online", max: 60 },
     ],
   },
   // ------------------------------------------------------------------------------------------ in-app (unchanged)

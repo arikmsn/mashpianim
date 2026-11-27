@@ -3,6 +3,7 @@ import { ArrowRight } from "lucide-react";
 import { LEGAL_ORDER, type LegalSlug } from "@/lib/legal";
 import type { SiteContent } from "@/lib/site-content";
 import { Markdown } from "./markdown";
+import { LegalDownloadButton } from "./legal-download";
 
 // One legal document, rendered from its Markdown body in the content registry (the admin edits it in
 // /admin/content, legal tab). Server-safe (no hooks), so the public pages, the acceptance gate and the side-menu
@@ -29,17 +30,23 @@ export function LegalPage({ slug, content }: { slug: LegalSlug; content: SiteCon
   return (
     <main className="min-h-screen bg-background px-6 py-12">
       <div className="max-w-3xl mx-auto">
-        <Link href="/" className="inline-flex items-center gap-1 text-sm text-pink-700 hover:underline mb-8">
-          <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          {common.back_home}
-        </Link>
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-3 print:hidden">
+          <Link href="/" className="inline-flex items-center gap-1 text-sm text-pink-700 hover:underline">
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            {common.back_home}
+          </Link>
+          <LegalDownloadButton label={common.download_pdf} />
+        </div>
 
         <h1 className="text-3xl font-bold mb-2">{doc.title}</h1>
-        <p className="text-neutral-500 text-sm mb-10">{doc.updated_label}</p>
+        <p className="text-neutral-500 text-sm mb-10">
+          {doc.updated_label}
+          <span className="hidden print:inline"> · {common.print_source}/{slug}</span>
+        </p>
 
         <LegalDocumentView body={doc.body} />
 
-        <div className="mt-12 pt-8 border-t border-border text-sm text-neutral-500 flex flex-wrap items-center justify-between gap-3">
+        <div className="mt-12 pt-8 border-t border-border text-sm text-neutral-500 flex flex-wrap items-center justify-between gap-3 print:hidden">
           <span>{common.more_docs}</span>
           <span className="flex gap-4">
             {others.map((s) => (
@@ -49,7 +56,7 @@ export function LegalPage({ slug, content }: { slug: LegalSlug; content: SiteCon
             ))}
           </span>
         </div>
-        <p className="mt-6 text-center text-sm text-neutral-500">{common.contact_note}</p>
+        <p className="mt-6 text-center text-sm text-neutral-500 print:hidden">{common.contact_note}</p>
       </div>
     </main>
   );
