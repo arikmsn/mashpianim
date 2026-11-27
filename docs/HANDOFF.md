@@ -59,7 +59,9 @@ npm run build        # must pass; this is what Vercel runs
 app/src/
   middleware.ts                 Supabase session refresh for page requests only (lib/supabase/middleware.ts): /api/* is skipped (routes authenticate themselves); a 4 s Auth timeout lets the request through instead of hanging
   app/
-    page.tsx                    marketing landing
+    page.tsx                    marketing landing (2026-11-27: canonical + hreflang in generateMetadata, JSON-LD graph via components/home/json-ld.tsx, descriptive alt texts on every creator poster from seo.poster_alt)
+    robots.ts, sitemap.ts       /robots.txt (allow /, disallow the signed-in area, /api, /login, /register; points at the sitemap) and /sitemap.xml (lib/seo.ts PUBLIC_PAGES, dated by the admin's last save of each page's registry sections, revalidate 1 h). The middleware matcher already skips both files
+    not-found.tsx               Hebrew 404 from the errors section; renders <meta name="robots" content="noindex"> itself (not-found has no metadata export). Anonymous visitors never reach it: lib/supabase/middleware.ts redirects every non-public path to /login first (307), so /login and /register carry robots noindex too
     login/, register/           phone OTP flows (register has creator + brand branches; brand categories are chips; `?type=brand|creator` picks the persona skin, `?next=billing` sends a business to /brand/billing after registration or login — the home page's purchase button)
     terms/
     (app)/                      authenticated area; layout.tsx gates on useAuth, template.tsx = 150ms fade
@@ -121,6 +123,7 @@ app/src/
     markdown.ts                 the safe Markdown subset (headings, lists, bold, http/mailto/tel/relative links) rendered by components/features/markdown.tsx
     site-content.ts             THE content registry (design package v3): SITE_CONTENT_SCHEMA (sections, fields, defaults, max, lists), SiteContent type, mergeSiteContent, resolveSiteContent ({creators} {videos} {price_min} {discount} {days}), splitMarker (*word*), validateSchema / validateFieldValue, hasHebrew
     site-content-server.ts      getSiteContent() for server components and routes (site_content rows + site_settings prices/timelines, no cookies so pages stay ISR), getTermsVersion()
+    seo.ts                      technical SEO (2026-11-27, pure): SITE_URL, ROBOTS_DISALLOW, PUBLIC_PAGES + sitemapEntries (dated by the registry's updated_at), the JSON-LD graph of the home page from the registry's seo section (organizationJsonLd / webSiteJsonLd / serviceJsonLd with the single-video price as an Offer / faqJsonLd for the FAQ step), serializeJsonLd ("<" and the Unicode line terminators escaped), posterAlt (seo.poster_alt template + caption)
     influencer-leads.ts         the quiz questions from the content, lead validation (Israeli phone, email), answers summary, utm parsing, lead statuses
     persona.ts                  brand | creator persona of the device: ?type=, localStorage + sessionStorage mashpian.persona, personaForRole, manifestHref
     admin-auth.ts               verifyAdmin(), isSupabaseConfigured()

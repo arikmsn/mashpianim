@@ -5,8 +5,10 @@ import { ArrowDown, ArrowLeft, Briefcase, Check, Heart, Sparkles, UserRound, X }
 import { cn } from "@/lib/utils";
 import { splitMarker } from "@/lib/site-content";
 import { getSiteContent } from "@/lib/site-content-server";
+import { SITE_URL, homeJsonLd, posterAlt } from "@/lib/seo";
 import { SiteNav } from "@/components/home/site-nav";
 import { CreatorFan } from "@/components/home/creator-fan";
+import { JsonLd } from "@/components/home/json-ld";
 import { Reveal } from "@/components/home/reveal";
 import { StickyCta } from "@/components/home/sticky-cta";
 import { InfluencerQuiz } from "@/components/features/influencer-quiz";
@@ -32,7 +34,9 @@ export async function generateMetadata(): Promise<Metadata> {
     title: seo.title,
     description: seo.description,
     keywords: seo.keywords.map((k) => k.value).filter(Boolean),
-    openGraph: { title: seo.og_title, description: seo.og_description, type: "website", locale: "he_IL", url: "https://www.mashpian.online" },
+    // One canonical address for the home page (metadataBase in layout.tsx makes the relative paths absolute)
+    alternates: { canonical: "/", languages: { "he-IL": "/" } },
+    openGraph: { title: seo.og_title, description: seo.og_description, type: "website", locale: "he_IL", url: SITE_URL },
     twitter: { card: "summary_large_image", title: seo.og_title, description: seo.og_description },
   };
 }
@@ -54,8 +58,9 @@ function TwoTone({ text, markedClassName, markedBlock }: { text: string; markedC
 type Poster = { image_url: string; caption: string };
 
 // Step 1 of the business process: the creator gallery as the business sees it, a deck of real portfolio
-// posters with the creator's name and category and the two decisions under it
-function GalleryPreview({ posters, heartLabel, passLabel }: { posters: Poster[]; heartLabel: string; passLabel: string }) {
+// posters with the creator's name and category and the two decisions under it. altTemplate: the registry's alt
+// text pattern for the posters (seo.poster_alt)
+function GalleryPreview({ posters, altTemplate, heartLabel, passLabel }: { posters: Poster[]; altTemplate: string; heartLabel: string; passLabel: string }) {
   const [front, ...behind] = posters;
   if (!front) return null;
   const [name, category] = front.caption.split(/,\s*/);
@@ -66,7 +71,7 @@ function GalleryPreview({ posters, heartLabel, passLabel }: { posters: Poster[];
         <img
           key={`${p.image_url}-${i}`}
           src={p.image_url}
-          alt=""
+          alt={posterAlt(altTemplate, p.caption)}
           loading="lazy"
           decoding="async"
           className={cn("absolute top-0 aspect-[9/16] w-[150px] rounded-2xl object-cover opacity-70 shadow-md", i === 0 ? "left-4 rotate-[5deg]" : "right-4 -rotate-[5deg]")}
@@ -74,17 +79,17 @@ function GalleryPreview({ posters, heartLabel, passLabel }: { posters: Poster[];
       ))}
       <div className="relative aspect-[9/16] w-[150px] overflow-hidden rounded-2xl shadow-lg">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={front.image_url} alt={front.caption} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+        <img src={front.image_url} alt={posterAlt(altTemplate, front.caption)} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent px-3 pb-3 pt-10 text-on-ink">
           <div className="text-sm font-bold">{name}</div>
           {category && <span className="mt-1 inline-block rounded-full bg-white/20 px-2 py-0.5 text-[11px]">{category}</span>}
         </div>
       </div>
       <div className="relative -mt-5 flex items-center justify-center gap-4">
-        <span className="grid h-11 w-11 place-items-center rounded-full border border-border bg-surface text-neutral-500 shadow-md" aria-label={passLabel} title={passLabel}>
+        <span role="img" className="grid h-11 w-11 place-items-center rounded-full border border-border bg-surface text-neutral-500 shadow-md" aria-label={passLabel} title={passLabel}>
           <X className="h-5 w-5" aria-hidden="true" />
         </span>
-        <span className="grid h-14 w-14 place-items-center rounded-full bg-primary text-white shadow-lg" aria-label={heartLabel} title={heartLabel}>
+        <span role="img" className="grid h-14 w-14 place-items-center rounded-full bg-primary text-white shadow-lg" aria-label={heartLabel} title={heartLabel}>
           <Heart className="h-7 w-7" aria-hidden="true" fill="currentColor" />
         </span>
       </div>
@@ -93,14 +98,14 @@ function GalleryPreview({ posters, heartLabel, passLabel }: { posters: Poster[];
 }
 
 // Step 2: two hearts met
-function MatchPreview({ posters, line, tag }: { posters: Poster[]; line: string; tag: string }) {
+function MatchPreview({ posters, altTemplate, line, tag }: { posters: Poster[]; altTemplate: string; line: string; tag: string }) {
   const [a, b] = posters;
   return (
     <div className="rounded-2xl border border-border bg-canvas p-4">
       <div className="flex items-center justify-center gap-3">
         <span className="relative h-14 w-14 overflow-hidden rounded-full border-2 border-white shadow-md">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          {a && <img src={a.image_url} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />}
+          {a && <img src={a.image_url} alt={posterAlt(altTemplate, a.caption)} loading="lazy" decoding="async" className="h-full w-full object-cover" />}
         </span>
         <span className="grid h-9 w-9 place-items-center rounded-full bg-pink-100 text-pink-600">
           <Heart className="h-4 w-4" aria-hidden="true" fill="currentColor" />
@@ -140,13 +145,13 @@ function ChatPreview({ bubbles }: { bubbles: string[] }) {
 }
 
 // Step 4: approved videos, each with the "done" mark
-function ApprovedPreview({ posters, badge }: { posters: Poster[]; badge: string }) {
+function ApprovedPreview({ posters, altTemplate, badge }: { posters: Poster[]; altTemplate: string; badge: string }) {
   return (
     <div className="flex justify-center gap-2.5">
       {posters.slice(0, 3).map((p, i) => (
         <div key={`${p.image_url}-${i}`} className="relative aspect-[9/16] w-[72px] overflow-hidden rounded-xl shadow-md md:w-[76px]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={p.image_url} alt={p.caption} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+          <img src={p.image_url} alt={posterAlt(altTemplate, p.caption)} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
           <span className="absolute left-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-success text-white shadow">
             <Check className="h-3.5 w-3.5" aria-hidden="true" strokeWidth={3} />
           </span>
@@ -158,7 +163,8 @@ function ApprovedPreview({ posters, badge }: { posters: Poster[]; badge: string 
 }
 
 export default async function HomePage() {
-  const { content } = await getSiteContent();
+  const { content, vars } = await getSiteContent();
+  const seo = content.seo;
   const nav = content.home_nav;
   const hero = content.home_hero;
   const tracks = content.home_tracks;
@@ -187,14 +193,16 @@ export default async function HomePage() {
   const galleryPosters = brands.gallery_posters as Poster[];
   const approvedPosters = brands.approved_posters as Poster[];
   const processSteps = [
-    { title: brands.bento1_title, desc: brands.bento1_desc, visual: <GalleryPreview posters={galleryPosters} heartLabel={brands.gallery_heart} passLabel={brands.gallery_pass} /> },
-    { title: brands.bento2_title, desc: brands.bento2_desc, visual: <MatchPreview posters={galleryPosters.slice(3)} line={brands.bento2_sample} tag={brands.bento2_sample_tag} /> },
+    { title: brands.bento1_title, desc: brands.bento1_desc, visual: <GalleryPreview posters={galleryPosters} altTemplate={seo.poster_alt} heartLabel={brands.gallery_heart} passLabel={brands.gallery_pass} /> },
+    { title: brands.bento2_title, desc: brands.bento2_desc, visual: <MatchPreview posters={galleryPosters.slice(3)} altTemplate={seo.poster_alt} line={brands.bento2_sample} tag={brands.bento2_sample_tag} /> },
     { title: brands.bento3_title, desc: brands.bento3_desc, visual: <ChatPreview bubbles={[brands.bento3_bubble1, brands.bento3_bubble2, brands.bento3_bubble3]} /> },
-    { title: brands.bento4_title, desc: brands.bento4_desc, visual: <ApprovedPreview posters={approvedPosters} badge={brands.approved_badge} /> },
+    { title: brands.bento4_title, desc: brands.bento4_desc, visual: <ApprovedPreview posters={approvedPosters} altTemplate={seo.poster_alt} badge={brands.approved_badge} /> },
   ];
 
   return (
     <div className="bg-canvas text-ink-900 pb-[80px] md:pb-0" id="top">
+      {/* Structured data: Organization, WebSite, Service (lib/seo.ts), from the registry's SEO section */}
+      <JsonLd data={homeJsonLd(content, vars)} />
       <SiteNav
         brandName={nav.brand_name}
         links={navLinks}
@@ -250,7 +258,7 @@ export default async function HomePage() {
             )}
           </div>
           <div className="relative z-[1] mt-7 md:mt-14">
-            <CreatorFan tiles={content.home_fan.tiles} autoplay={content.home_fan.autoplay} label={hero.fan_label} counterLine={hero.counter_line} demoNote={hero.demo_note} />
+            <CreatorFan tiles={content.home_fan.tiles} autoplay={content.home_fan.autoplay} altTemplate={seo.poster_alt} label={hero.fan_label} counterLine={hero.counter_line} demoNote={hero.demo_note} />
           </div>
         </section>
 
@@ -374,7 +382,7 @@ export default async function HomePage() {
             <a href="#how" className={cn(pillOutline, "hidden md:inline-flex")}>
               {brands.cta_secondary}
             </a>
-            <span className="text-center text-[13px] text-neutral-500 md:ms-2 md:text-start md:text-sm">{brands.price_note}</span>
+            <span className="text-center text-[13px] text-ink-700 md:ms-2 md:text-start md:text-sm">{brands.price_note}</span>
           </div>
         </section>
 
@@ -464,7 +472,7 @@ export default async function HomePage() {
                     ))}
                   </div>
                 </div>
-                <InfluencerQuiz quiz={content.quiz} texts={{ card_eyebrow: inf.card_eyebrow, privacy_note: inf.privacy_note, cta_next: inf.cta_next, cta_back: inf.cta_back }} homeHref="#top" />
+                <InfluencerQuiz quiz={content.quiz} texts={{ card_eyebrow: inf.card_eyebrow, privacy_note: inf.privacy_note, cta_next: inf.cta_next, cta_back: inf.cta_back, progress_label: inf.progress_label }} homeHref="#top" />
               </div>
             </div>
           </Reveal>

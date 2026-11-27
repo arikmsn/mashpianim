@@ -15,7 +15,7 @@ import type { SectionContent } from "@/lib/site-content";
 // slider and the multiple-choice questions wait for the next button (an empty multiple choice may be skipped).
 
 type QuizContent = SectionContent<"quiz">;
-type SectionTexts = Pick<SectionContent<"home_influencers">, "card_eyebrow" | "privacy_note" | "cta_next" | "cta_back">;
+type SectionTexts = Pick<SectionContent<"home_influencers">, "card_eyebrow" | "privacy_note" | "cta_next" | "cta_back" | "progress_label">;
 
 interface Props {
   quiz: QuizContent;
@@ -230,7 +230,7 @@ export function InfluencerQuiz({ quiz, texts, homeHref }: Props) {
             </span>
             <span className="inline-flex items-center gap-2 text-xs font-medium tracking-[1.2px] text-on-ink/70 before:content-[''] before:h-1.5 before:w-1.5 before:rounded-full before:bg-pink-500">{texts.card_eyebrow}</span>
           </div>
-          <div className="mb-6 h-[3px] overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
+          <div className="mb-6 h-[3px] overflow-hidden rounded-full bg-white/10" role="progressbar" aria-label={texts.progress_label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
             <div className="h-full rounded-full bg-pink-500 transition-[width] duration-500 ease-[cubic-bezier(.16,1,.3,1)]" style={{ width: `${progress}%` }} />
           </div>
         </>

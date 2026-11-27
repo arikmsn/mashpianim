@@ -128,7 +128,7 @@ describe("site content registry (design package v3, ניהול תוכן מהאד
     const fan = SITE_CONTENT_DEFAULTS.home_fan;
     assert.ok(fan.tiles.length >= 4 && fan.tiles.length <= 8);
     for (const t of fan.tiles) {
-      assert.match(t.video_url, /^https:\/\/.*\/storage\/v1\/object\/public\/videos\/portfolio\//);
+      assert.match(t.video_url, /^https:\/\/.*\/storage\/v1\/object\/public\/videos\/landing\/[0-9a-f-]{36}\/\d+\.mp4$/, "the hero streams the light landing copy, never the raw upload");
       assert.match(t.poster_url, /^https:\/\/.*\/storage\/v1\/object\/public\/thumbnails\/portfolio\//);
       assert.ok(t.caption.length > 0);
     }

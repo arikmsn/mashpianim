@@ -9,6 +9,8 @@ export default async function NotFound() {
   const t = content.errors;
   return (
     <main className="min-h-screen flex items-center justify-center bg-background px-6" dir="rtl">
+      {/* A missing page is never indexed (React hoists the meta into the head; not-found has no metadata export) */}
+      <meta name="robots" content="noindex" />
       <div className="text-center max-w-sm">
         <Image src="/icon-192.png" alt="" width={72} height={72} unoptimized className="mx-auto rounded-2xl shadow-lg mb-5" />
         <p className="font-mono text-sm font-medium text-pink-700 mb-1">{t.not_found_tag}</p>

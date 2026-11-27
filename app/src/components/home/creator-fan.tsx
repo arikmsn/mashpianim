@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { tagClass } from "./styles";
+import { posterAlt } from "@/lib/seo";
 
 // The strip of 9:16 creator posters under the hero headline: real portfolio videos from the system (the admin
 // curates the list in /admin/content). Posters everywhere and a single <video> at a time (CLAUDE.md).
@@ -22,6 +23,8 @@ interface Props {
   // The admin's list (content registry); missing keys are tolerated
   tiles: Record<string, string>[];
   autoplay: boolean;
+  // The posters' alt text pattern (registry seo.poster_alt; "{caption}" = the tile's caption)
+  altTemplate: string;
   label: string;
   counterLine: string;
   demoNote: string;
@@ -39,7 +42,7 @@ function subscribeWide(onChange: () => void) {
 const readWide = () => window.matchMedia(WIDE).matches;
 const serverWide = () => false;
 
-export function CreatorFan({ tiles, autoplay, label, counterLine, demoNote }: Props) {
+export function CreatorFan({ tiles, autoplay, altTemplate, label, counterLine, demoNote }: Props) {
   const reduce = useReducedMotion();
   const wide = useSyncExternalStore(subscribeWide, readWide, serverWide);
   const list: FanTile[] = tiles
@@ -163,7 +166,7 @@ export function CreatorFan({ tiles, autoplay, label, counterLine, demoNote }: Pr
                     aria-pressed={isActive}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={t.poster_url} alt="" className="absolute inset-0 h-full w-full object-cover" loading={copy === 0 && Math.abs(offset) <= 2 ? "eager" : "lazy"} decoding="async" />
+                    <img src={t.poster_url} alt={posterAlt(altTemplate, t.caption)} className="absolute inset-0 h-full w-full object-cover" loading={copy === 0 && Math.abs(offset) <= 2 ? "eager" : "lazy"} decoding="async" />
                     {isActive && inView && t.video_url && (
                       <video
                         key={t.video_url}

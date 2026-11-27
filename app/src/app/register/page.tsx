@@ -9,7 +9,8 @@ export const revalidate = 60;
 // The tab title from the registry's SEO section (the layout default carries the old English tagline)
 export async function generateMetadata(): Promise<Metadata> {
   const { content } = await getSiteContent();
-  return { title: content.seo.title, description: content.seo.description };
+  // The auth screens never belong in a search index (robots.txt disallows them too; a dead url redirects here)
+  return { title: content.seo.title, description: content.seo.description, robots: { index: false, follow: false } };
 }
 
 export default async function RegisterPage() {
