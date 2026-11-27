@@ -150,7 +150,7 @@ function RegisterFrame({ persona, texts, step, total, addRole, children, onSwitc
   );
 }
 
-function StepHeader({ title, hint, onBack, showBack }: { title: string; hint?: string; onBack: () => void; showBack: boolean }) {
+function StepHeader({ title, hint, badge, onBack, showBack }: { title: string; hint?: string; badge?: string; onBack: () => void; showBack: boolean }) {
   return (
     <div className="mb-4 flex items-start gap-2">
       {showBack && (
@@ -159,7 +159,10 @@ function StepHeader({ title, hint, onBack, showBack }: { title: string; hint?: s
         </button>
       )}
       <div>
-        <h2 className="text-lg font-bold text-ink-900">{title}</h2>
+        <h2 className="flex flex-wrap items-center gap-2 text-lg font-bold text-ink-900">
+          {title}
+          {badge && <span className="rounded-full border border-border-strong px-2 py-0.5 text-xs font-medium text-neutral-500">{badge}</span>}
+        </h2>
         {hint && <p className="mt-0.5 text-sm text-neutral-500">{hint}</p>}
       </div>
     </div>
@@ -315,7 +318,7 @@ function CreatorRegistration({ texts, onBack, onSwitch, preVerifiedUserId, preVe
 
       {step === 2 && (
         <div>
-          <StepHeader title={texts.reg_creator_step2} hint={texts.reg_creator_step2_hint} onBack={back} showBack />
+          <StepHeader title={texts.reg_creator_step2} hint={texts.reg_creator_step2_hint} badge={texts.reg_optional} onBack={back} showBack />
           <div className="space-y-3.5">
             <div>
               <label htmlFor="reg-tiktok" className={authLabel}>{texts.f_tiktok}</label>
@@ -329,6 +332,17 @@ function CreatorRegistration({ texts, onBack, onSwitch, preVerifiedUserId, preVe
           <button type="button" onClick={() => setStep(3)} className={`${personaButton} mt-5`}>
             {texts.cta_next}
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+          </button>
+          {/* Optional step (owner, 2026-11-27): a visible way past it so nobody drops off here; the feed nudges later */}
+          <button
+            type="button"
+            onClick={() => {
+              setForm((prev) => ({ ...prev, tiktokHandle: "", instagramHandle: "" }));
+              setStep(3);
+            }}
+            className="mt-2 inline-flex h-11 w-full items-center justify-center rounded-full text-sm font-medium text-neutral-500 transition-colors hover:text-ink-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          >
+            {texts.reg_skip}
           </button>
         </div>
       )}
@@ -358,6 +372,7 @@ function CreatorRegistration({ texts, onBack, onSwitch, preVerifiedUserId, preVe
             <SummaryRow label={texts.sum_phone} value={form.phone} ltr />
             {form.city && <SummaryRow label={texts.sum_city} value={form.city} />}
             {form.tiktokHandle && <SummaryRow label={texts.sum_tiktok} value={form.tiktokHandle} ltr />}
+            {form.instagramHandle && <SummaryRow label={texts.sum_instagram} value={form.instagramHandle} ltr />}
             <SummaryRow label={texts.sum_categories} value={form.categories.join(", ")} />
           </div>
           <button type="button" onClick={handleSubmit} disabled={loading} className={personaButton}>
