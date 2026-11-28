@@ -193,20 +193,18 @@ export function aboutJsonLd(content: SiteContent): JsonLd {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Blog (the content hub): the registry's `blog.posts` list, published ones only, newest first
+// Blog (the content hub): the registry's `blog.posts` list, published ones only, in the admin's order. No dates
+// anywhere (owner, 2026-11-28): readers should not see when articles went up or how often they change.
 // ---------------------------------------------------------------------------------------------------------------
 export interface BlogPost {
   slug: string;
   title: string;
   excerpt: string;
-  // YYYY-MM-DD as the admin typed it ("" when missing or malformed)
-  date: string;
   published: boolean;
   body: string;
 }
 
 export const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const UNPUBLISHED = new Set(["", "לא", "0", "no", "false", "off"]);
 
 // "כן" (or anything but an explicit no) publishes; an empty flag keeps a draft out of the site
@@ -225,19 +223,10 @@ export function blogPosts(content: SiteContent, options: { includeUnpublished?: 
     if (!SLUG_RE.test(slug) || !title || !body) continue;
     if (!published && !options.includeUnpublished) continue;
     if (posts.some((x) => x.slug === slug)) continue;
-    const date = clean(p.date);
-    posts.push({ slug, title, excerpt: clean(p.excerpt), date: DATE_RE.test(date) && !Number.isNaN(new Date(date).getTime()) ? date : "", published, body });
+    posts.push({ slug, title, excerpt: clean(p.excerpt), published, body });
   }
-  // Newest first; undated posts keep their list order after the dated ones
-  return posts
-    .map((p, i) => ({ p, i }))
-    .sort((a, b) => {
-      if (a.p.date && b.p.date && a.p.date !== b.p.date) return a.p.date < b.p.date ? 1 : -1;
-      if (a.p.date && !b.p.date) return -1;
-      if (!a.p.date && b.p.date) return 1;
-      return a.i - b.i;
-    })
-    .map((x) => x.p);
+  // The admin's list order (drag in /admin/content to reorder)
+  return posts;
 }
 
 export function blogPost(content: SiteContent, slug: string): BlogPost | null {
@@ -247,19 +236,10 @@ export function blogPost(content: SiteContent, slug: string): BlogPost | null {
 
 export const blogUrl = (slug: string) => `${SITE_URL}/blog/${slug}`;
 
-// "27 בנובמבר 2026" from the admin's YYYY-MM-DD (UTC, so the day never shifts)
-export function formatPostDate(date: string): string {
-  if (!date) return "";
-  try {
-    return new Date(date).toLocaleDateString("he-IL", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
-  } catch {
-    return date;
-  }
-}
 export const BLOG_ID = `${SITE_URL}/blog#blog`;
 
 export function blogSitemapEntries(content: SiteContent): SitemapEntry[] {
-  return blogPosts(content).map((p) => ({ url: blogUrl(p.slug), ...(p.date ? { lastModified: new Date(p.date) } : {}), changeFrequency: "monthly" as const, priority: 0.6 }));
+  return blogPosts(content).map((p) => ({ url: blogUrl(p.slug), changeFrequency: "monthly" as const, priority: 0.6 }));
 }
 
 // Words of a Markdown body (headings and link labels count, syntax does not)
@@ -288,7 +268,7 @@ export function blogJsonLd(content: SiteContent): JsonLd {
         inLanguage: "he-IL",
         isPartOf: { "@id": WEBSITE_ID },
         publisher: { "@id": ORGANIZATION_ID },
-        blogPost: blogPosts(content).map((p) => ({ "@type": "BlogPosting", "@id": `${blogUrl(p.slug)}#article`, headline: p.title, url: blogUrl(p.slug), ...(p.date ? { datePublished: p.date } : {}) })),
+        blogPost: blogPosts(content).map((p) => ({ "@type": "BlogPosting", "@id": `${blogUrl(p.slug)}#article`, headline: p.title, url: blogUrl(p.slug) })),
       },
     ],
   };
@@ -308,7 +288,6 @@ export function articleJsonLd(content: SiteContent, post: BlogPost): JsonLd {
         description: post.excerpt,
         url,
         mainEntityOfPage: { "@type": "WebPage", "@id": url },
-        ...(post.date ? { datePublished: post.date, dateModified: post.date } : {}),
         inLanguage: "he-IL",
         wordCount: wordCount(post.body),
         author: { "@id": ORGANIZATION_ID },

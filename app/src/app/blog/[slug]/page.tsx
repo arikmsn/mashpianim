@@ -3,11 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { articleJsonLd, blogPost, blogPosts, blogUrl, formatPostDate } from "@/lib/seo";
+import { articleJsonLd, blogPost, blogPosts, blogUrl } from "@/lib/seo";
 import { getSiteContent } from "@/lib/site-content-server";
 import { JsonLd } from "@/components/home/json-ld";
 import { Markdown } from "@/components/features/markdown";
-import { container, display, eyebrow, pillCreator, pillPrimary, tagClass } from "@/components/home/styles";
+import { container, display, eyebrow, pillCreator, pillPrimary } from "@/components/home/styles";
 
 // /blog/[slug]: one article from the registry's blog list (published only; anything else is a 404). The body is
 // the Markdown subset of lib/markdown.ts, rendered by components/features/markdown.tsx; the labels, the author
@@ -35,7 +35,6 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       type: "article",
       locale: "he_IL",
       url: blogUrl(post.slug),
-      ...(post.date ? { publishedTime: post.date, modifiedTime: post.date } : {}),
       authors: [brand],
     },
     twitter: { card: "summary_large_image", title: post.title, description: post.excerpt },
@@ -51,7 +50,6 @@ export default async function BlogPostPage({ params }: Params) {
   const more = blogPosts(content)
     .filter((p) => p.slug !== post.slug)
     .slice(0, 3);
-  const dateLabel = formatPostDate(post.date);
   return (
     <main className="min-h-screen bg-canvas text-ink-900">
       <JsonLd data={articleJsonLd(content, post)} />
@@ -65,20 +63,7 @@ export default async function BlogPostPage({ params }: Params) {
           <span className={eyebrow}>{blog.eyebrow}</span>
           <h1 className={cn(display, "mt-3 text-[30px] leading-[1.12] md:text-[44px] md:leading-[1.08]")}>{post.title}</h1>
           {post.excerpt && <p className="mt-4 text-base leading-relaxed text-ink-700 md:mt-5 md:text-lg">{post.excerpt}</p>}
-          <p className="mt-4 flex flex-wrap items-center gap-x-2 text-[13px] text-neutral-600 md:text-sm">
-            <span>{blog.author_label}</span>
-            {dateLabel && blog.published_prefix && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span>
-                  {blog.published_prefix}{" "}
-                  <time dateTime={post.date} className={tagClass(dateLabel)}>
-                    {dateLabel}
-                  </time>
-                </span>
-              </>
-            )}
-          </p>
+          <p className="mt-4 text-[13px] text-neutral-600 md:text-sm">{blog.author_label}</p>
         </header>
 
         <div className="mt-8 max-w-[760px] md:mt-12">

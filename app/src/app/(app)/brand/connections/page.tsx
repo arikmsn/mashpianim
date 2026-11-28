@@ -4,9 +4,8 @@ import { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, Badge, Button, Modal, Avatar, Input, Textarea, useToast } from "@/components/ui";
-import { ConnectionTimeline, PublicProfileContent, CreditsAccess } from "@/components/features";
+import { ConnectionTimeline, PublicProfileContent } from "@/components/features";
 import { createClient } from "@/lib/supabase/client";
-import { CREDITS_CONTACT_NOTICE } from "@/lib/credits";
 import { swrFetch, fetchJson } from "@/lib/client-cache";
 import { activeDeadlineField, canBrandReview, brandBoardTab, brandTask, boardTabFromParam, BRAND_BOARD_TABS, type BrandBoardTab, type BrandTask } from "@/lib/connection-flow";
 import { toDirectImageUrl } from "@/lib/images";
@@ -83,8 +82,8 @@ function stateTabOf(conn: Connection) {
 type HeartGroup = "match" | "chose_you" | "my_list";
 const HEART_GROUP_ORDER: HeartGroup[] = ["match", "chose_you", "my_list"];
 const HEART_GROUP_TITLES: Record<HeartGroup, string> = {
-  match: "🎉 מאטץ' — שני הצדדים סימנו לב, האישור שלכם פותח את החיבור",
-  chose_you: "💗 בחרו בך — יוצרים שסימנו את המוצרים שלכם · לב בחזרה = מאטץ'",
+  match: "🎉 מאטץ': שני הצדדים סימנו לב. ״ליצירת סרטון״ פותח את השיחה עם היוצר/ת",
+  chose_you: "💗 בחרו בך: יוצרים שסימנו את המוצרים שלכם. ״ליצירת סרטון״ פותח את השיחה",
   my_list: "💗 שלחתם לב — ממתינים לתשובת היוצר/ת",
 };
 function heartGroupOf(conn: Connection): HeartGroup {
@@ -112,7 +111,7 @@ function ConnectionsSkeleton() {
 
 // The badge on a pending card, by who hearted whom
 function pendingInfo(conn: Connection): { label: string; variant: "pink" | "success" | "warning" } {
-  if (conn.mutualAt) return { label: "🎉 מאטץ' — ממתין לאישורכם", variant: "success" };
+  if (conn.mutualAt) return { label: "🎉 מאטץ': ממתין ליצירת הסרטון", variant: "success" };
   if (conn.initiatedBy === "brand") return { label: "💗 הלב נשלח — ממתין ליוצר/ת", variant: "pink" };
   return { label: "💗 בחר/ה בכם", variant: "warning" };
 }
@@ -138,7 +137,6 @@ function BrandConnectionsPageInner() {
   const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
   const [confirmFor, setConfirmFor] = useState<Connection | null>(null);
   const [credits, setCredits] = useState<{ remaining: number; total: number } | null>(null);
-  const [purchaseOpen, setPurchaseOpen] = useState(false);
 
   useEffect(() => {
     if (!openId || connections.length === 0 || handledOpenRef.current === openId) return;
@@ -287,8 +285,7 @@ function BrandConnectionsPageInner() {
         const data = await res.json().catch(() => ({}));
         toast((data as any).error || "שגיאה בעדכון", "error");
         if ((data as any).error && /סרטונים|קרדיט/.test((data as any).error)) {
-          setConfirmFor(null);
-          setPurchaseOpen(true);
+          setCredits((c) => ({ total: c?.total || 0, remaining: 0 }));
         }
       }
     } catch {
@@ -338,12 +335,14 @@ function BrandConnectionsPageInner() {
     switch (conn.status) {
       case "pending":
         if (conn.mutualAt) {
-          actions.push({ label: "✅ אישור החיבור", status: "approved", variant: "primary", confirm: true });
+          actions.push({ label: "🎬 ליצירת סרטון", status: "approved", variant: "primary", confirm: true });
           actions.push({ label: "ביטול", status: "cancelled", variant: "secondary" });
         } else if (conn.initiatedBy === "brand") {
           actions.push({ label: "ביטול הלב", status: "cancelled", variant: "secondary" });
         } else {
-          actions.push({ label: "💗 לב בחזרה", status: "mutual", variant: "primary" });
+          // "ליצירת סרטון" (owner, 2026-11-28): the business uses a credit straight on the creator's heart, which opens
+          // the chat; the API accepts "approved" on a creator's pending heart (performMatch, credit -1)
+          actions.push({ label: "🎬 ליצירת סרטון", status: "approved", variant: "primary", confirm: true });
           actions.push({ label: "לא מתאים", status: "rejected", variant: "danger" });
         }
         break;
@@ -417,14 +416,15 @@ function BrandConnectionsPageInner() {
               );
             })}
           </div>
+          <p className="text-xs text-neutral-500 mt-2">{BRAND_BOARD_TABS.find((b) => b.id === activeTab)?.hint}</p>
         </div>
       </header>
 
       <div className="max-w-2xl mx-auto px-4 py-4">
         {activeTab === "tasks" && filtered.some((c) => taskOf(c)?.kind === "confirm_match") && (
           <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-3 mb-4 text-sm text-emerald-800">
-            🎉 שני הצדדים סימנו לב. אישור החיבור פותח צ&apos;אט, שולח ליוצר/ת את הבריף ומחייב סרטון אחד מהחבילה
-            {credits ? ` (נותרו ${credits.remaining})` : ""}.
+            🎉 שני הצדדים סימנו לב. ״ליצירת סרטון״ משתמש בקרדיט אחד, פותח את השיחה עם היוצר/ת ושולח את הבריף
+            {credits ? ` (יתרה: ${credits.remaining})` : ""}.
           </div>
         )}
         {loading ? (
@@ -516,34 +516,59 @@ function BrandConnectionsPageInner() {
         )}
       </div>
 
-      {/* The paid step: confirming a mutual match */}
+      {/* The paid step (owner, 2026-11-28): "ליצירת סרטון" uses one credit and opens the chat with the creator. With
+          no credit left the popup offers the purchase page instead. */}
       <Modal open={!!confirmFor} onClose={() => !updating && setConfirmFor(null)} size="sm">
-        {confirmFor && (
-          <div className="text-center space-y-4">
-            <span className="text-4xl block">🎉</span>
-            <div>
-              <h3 className="text-lg font-bold">לאשר את החיבור עם {confirmFor.creatorName}?</h3>
-              <p className="text-sm text-neutral-600 mt-2">
-                על ״{confirmFor.productName}״. האישור פותח צ&apos;אט, שולח ליוצר/ת את הבריף, ומחייב{" "}
-                <span className="font-bold text-neutral-900">סרטון אחד מהחבילה</span>
-                {credits ? ` (נותרו ${credits.remaining}${credits.remaining === 1 ? " — זה האחרון" : ""})` : ""}.
-              </p>
-            </div>
-            {credits && credits.remaining === 0 ? (
-              <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-sm text-red-700 space-y-2">
-                <p>אין סרטונים בחבילה — כדי לאשר צריך לטעון סרטונים. {CREDITS_CONTACT_NOTICE}</p>
-                <Button size="sm" fullWidth onClick={() => { setConfirmFor(null); setPurchaseOpen(true); }}>✉️ לצור קשר</Button>
+        {confirmFor &&
+          (credits && credits.remaining === 0 ? (
+            <div className="text-center space-y-4">
+              <span className="text-4xl block">🎬</span>
+              <div>
+                <h3 className="text-lg font-bold">ליצירת הסרטון צריך קרדיט</h3>
+                <p className="text-sm text-neutral-600 mt-2">
+                  כדי ליצור סרטון עם {confirmFor.creatorName} על ״{confirmFor.productName}״ יש לרכוש קרדיט. אין לכם כרגע קרדיטים זמינים.
+                </p>
               </div>
-            ) : (
-              <Button fullWidth loading={updating === confirmFor.id} onClick={() => updateStatus(confirmFor.id, "approved")}>
-                ✅ אישור וחיוב סרטון אחד
+              <Button fullWidth onClick={() => router.push("/brand/billing")}>
+                מעבר לקניית קרדיט
               </Button>
-            )}
-            <Button variant="ghost" fullWidth disabled={!!updating} onClick={() => setConfirmFor(null)}>
-              עוד לא
-            </Button>
-          </div>
-        )}
+              <Button variant="ghost" fullWidth onClick={() => setConfirmFor(null)}>
+                ביטול
+              </Button>
+            </div>
+          ) : (
+            <div className="text-center space-y-4">
+              <span className="text-4xl block">🎬</span>
+              <div>
+                <h3 className="text-lg font-bold">יצירת סרטון עם {confirmFor.creatorName}</h3>
+                <p className="text-sm text-neutral-600 mt-2">
+                  על ״{confirmFor.productName}״. ליצירת הסרטון נשתמש ב<span className="font-bold text-neutral-900">קרדיט אחד</span>: השיחה עם יוצר/ת התוכן תיפתח והבריף יישלח.
+                </p>
+              </div>
+              <div className="rounded-xl bg-neutral-50 border border-neutral-100 px-4 py-3 text-sm">
+                {credits ? (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-neutral-600">הקרדיטים שלכם כרגע</span>
+                      <span className="font-bold tabular-nums">{credits.remaining}</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-neutral-600">אחרי פתיחת השיחה</span>
+                      <span className="font-bold tabular-nums">{Math.max(0, credits.remaining - 1)}</span>
+                    </div>
+                  </>
+                ) : (
+                  <span className="text-neutral-500">טוען את יתרת הקרדיטים</span>
+                )}
+              </div>
+              <Button fullWidth loading={updating === confirmFor.id} disabled={!credits} onClick={() => updateStatus(confirmFor.id, "approved")}>
+                שימוש בקרדיט ופתיחת השיחה
+              </Button>
+              <Button variant="ghost" fullWidth disabled={!!updating} onClick={() => setConfirmFor(null)}>
+                ביטול
+              </Button>
+            </div>
+          ))}
       </Modal>
 
       <Modal
@@ -774,11 +799,11 @@ function BrandConnectionsPageInner() {
               {selectedConnection.status === "pending" && selectedConnection.mutualAt && (
                 <div className="bg-emerald-50 rounded-xl p-4 space-y-3">
                   <p className="text-sm text-emerald-800">
-                    🎉 שני הצדדים סימנו לב. אישור החיבור פותח צ&apos;אט, שולח את הבריף ומחייב סרטון אחד מהחבילה.
+                    🎉 שני הצדדים סימנו לב. ״ליצירת סרטון״ משתמש בקרדיט אחד, פותח את השיחה עם היוצר/ת ושולח את הבריף.
                   </p>
                   <div className="flex gap-2">
-                    <Button fullWidth loading={updating === selectedConnection.id} onClick={() => setConfirmFor(selectedConnection)}>
-                      ✅ אישור החיבור
+                    <Button fullWidth loading={updating === selectedConnection.id} onClick={() => { const c = selectedConnection; setSelectedConnection(null); setConfirmFor(c); }}>
+                      🎬 ליצירת סרטון
                     </Button>
                     <Button variant="ghost" fullWidth loading={updating === selectedConnection.id} onClick={() => updateStatus(selectedConnection.id, "cancelled")}>
                       ביטול
@@ -801,10 +826,10 @@ function BrandConnectionsPageInner() {
               )}
               {selectedConnection.status === "pending" && !selectedConnection.mutualAt && selectedConnection.initiatedBy !== "brand" && (
                 <div className="space-y-2 pt-2">
-                  <p className="text-sm text-amber-700">💗 {selectedConnection.creatorName} בחר/ה בכם. לב בחזרה פותח מאטץ&apos; — החיוב רק באישור החיבור.</p>
+                  <p className="text-sm text-amber-700">💗 {selectedConnection.creatorName} בחר/ה בכם. ״ליצירת סרטון״ משתמש בקרדיט אחד ופותח את השיחה עם היוצר/ת.</p>
                   <div className="flex gap-3">
-                    <Button fullWidth loading={updating === selectedConnection.id} onClick={() => updateStatus(selectedConnection.id, "mutual")}>
-                      💗 לב בחזרה
+                    <Button fullWidth loading={updating === selectedConnection.id} onClick={() => { const c = selectedConnection; setSelectedConnection(null); setConfirmFor(c); }}>
+                      🎬 ליצירת סרטון
                     </Button>
                     <Button variant="danger" fullWidth loading={updating === selectedConnection.id} onClick={() => updateStatus(selectedConnection.id, "rejected")}>
                       לא מתאים
@@ -817,14 +842,6 @@ function BrandConnectionsPageInner() {
         })()}
       </Modal>
 
-      {/* The confirm modal already carried the notice, so this opens the contact form straight away */}
-      <CreditsAccess
-        open={purchaseOpen}
-        onClose={() => setPurchaseOpen(false)}
-        total={credits?.total || 0}
-        used={credits ? credits.total - credits.remaining : 0}
-        startAtContact
-      />
     </main>
   );
 }

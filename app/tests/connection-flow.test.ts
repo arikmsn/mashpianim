@@ -135,11 +135,11 @@ describe("hearts, mutual hearts and the brand's lists (2026-11-04)", () => {
   test("the next-action line explains the mutual state to both sides", () => {
     const brand = flowNextAction("pending", "brand", { initiatedBy: "creator", mutual: true });
     assert.equal(brand.mine, true);
-    assert.match(brand.text, /אשרו את החיבור/);
+    assert.match(brand.text, /ליצירת סרטון/);
     const creator = flowNextAction("pending", "creator", { initiatedBy: "brand", mutual: true });
     assert.equal(creator.mine, false);
     assert.match(creator.text, /אישור הסופי של העסק/);
-    assert.match(flowNextAction("pending", "brand", { initiatedBy: "creator" }).text, /לב בחזרה/);
+    assert.match(flowNextAction("pending", "brand", { initiatedBy: "creator" }).text, /ליצירת סרטון/);
   });
 });
 

@@ -16,7 +16,6 @@ import {
   blogSitemapEntries,
   faqItemsOf,
   faqJsonLd,
-  formatPostDate,
   homeJsonLd,
   isDisallowed,
   isPublishedFlag,
@@ -191,19 +190,16 @@ describe("technical SEO of the public site (robots, sitemap, JSON-LD, alt texts)
       { creators: 500, videos: 353, price_min: 99, discount: 15, days: 7 }
     );
     const posts = blogPosts(content);
-    assert.deepEqual(posts.map((p) => p.slug), ["newest-post", "older-post", "undated"], "published, valid, unique, newest first, undated last");
-    assert.equal(posts[1].body, "## כותרת\n\nגוף עם [קישור](/register?type=brand) ו-99 ₪.", "variables resolve inside article bodies");
-    assert.equal(posts[2].date, "", "a malformed date is dropped, the post stays");
+    assert.deepEqual(posts.map((p) => p.slug), ["older-post", "newest-post", "undated"], "published, valid, unique, in the admin's list order (dates are ignored)");
+    for (const p of posts) assert.equal((p as unknown as Record<string, unknown>).date, undefined, "no date reaches the site");
+    assert.equal(posts[0].body, "## כותרת\n\nגוף עם [קישור](/register?type=brand) ו-99 ₪.", "variables resolve inside article bodies");
     assert.equal(blogPosts(content, { includeUnpublished: true }).length, 4, "drafts show up only on request");
     assert.equal(blogPost(content, "DRAFT-POST"), null, "a draft is never served");
     assert.equal(blogPost(content, "Older-Post")?.title, "ישן", "slug lookup is case-insensitive");
     assert.equal(blogPost(content, "missing"), null);
     const sm = blogSitemapEntries(content);
-    assert.deepEqual(sm.map((e) => e.url), ["newest-post", "older-post", "undated"].map((s) => `${SITE_URL}/blog/${s}`));
-    assert.equal(sm[0].lastModified?.toISOString(), "2026-11-27T00:00:00.000Z");
-    assert.equal(sm[2].lastModified, undefined);
-    assert.equal(formatPostDate("2026-11-27"), "27 בנובמבר 2026");
-    assert.equal(formatPostDate(""), "");
+    assert.deepEqual(sm.map((e) => e.url), ["older-post", "newest-post", "undated"].map((s) => `${SITE_URL}/blog/${s}`));
+    for (const e of sm) assert.equal(e.lastModified, undefined, "no dates in the sitemap entries of articles");
     assert.equal(wordCount("## כותרת\n\nשלוש **מילים** [כאן](/x)."), 4);
     const blog = blogJsonLd(content);
     const nodes = blog["@graph"] as Record<string, unknown>[];
@@ -211,13 +207,14 @@ describe("technical SEO of the public site (robots, sitemap, JSON-LD, alt texts)
     const blogNode = nodes[1] as { "@id": string; blogPost: { headline: string; url: string; datePublished?: string }[] };
     assert.equal(blogNode["@id"], BLOG_ID);
     assert.equal(blogNode.blogPost.length, 3);
-    assert.equal(blogNode.blogPost[0].headline, "חדש");
-    assert.equal(blogNode.blogPost[2].datePublished, undefined);
-    const article = articleJsonLd(content, posts[1]);
+    assert.equal(blogNode.blogPost[0].headline, "ישן");
+    for (const bp of blogNode.blogPost) assert.equal(bp.datePublished, undefined);
+    const article = articleJsonLd(content, posts[0]);
     const art = (article["@graph"] as Record<string, unknown>[])[1];
     assert.equal(art["@type"], "BlogPosting");
     assert.equal(art.headline, "ישן");
-    assert.equal(art.datePublished, "2026-11-20");
+    assert.equal(art.datePublished, undefined, "no publication date in the article schema");
+    assert.equal(art.dateModified, undefined);
     assert.equal(art.url, `${SITE_URL}/blog/older-post`);
     assert.deepEqual(art.author, { "@id": ORGANIZATION_ID });
     assert.deepEqual(art.isPartOf, { "@id": BLOG_ID });
@@ -243,7 +240,6 @@ describe("technical SEO of the public site (robots, sitemap, JSON-LD, alt texts)
       assert.ok(words >= 650 && words <= 1200, `${p.slug}: ${words} words`);
       assert.ok(p.title.length >= 20 && p.title.length <= 70, `${p.slug}: title length ${p.title.length}`);
       assert.ok(p.excerpt.length >= 80 && p.excerpt.length <= 200, `${p.slug}: excerpt length ${p.excerpt.length}`);
-      assert.match(p.date, /^2026-\d{2}-\d{2}$/, `${p.slug}: date`);
       const h2 = (p.body.match(/^## /gm) || []).length;
       assert.ok(h2 >= 4 && h2 <= 9, `${p.slug}: ${h2} H2 headings`);
       assert.ok(!/^# /m.test(p.body), `${p.slug}: no H1 inside the body`);

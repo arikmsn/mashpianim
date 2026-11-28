@@ -37,7 +37,8 @@ describe("the business's board (owner, 2026-11-09)", () => {
     assert.equal(brandBoardTab({ status: "pending", initiated_by: "creator", mutual_at: "x" }), "hearts");
     for (const s of ["approved", "shipped", "delivered", "filming", "uploaded", "in_review", "revision_requested"]) assert.equal(brandBoardTab({ status: s }), "active", s);
     for (const s of ["completed", "cancelled", "rejected"]) assert.equal(brandBoardTab({ status: s }), "done", s);
-    assert.deepEqual(BRAND_BOARD_TABS.map((t) => t.id), ["tasks", "active", "hearts", "done"]);
+    assert.deepEqual(BRAND_BOARD_TABS.map((t) => t.id), ["hearts", "tasks", "active", "done"], "flow order: hearts, waiting for you, running, done");
+    for (const t of BRAND_BOARD_TABS) assert.ok(t.hint.length > 10, `${t.id} has a hint line`);
   });
 
   test("old deep links still land on a view", () => {

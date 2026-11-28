@@ -919,7 +919,7 @@ export const SITE_CONTENT_SCHEMA = [
     id: "blog",
     page: "blog",
     label: "בלוג (/blog)",
-    help: "מרכז התוכן: כל מאמר הוא פריט ברשימה (slug באנגלית לכתובת, כותרת, תקציר, תאריך YYYY-MM-DD, פורסם כן / לא, גוף ב-Markdown: כותרות עם ##, רשימות עם -, קישורים [טקסט](/נתיב)). מאמר שאינו מפורסם לא מופיע ברשימה, ב-sitemap וב-llms.txt. משתנים: {creators} {videos} {price_min} {discount} {days}.",
+    help: "מרכז התוכן: כל מאמר הוא פריט ברשימה (slug באנגלית לכתובת, כותרת, תקציר, פורסם כן / לא, גוף ב-Markdown: כותרות עם ##, רשימות עם -, קישורים [טקסט](/נתיב)). הסדר ברשימה הוא סדר ההצגה באתר, ותאריכים לא מוצגים בשום מקום. מאמר שאינו מפורסם לא מופיע ברשימה, ב-sitemap וב-llms.txt. משתנים: {creators} {videos} {price_min} {discount} {days}.",
     anchor: "",
     fields: [
       { key: "meta_title", label: "כותרת הדף (title) של רשימת המאמרים", type: "text", default: "בלוג משפיען אונליין: UGC, משפיענים וסרטונים שמוכרים", max: 90 },
@@ -937,7 +937,6 @@ export const SITE_CONTENT_SCHEMA = [
       { key: "empty", label: "טקסט כשאין מאמרים מפורסמים", type: "text", default: "עוד אין מאמרים. בקרוב.", max: 60 },
       { key: "back_home", label: "קישור לדף הבית", type: "text", default: "לדף הבית", max: 24 },
       { key: "back_blog", label: "קישור חזרה לרשימה (בעמוד מאמר)", type: "text", default: "לכל המאמרים", max: 24 },
-      { key: "published_prefix", label: "לפני התאריך בעמוד מאמר (ריק = בלי תאריך)", type: "text", default: "פורסם", max: 20, allowEmpty: true },
       { key: "author_label", label: "שורת המחבר בעמוד מאמר", type: "text", default: "צוות משפיען אונליין", max: 40 },
       { key: "more_title", label: "כותרת 'עוד מאמרים' בתחתית מאמר", type: "text", default: "עוד מאמרים", max: 30 },
       { key: "cta_title", label: "כותרת בלוק ההרשמה בתחתית מאמר", type: "text", default: "רוצים סרטוני UGC מאנשים אמיתיים?", max: 60 },
@@ -946,7 +945,7 @@ export const SITE_CONTENT_SCHEMA = [
       { key: "cta_creator", label: "כפתור יוצרים", type: "text", default: "הרשמה כיוצר/ת", max: 24 },
       {
         key: "posts",
-        label: "המאמרים (החדש למעלה; slug באנגלית, תאריך YYYY-MM-DD, פורסם: כן / לא)",
+        label: "המאמרים (הסדר כאן הוא הסדר באתר; slug באנגלית, פורסם: כן / לא)",
         help: VARIABLES_HELP,
         type: "list",
         minItems: 0,
@@ -955,7 +954,6 @@ export const SITE_CONTENT_SCHEMA = [
           listItem("slug", "slug (אותיות אנגליות קטנות ומקפים, חלק מהכתובת /blog/...; שינוי שובר קישורים קיימים)", "text", 60, { stable: true }),
           listItem("title", "כותרת", "text", 90),
           listItem("excerpt", "תקציר (מופיע ברשימה, בשיתוף ובתיאור לגוגל)", "textarea", 200),
-          listItem("date", "תאריך פרסום (YYYY-MM-DD)", "text", 10),
           listItem("published", "פורסם (כן / לא)", "text", 3),
           listItem("body", "גוף המאמר (Markdown)", "textarea", 12000),
         ],

@@ -99,11 +99,13 @@ export function canBrandReview(status: unknown): boolean {
 // long list that matters at the start; later the business works from "לטיפול" and "בתהליך".
 export type BrandBoardTab = "tasks" | "active" | "hearts" | "done";
 
-export const BRAND_BOARD_TABS: { id: BrandBoardTab; label: string; empty: string }[] = [
-  { id: "tasks", label: "⚡ לטיפול", empty: "שום דבר לא מחכה לכם כרגע 🙌" },
-  { id: "active", label: "בתהליך", empty: "אין חיבורים בתהליך — אשרו מאטץ' או שלחו לב ליוצר/ת" },
-  { id: "hearts", label: "לבבות", empty: "אין לבבות פתוחים — גלו יוצרים ושלחו לב" },
-  { id: "done", label: "הסתיימו", empty: "אין חיבורים שהסתיימו" },
+// Flow order (owner, 2026-11-28): hearts first, then what waits for the business, what is running, the archive.
+// "hint" is the one line under the tabs that says what each view holds.
+export const BRAND_BOARD_TABS: { id: BrandBoardTab; label: string; empty: string; hint: string }[] = [
+  { id: "hearts", label: "לבבות", empty: "אין לבבות פתוחים. גלו יוצרים ושלחו לב", hint: "יוצרים שבחרו במוצרים שלכם, והלבבות ששלחתם. ״ליצירת סרטון״ פותח את השיחה עם היוצר/ת." },
+  { id: "tasks", label: "⚡ לטיפול", empty: "שום דבר לא מחכה לכם כרגע 🙌", hint: "מה שמחכה לפעולה שלכם עכשיו: יצירת סרטון ממאטץ', שליחת בריף, משלוח, בדיקת סרטון." },
+  { id: "active", label: "בתהליך", empty: "אין חיבורים בתהליך. לחצו ״ליצירת סרטון״ על לב של יוצר/ת", hint: "כל שיתופי הפעולה שרצים, גם אלה שמחכים כרגע ליוצר/ת (צילום, העלאה)." },
+  { id: "done", label: "הסתיימו", empty: "אין חיבורים שהסתיימו", hint: "סרטונים שאושרו וחיבורים שנסגרו." },
 ];
 
 export type BrandTaskKind = "confirm_match" | "ship" | "post_brief" | "review";
@@ -127,7 +129,7 @@ export function brandTask(conn: {
 }): BrandTask | null {
   const status = typeof conn.status === "string" ? conn.status : "";
   if (status === "pending") {
-    return conn.mutual_at ? { kind: "confirm_match", label: "🎉 מאטץ' — ממתין לאישורכם", cta: "✅ אישור החיבור", order: 0 } : null;
+    return conn.mutual_at ? { kind: "confirm_match", label: "🎉 מאטץ': ממתין ליצירת הסרטון", cta: "🎬 ליצירת סרטון", order: 0 } : null;
   }
   if (status === "approved") {
     if (!conn.brief_posted_at) return { kind: "post_brief", label: "📋 הבריף עוד לא נשלח ליוצר/ת", cta: "📋 שליחת הבריף", order: 2 };
@@ -201,7 +203,7 @@ export function flowNextAction(
       if (opts.mutual) {
         return role === "creator"
           ? { text: "יש מאטץ'! ממתינים לאישור הסופי של העסק", mine: false }
-          : { text: "יש מאטץ' — אשרו את החיבור כדי להתחיל (סרטון אחד מהחבילה)", mine: true };
+          : { text: "יש מאטץ': לחצו ״ליצירת סרטון״ כדי להתחיל (קרדיט אחד)", mine: true };
       }
       if (opts.initiatedBy === "brand") {
         return role === "creator"
@@ -210,7 +212,7 @@ export function flowNextAction(
       }
       return role === "creator"
         ? { text: "הלב נשלח — ממתינים לתשובת העסק", mine: false }
-        : { text: "היוצר/ת בחר/ה בכם — סמנו לב בחזרה", mine: true };
+        : { text: "היוצר/ת בחר/ה בכם: לחצו ״ליצירת סרטון״", mine: true };
     case "approved":
       return role === "brand"
         ? { text: digital ? "שלחו את פרטי הגישה" : "שלחו את המוצר ועדכנו מספר מעקב", mine: true }

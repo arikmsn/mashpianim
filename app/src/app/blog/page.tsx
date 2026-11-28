@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SITE_URL, blogJsonLd, blogPosts, formatPostDate } from "@/lib/seo";
+import { SITE_URL, blogJsonLd, blogPosts } from "@/lib/seo";
 import { getSiteContent } from "@/lib/site-content-server";
 import { JsonLd } from "@/components/home/json-ld";
-import { container, display, eyebrow, tagClass } from "@/components/home/styles";
+import { container, display, eyebrow } from "@/components/home/styles";
 
 // /blog: the content hub (2026-11-27). The list and every label come from the `blog` section of the content
-// registry (/admin/content, the blog tab); only published articles are listed, newest first. Public
+// registry (/admin/content, the blog tab); only published articles are listed, in the admin's order, without dates. Public
 // (middleware publicRoutes) and in the sitemap, with a Blog node in the JSON-LD graph.
 export const revalidate = 60;
 
@@ -48,12 +48,7 @@ export default async function BlogIndexPage() {
           <ul className="mt-8 grid grid-cols-1 gap-4 md:mt-12 md:grid-cols-2 md:gap-5">
             {posts.map((p) => (
               <li key={p.slug} className="flex h-full flex-col rounded-3xl border border-border bg-surface p-6 md:p-7">
-                {p.date && (
-                  <time dateTime={p.date} className={cn("text-[13px] text-neutral-600", tagClass(formatPostDate(p.date)))}>
-                    {formatPostDate(p.date)}
-                  </time>
-                )}
-                <h2 className="mt-2 font-display text-[22px] leading-tight text-ink-900 md:text-[26px]">
+                <h2 className="font-display text-[22px] leading-tight text-ink-900 md:text-[26px]">
                   <Link href={`/blog/${p.slug}`} className="hover:text-pink-700">
                     {p.title}
                   </Link>
