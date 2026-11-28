@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useNotifications, type AppNotification } from "@/hooks/use-notifications";
 import { notificationHref, type ViewerRole } from "@/lib/notification-links";
 import { readCache, swrFetch } from "@/lib/client-cache";
+import { SYSTEM_MESSAGE_LABEL, SYSTEM_MESSAGE_TYPE } from "@/lib/system-message";
 
 const typeIcons: Record<string, string> = {
   heart_received: "💗",
@@ -46,9 +47,11 @@ const typeIcons: Record<string, string> = {
   chat_blocked: "⛔",
   chat_unblocked: "🔓",
   system: "🔔",
+  system_message: "📢",
 };
 
 const typeColors: Record<string, string> = {
+  system_message: "bg-purple-50 text-purple-600",
   heart_received: "bg-pink-50 text-pink-500",
   heart_back: "bg-pink-50 text-pink-500",
   match_ready: "bg-emerald-50 text-emerald-600",
@@ -205,13 +208,15 @@ export default function NotificationsPage() {
                   <span className="text-lg">{typeIcons[notification.type] || "🔔"}</span>
                 </div>
                 <div className="flex-1 min-w-0">
+                  {/* A message from the team: labelled, shown in full, nothing to open or answer */}
+                  {notification.type === SYSTEM_MESSAGE_TYPE && <p className="text-[11px] font-bold text-purple-600 mb-0.5">{SYSTEM_MESSAGE_LABEL}</p>}
                   <div className="flex items-center justify-between mb-0.5">
                     <span className={`font-medium text-sm ${isNew ? "text-neutral-900" : "text-neutral-600"}`}>
                       {notification.title}
                     </span>
                     <span className="text-xs text-neutral-400 flex-shrink-0 mr-2">{formatTime(notification.created_at)}</span>
                   </div>
-                  <p className={`text-sm ${isNew ? "text-neutral-600" : "text-neutral-400"}`}>{notification.body}</p>
+                  <p className={`text-sm whitespace-pre-line ${isNew ? "text-neutral-600" : "text-neutral-400"}`}>{notification.body}</p>
                   {href && <p className="text-[11px] text-pink-600 mt-1">פתיחה ›</p>}
                 </div>
                 {isNew && <div className="w-2.5 h-2.5 rounded-full bg-pink-500 flex-shrink-0 mt-2" />}

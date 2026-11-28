@@ -26,6 +26,8 @@ export function notificationHref(n: NotificationLike, role: ViewerRole, isAdmin 
     return feedbackId ? `/profile?feedback=${feedbackId}` : "/profile";
   }
   if (n.type === "portfolio_video_removed") return "/profile";
+  // A message from the team (admin → creator, 2026-11-28) is read in the bell itself: nothing to open or answer
+  if (n.type === "system_message") return null;
   // Purchases (SUMIT): the business lands on its home (the credits card), admins on the businesses screen
   if (n.type === "credits_loaded") return role === "brand" ? "/brand" : "/profile";
   if (n.type === "purchase_received") return isAdmin ? "/admin/brands" : null;

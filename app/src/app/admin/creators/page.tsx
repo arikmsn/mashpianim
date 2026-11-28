@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Avatar, Badge, Card, useToast } from "@/components/ui";
+import { Avatar, Badge, Button, Card, Modal, useToast } from "@/components/ui";
+import { SYSTEM_MESSAGE_BODY_MAX, SYSTEM_MESSAGE_LABEL, SYSTEM_MESSAGE_TITLE_MAX } from "@/lib/system-message";
 import { displayName, formatFollowers, lastSeenLabel, matchesSearch } from "@/lib/admin-creators";
 import { loginLabel } from "@/lib/login-record";
 
@@ -44,7 +45,38 @@ export default function AdminCreatorsPage() {
   const [filter, setFilter] = useState<"all" | "active" | "suspended">("all");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  // "שליחת הודעה" (owner, 2026-11-28): a one-way system message into the creator's bell
+  const [messageTo, setMessageTo] = useState<Creator | null>(null);
+  const [messageTitle, setMessageTitle] = useState("");
+  const [messageBody, setMessageBody] = useState("");
+  const [sending, setSending] = useState(false);
   const { toast } = useToast();
+
+  function openMessage(c: Creator) {
+    setMessageTo(c);
+    setMessageTitle("");
+    setMessageBody("");
+  }
+
+  async function sendMessage() {
+    if (!messageTo) return;
+    setSending(true);
+    try {
+      const res = await fetch(`/api/admin/creators/${messageTo.id}/message`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: messageTitle, body: messageBody }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || "שגיאה בשליחה");
+      toast(`ההודעה נשלחה ל${displayName(messageTo.name, messageTo.phone)}`, "success");
+      setMessageTo(null);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "שגיאה בשליחה", "error");
+    } finally {
+      setSending(false);
+    }
+  }
 
   useEffect(() => {
     fetch("/api/admin/creators")
@@ -220,9 +252,15 @@ export default function AdminCreatorsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
-                        <Link href={`/admin/creators/${c.id}`} className="px-2.5 py-1 rounded-lg text-xs bg-neutral-50 hover:bg-neutral-100 transition-colors">
+                        <Link href={`/admin/creators/${c.id}`} className="px-2.5 py-1 rounded-lg text-xs bg-neutral-50 hover:bg-neutral-100 transition-colors whitespace-nowrap">
                           פרטים וסרטונים
                         </Link>
+                        <button
+                          onClick={() => openMessage(c)}
+                          className="px-2.5 py-1 rounded-lg text-xs bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors whitespace-nowrap"
+                        >
+                          📢 שליחת הודעה
+                        </button>
                         <button
                           onClick={() => toggleActive(c)}
                           disabled={busy === c.id}
@@ -246,6 +284,52 @@ export default function AdminCreatorsPage() {
           </table>
         </div>
       )}
+
+      <Modal open={!!messageTo} onClose={() => !sending && setMessageTo(null)} title={messageTo ? `הודעה ל${displayName(messageTo.name, messageTo.phone)}` : ""} size="md">
+        {messageTo && (
+          <div className="space-y-4">
+            <p className="text-sm text-neutral-500">
+              ההודעה תופיע אצל היוצר/ת בהתראות (פעמון) בשם ״{SYSTEM_MESSAGE_LABEL}״. אין אפשרות להשיב עליה.
+            </p>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="sysmsg-title" className="text-sm font-medium">כותרת</label>
+                <span className="text-[11px] text-neutral-400 tabular-nums">{messageTitle.length}/{SYSTEM_MESSAGE_TITLE_MAX}</span>
+              </div>
+              <input
+                id="sysmsg-title"
+                type="text"
+                value={messageTitle}
+                maxLength={SYSTEM_MESSAGE_TITLE_MAX}
+                onChange={(e) => setMessageTitle(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-neutral-50 border border-neutral-100 text-sm outline-none focus:border-pink-300"
+              />
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="sysmsg-body" className="text-sm font-medium">הודעה</label>
+                <span className="text-[11px] text-neutral-400 tabular-nums">{messageBody.length}/{SYSTEM_MESSAGE_BODY_MAX}</span>
+              </div>
+              <textarea
+                id="sysmsg-body"
+                rows={6}
+                value={messageBody}
+                maxLength={SYSTEM_MESSAGE_BODY_MAX}
+                onChange={(e) => setMessageBody(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-neutral-50 border border-neutral-100 text-sm outline-none focus:border-pink-300 resize-y"
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button fullWidth loading={sending} disabled={!messageTitle.trim() || !messageBody.trim()} onClick={sendMessage}>
+                שליחה
+              </Button>
+              <Button variant="ghost" fullWidth disabled={sending} onClick={() => setMessageTo(null)}>
+                ביטול
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
