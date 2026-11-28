@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isQaPhone } from "@/lib/qa-accounts";
 import { resolveViewer } from "@/lib/viewer";
 import { readActiveRole } from "@/lib/active-role";
 import { createClient } from "@supabase/supabase-js";
@@ -45,7 +46,7 @@ export async function GET() {
   const [{ data: creators }, { data: videos }, { data: relations }, { data: passes }] = await Promise.all([
     admin
       .from("users")
-      .select("id, full_name, avatar_url, created_at, creator_profiles(id, bio, city, categories, level, completed_connections, tiktok_followers, instagram_followers)")
+      .select("id, full_name, avatar_url, created_at, phone, creator_profiles(id, bio, city, categories, level, completed_connections, tiktok_followers, instagram_followers)")
       .eq("type", "creator")
       .eq("is_active", true)
       // An account that is both a brand and a creator must not see (or heart) itself
@@ -91,6 +92,8 @@ export async function GET() {
     cats.some((c) => brandCats.some((b) => b === normalize(c) || b.startsWith(normalize(c)) || normalize(c).startsWith(b)));
 
   const list = ((creators || []) as any[])
+    // Our internal QA accounts never show to real businesses (owner, 2026-11-28); the phone stays server-side
+    .filter((u) => !isQaPhone(u.phone))
     .filter((u) => {
       const cp = Array.isArray(u.creator_profiles) ? u.creator_profiles[0] : u.creator_profiles;
       return !(cp?.id && passed.has(cp.id));
